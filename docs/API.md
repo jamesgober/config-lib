@@ -22,7 +22,7 @@
 - **[Feature Flags](#feature-flags)**
 - **[Getting Started](#getting-started)**
   - **[Basic Setup](#basic-setup)**
-  - **[parse_from_file()](#parse_from_file)**
+  - **[Default Presets](#default-presets)**
 
 <hr>
 <br>
@@ -102,14 +102,28 @@ cargo add config-lib --features async
 <h3 id="basic-setup">Basic Setup</h3>
 
 ```rust
+use config_lib::{Config, EnterpriseConfig};
 
-// Example Basic Setup
+// Standard configuration management
+let mut config = Config::from_file("app.conf")?;
+let port = config.get("server.port").unwrap().as_integer()?;
+let host = config.get("server.host").unwrap().as_string()?;
+
+// Enterprise configuration with caching
+let enterprise = EnterpriseConfig::from_file("production.conf")?;
+let cached_value = enterprise.get_or_default("database.timeout", 30)?;
+
+// Modify and track changes
+config.set("server.port", 9000)?;
+if config.is_modified() {
+    config.save()?;
+}
 
 ```
 
 <br>
 
-<h3 id="basic-setup">Basic Setup</h3>
+<h3 id="default-presets">Config Default Presets</h3>
 
 ```rust
 

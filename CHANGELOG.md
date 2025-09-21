@@ -10,6 +10,18 @@
 
 ## [Unreleased]
 
+
+
+
+
+
+
+
+
+<br>
+
+
+## [0.4.0] - 2025-09-20
 ### Added
 - **Core Configuration API** - `Config` struct with comprehensive configuration management
 - **Enterprise Configuration** - `EnterpriseConfig` with thread-safe caching and performance optimizations
@@ -56,15 +68,6 @@
 
 
 
-
-
-
-
-<br>
-
-
-
-
 <br>
 
 
@@ -82,6 +85,6 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/metrics-lib/compare/v0.1.0...HEAD
-[0.2.0]: https://github.com/jamesgober/metrics-lib/compare/v0.1.0...v0.2.0
+[Unreleased]: https://github.com/jamesgober/metrics-lib/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/jamesgober/metrics-lib/compare/v0.1.0...v0.4.0
 [0.1.0]: https://github.com/jamesgober/metrics-lib/releases/tag/v0.1.0

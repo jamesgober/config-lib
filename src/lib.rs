@@ -44,7 +44,7 @@
 
 pub mod config;
 /// Enterprise-grade configuration management with advanced caching, performance optimizations,
-/// and multi-instance support. Provides thread-safe caching with Arc<RwLock> for high-concurrency
+/// and multi-instance support. Provides thread-safe caching with `Arc<RwLock>` for high-concurrency
 /// environments and sub-50ns access times for cached values.
 pub mod enterprise;  // Enterprise API with caching and performance
 pub mod error;

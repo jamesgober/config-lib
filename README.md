@@ -92,7 +92,7 @@ if config.is_modified() {
 ```toml
 # Cargo.toml
 [dependencies]
-config-lib = { version = "0.1.0", features = ["json", "async"] }
+config-lib = { version = "0.4.0", features = ["json", "async"] }
 ```
 
 <!-- LICENSE
