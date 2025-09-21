@@ -1,0 +1,123 @@
+[package]# Rust Package Manifest
+#▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+name = "config-lib"
+version = "0.4.0"
+
+# Project Metadata
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+rust-version = "1.82"
+edition = "2021"
+readme  = "README.md"
+publish = true
+license = "Apache-2.0"
+
+# links
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+homepage      = "https://github.com/jamesgober/config-lib"
+repository    = "https://github.com/jamesgober/config-lib"
+documentation = "https://docs.rs/config-lib"
+
+
+# Project Information
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+description = "A configuration parsing library supporting CONF, NOML, TOML, and JSON formats."
+
+
+# Categories (5 NAX)
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+categories = [
+    "config",
+    "parsing", 
+    "data-structures",
+    "development-tools",
+    "template-engine"
+]
+
+# Keywords (5 NAX)
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+keywords = [
+    "config", 
+    "parser", 
+    "toml",
+    "configuration",
+    "settings",
+]
+
+# Exclude files from the package
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+exclude = [
+    ".github/",  # GitHub metadata 
+    "benches/",  # Benchmarking code
+    "docs/",     # Documentation
+    "dev/",      # Development utilities
+]
+
+
+# Authors
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+authors = [
+    "James Gober <code@jamesgober.dev>"
+]
+
+
+
+
+[features]
+#▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+
+# Default features
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+default = ["conf"]
+
+# Config Formats
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+conf = []                              # CONF format parsing (built-in)
+noml = []                              # NOML format parsing (placeholder feature)
+toml = []                              # TOML format parsing (placeholder feature)
+json = ["dep:serde_json"]              # JSON format parsing
+
+# Additional Features
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+async   = ["dep:tokio"]                # Enable async file operations
+chrono  = ["dep:chrono"]               # Enable DateTime support
+schema  = []                           # Enable schema validation
+
+
+
+
+
+[dependencies]
+#▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+
+# Core Dependencies
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+thiserror = "1.0"                      # Error handling
+serde = { version = "1.0", features = ["derive"] }  # Serialization
+
+# Optional Dependencies
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+tokio = { version = "1.0", features = ["fs", "io-util"], optional = true }
+chrono = { version = "0.4", features = ["serde"], optional = true }
+serde_json = { version = "1.0", optional = true }
+base64 = { version = "0.21", optional = true }
+
+# NOML Language Library (commented out until path is resolved)
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+# noml = { path = "../../NOML/noml-rust", optional = true }
+
+
+
+
+[dev-dependencies]
+#▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+tokio-test = "0.4"                     # Async testing utilities
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3.8"
+
+[[bench]]
+name = "enterprise_benchmarks"
+harness = false
