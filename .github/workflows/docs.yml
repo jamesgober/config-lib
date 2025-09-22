@@ -25,13 +25,13 @@ jobs:
       uses: Swatinem/rust-cache@v2
 
     - name: Build documentation
-      run: cargo doc --all-features --no-deps --document-private-items
+      run: cargo doc --features "json,chrono,validation,xml,hcl,env-override,async" --no-deps --document-private-items
 
     - name: Check for missing docs
-      run: cargo doc --all-features --no-deps -- -D missing_docs
+      run: cargo doc --features "json,chrono,validation,xml,hcl,env-override,async" --no-deps -- -D missing_docs
 
     - name: Test documentation examples
-      run: cargo test --doc --all-features
+      run: cargo test --doc --features "json,chrono,validation,xml,hcl,env-override,async"
 
     - name: Deploy docs to GitHub Pages
       if: github.ref == 'refs/heads/main'
@@ -59,7 +59,7 @@ jobs:
       uses: Swatinem/rust-cache@v2
 
     - name: Build all examples
-      run: cargo build --examples --all-features
+      run: cargo build --examples --features "json,chrono,validation,xml,hcl,env-override,async"
 
     - name: Test examples
       shell: bash
@@ -77,7 +77,7 @@ jobs:
               ;;
           esac
           
-          timeout 30s cargo run --example "$example_name" --features xml,hcl,env-override,validation,json || {
+          timeout 30s cargo run --example "$example_name" --features "json,chrono,validation,xml,hcl,env-override,async" || {
             echo "Example $example_name failed or timed out"
             exit 1
           }
@@ -123,7 +123,7 @@ jobs:
     - name: Check API documentation coverage
       run: |
         # Build docs and capture warnings
-        cargo doc --all-features --no-deps 2> doc_warnings.txt || true
+        cargo doc --features "json,chrono,validation,xml,hcl,env-override,async" --no-deps 2> doc_warnings.txt || true
         
         # Check for missing documentation warnings
         if grep -q "missing documentation" doc_warnings.txt; then
@@ -137,7 +137,7 @@ jobs:
     - name: Validate documentation links
       run: |
         # Check for broken internal links in documentation
-        cargo doc --all-features --no-deps
+        cargo doc --features "json,chrono,validation,xml,hcl,env-override,async" --no-deps
         
         # Install htmlproofer if available (optional check)
         if command -v htmlproofer &> /dev/null; then

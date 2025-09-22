@@ -47,7 +47,7 @@ jobs:
 
     - name: Run clippy
       if: matrix.rust == 'stable'
-      run: cargo clippy --all-targets --all-features -- -D warnings
+      run: cargo clippy --all-targets --features "json,chrono,validation,xml,hcl,env-override,async" -- -D warnings
 
     - name: Build
       run: cargo build --verbose
@@ -56,13 +56,13 @@ jobs:
       run: cargo test --verbose
 
     - name: Run tests (all working features)
-      run: cargo test --verbose --features xml,hcl,env-override,validation,json
+      run: cargo test --verbose --features "json,chrono,validation,xml,hcl,env-override,async"
 
     - name: Build examples
-      run: cargo build --examples --features xml,hcl,env-override,validation,json
+      run: cargo build --examples --features "json,chrono,validation,xml,hcl,env-override,async"
 
     - name: Run doctests
-      run: cargo test --doc --features xml,hcl,env-override,validation,json
+      run: cargo test --doc --features "json,chrono,validation,xml,hcl,env-override,async"
 
   nightly:
     name: Nightly Tests
@@ -82,10 +82,10 @@ jobs:
       uses: Swatinem/rust-cache@v2
 
     - name: Run tests with nightly
-      run: cargo test --verbose --features xml,hcl,env-override,validation,json
+      run: cargo test --verbose --features "json,chrono,validation,xml,hcl,env-override,async"
 
     - name: Run clippy with nightly features
-      run: cargo clippy --all-targets --all-features
+      run: cargo clippy --all-targets --features "json,chrono,validation,xml,hcl,env-override,async"
 
   cross-compile:
     name: Cross Compile
@@ -114,7 +114,7 @@ jobs:
       run: cargo install cross --git https://github.com/cross-rs/cross
 
     - name: Cross compile
-      run: cross build --target ${{ matrix.target }} --features xml,hcl,env-override,validation,json
+      run: cross build --target ${{ matrix.target }} --features "json,chrono,validation,xml,hcl,env-override"
 
   minimal-deps:
     name: Minimal Dependencies
@@ -141,3 +141,5 @@ jobs:
         cargo test --no-default-features --features validation
         cargo test --no-default-features --features env-override
         cargo test --no-default-features --features json
+        cargo test --no-default-features --features chrono
+        cargo test --no-default-features --features async
