@@ -535,6 +535,8 @@ impl EnterpriseConfig {
                 items.join(" ")
             }
             Value::Table(_) => "[Table]".to_string(), // Simplified for now
+            #[cfg(feature = "chrono")]
+            Value::DateTime(dt) => dt.to_rfc3339(),
         }
     }
 }

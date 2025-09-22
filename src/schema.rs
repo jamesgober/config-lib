@@ -14,7 +14,7 @@ pub struct Schema {
 }
 
 /// Schema definition for a single field
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FieldSchema {
     field_type: FieldType,
     required: bool,

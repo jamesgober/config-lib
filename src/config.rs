@@ -262,17 +262,18 @@ impl Config {
                 #[cfg(feature = "toml")]
                 {
                     // Use NOML's serializer for format preservation
+                    #[cfg(feature = "noml")]
                     if let Some(ref document) = self.noml_document {
                         return Ok(noml::serialize_document(document));
-                    } else {
-                        // Fallback to basic serialization
-                        return self.serialize_as_toml();
                     }
+                    // Fallback to basic serialization
+                    return self.serialize_as_toml();
                 }
                 #[cfg(not(feature = "toml"))]
                 return Err(Error::feature_not_enabled("toml"));
             }
             "noml" => {
+                #[cfg(feature = "noml")]
                 #[cfg(feature = "noml")]
                 {
                     if let Some(ref document) = self.noml_document {

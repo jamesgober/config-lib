@@ -178,5 +178,7 @@ pub fn to_json_value(value: &Value) -> Result<serde_json::Value> {
             }
             Ok(serde_json::Value::Object(map))
         }
+        #[cfg(feature = "chrono")]
+        Value::DateTime(dt) => Ok(serde_json::Value::String(dt.to_rfc3339())),
     }
 }

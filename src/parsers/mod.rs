@@ -22,9 +22,13 @@ pub mod xml_parser;
 #[cfg(feature = "hcl")]
 pub mod hcl_parser;
 
-// Disabled for now - require external NOML crate
-// pub mod toml_parser;
-// pub mod noml_parser;
+/// TOML format parser
+#[cfg(feature = "toml")]
+pub mod toml_parser;
+
+/// NOML format parser  
+#[cfg(feature = "noml")]
+pub mod noml_parser;
 
 use crate::error::{Error, Result};
 use crate::value::Value;

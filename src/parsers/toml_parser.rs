@@ -8,13 +8,23 @@ use crate::value::Value;
 use std::collections::BTreeMap;
 
 /// Parse TOML format configuration
+#[cfg(feature = "noml")]
 pub fn parse(source: &str) -> Result<Value> {
     // Use NOML's TOML parsing capability for format preservation
     let noml_value = noml::parse(source)?;
     convert_noml_value(noml_value)
 }
 
+/// Parse TOML format configuration (fallback when NOML is not available)
+#[cfg(not(feature = "noml"))]
+pub fn parse(_source: &str) -> Result<Value> {
+    Err(Error::general(
+        "TOML parsing requires either the 'noml' feature or a dedicated TOML parser"
+    ))
+}
+
 /// Parse TOML with format preservation for round-trip editing
+#[cfg(feature = "noml")]
 pub fn parse_with_preservation(source: &str) -> Result<(Value, noml::Document)> {
     // Parse to get the AST document for format preservation
     let document = noml::parse_string(source, None)?;
@@ -29,7 +39,16 @@ pub fn parse_with_preservation(source: &str) -> Result<(Value, noml::Document)> 
     Ok((value, document))
 }
 
+/// Parse TOML with format preservation (fallback when NOML is not available)
+#[cfg(not(feature = "noml"))]
+pub fn parse_with_preservation(_source: &str) -> Result<(Value, ())> {
+    Err(Error::general(
+        "TOML format preservation requires the 'noml' feature"
+    ))
+}
+
 /// Convert NOML Value to config-lib Value
+#[cfg(feature = "noml")]
 fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
     match noml_value {
         noml::Value::Null => Ok(Value::Null),

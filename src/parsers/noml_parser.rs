@@ -14,12 +14,22 @@ use crate::value::Value;
 use std::collections::BTreeMap;
 
 /// Parse NOML format configuration using the noml library
+#[cfg(feature = "noml")]
 pub fn parse(source: &str) -> Result<Value> {
     let noml_value = noml::parse(source)?;
     convert_noml_value(noml_value)
 }
 
+/// Parse NOML format configuration (fallback when NOML is not available)
+#[cfg(not(feature = "noml"))]
+pub fn parse(_source: &str) -> Result<Value> {
+    Err(Error::general(
+        "NOML parsing requires the 'noml' feature to be enabled"
+    ))
+}
+
 /// Convert NOML Value to config-lib Value
+#[cfg(feature = "noml")]
 fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
     match noml_value {
         noml::Value::Null => Ok(Value::Null),
@@ -45,7 +55,13 @@ fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
         noml::Value::DateTime(dt) => Ok(Value::DateTime(dt)),
         noml::Value::Binary(data) => {
             // Convert binary data to base64 string for compatibility
-            Ok(Value::String(base64::encode(data)))
+            #[cfg(feature = "base64")]
+            {
+                use base64::{Engine as _, engine::general_purpose};
+                Ok(Value::String(general_purpose::STANDARD.encode(data)))
+            }
+            #[cfg(not(feature = "base64"))]
+            Ok(Value::String("<binary data>".to_string()))
         }
         noml::Value::Size(size) => {
             // Convert size to integer (bytes)

@@ -24,6 +24,9 @@ pub enum Value {
     Array(Vec<Value>),
     /// Table (key-value pairs)
     Table(BTreeMap<String, Value>),
+    /// DateTime value (when chrono feature is enabled)
+    #[cfg(feature = "chrono")]
+    DateTime(chrono::DateTime<chrono::Utc>),
 }
 
 impl Value {
@@ -62,6 +65,12 @@ impl Value {
         Value::Table(table)
     }
 
+    /// Create a new datetime value (when chrono feature is enabled)
+    #[cfg(feature = "chrono")]
+    pub fn datetime(dt: chrono::DateTime<chrono::Utc>) -> Self {
+        Value::DateTime(dt)
+    }
+
     /// Get the type name of this value
     pub fn type_name(&self) -> &'static str {
         match self {
@@ -72,6 +81,8 @@ impl Value {
             Value::String(_) => "string",
             Value::Array(_) => "array",
             Value::Table(_) => "table",
+            #[cfg(feature = "chrono")]
+            Value::DateTime(_) => "datetime",
         }
     }
 
@@ -477,6 +488,8 @@ impl fmt::Display for Value {
                 }
                 write!(f, "}}")
             }
+            #[cfg(feature = "chrono")]
+            Value::DateTime(dt) => write!(f, "{}", dt.to_rfc3339()),
         }
     }
 }
