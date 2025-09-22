@@ -12,6 +12,9 @@ use std::path::{Path, PathBuf};
 #[cfg(feature = "schema")]
 use crate::schema::Schema;
 
+#[cfg(feature = "validation")]
+use crate::validation::{ValidationError, ValidationRuleSet};
+
 /// High-level configuration manager with format preservation and change tracking
 ///
 /// [`Config`] provides a comprehensive API for managing configurations
@@ -50,19 +53,23 @@ use crate::schema::Schema;
 pub struct Config {
     /// The resolved configuration values
     values: Value,
-    
+
     /// Path to the source file (if loaded from file)
     file_path: Option<PathBuf>,
-    
+
     /// Detected or specified format
     format: String,
-    
+
     /// Change tracking - has the config been modified?
     modified: bool,
-    
+
     /// Format-specific preservation data
     #[cfg(feature = "noml")]
     noml_document: Option<noml::Document>,
+
+    /// Validation rules for this configuration
+    #[cfg(feature = "validation")]
+    validation_rules: Option<ValidationRuleSet>,
 }
 
 impl Config {
@@ -75,17 +82,17 @@ impl Config {
             modified: false,
             #[cfg(feature = "noml")]
             noml_document: None,
+            #[cfg(feature = "validation")]
+            validation_rules: None,
         }
     }
 
     /// Load configuration from a string
     pub fn from_string(source: &str, format: Option<&str>) -> Result<Self> {
-        let detected_format = format.unwrap_or_else(|| {
-            parsers::detect_format(source)
-        });
+        let detected_format = format.unwrap_or_else(|| parsers::detect_format(source));
 
         let values = parsers::parse_string(source, Some(detected_format))?;
-        
+
         let config = Self {
             values,
             file_path: None,
@@ -93,6 +100,8 @@ impl Config {
             modified: false,
             #[cfg(feature = "noml")]
             noml_document: None,
+            #[cfg(feature = "validation")]
+            validation_rules: None,
         };
 
         // Store format-specific preservation data
@@ -109,15 +118,15 @@ impl Config {
     /// Load configuration from a file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| Error::io(path.display().to_string(), e))?;
+        let content =
+            std::fs::read_to_string(path).map_err(|e| Error::io(path.display().to_string(), e))?;
 
         let format = parsers::detect_format_from_path(path)
             .unwrap_or_else(|| parsers::detect_format(&content));
 
         let mut config = Self::from_string(&content, Some(format))?;
         config.file_path = Some(path.to_path_buf());
-        
+
         Ok(config)
     }
 
@@ -134,7 +143,7 @@ impl Config {
 
         let mut config = Self::from_string(&content, Some(format))?;
         config.file_path = Some(path.to_path_buf());
-        
+
         Ok(config)
     }
 
@@ -201,9 +210,9 @@ impl Config {
                 self.save_to_file(path.clone())?;
                 self.modified = false;
                 Ok(())
-            },
+            }
             None => Err(Error::internal(
-                "Cannot save configuration that wasn't loaded from a file"
+                "Cannot save configuration that wasn't loaded from a file",
             )),
         }
     }
@@ -211,8 +220,7 @@ impl Config {
     /// Save the configuration to a specific file
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let serialized = self.serialize()?;
-        std::fs::write(path, serialized)
-            .map_err(|e| Error::io("save".to_string(), e))?;
+        std::fs::write(path, serialized).map_err(|e| Error::io("save".to_string(), e))?;
         Ok(())
     }
 
@@ -224,9 +232,9 @@ impl Config {
                 self.save_to_file_async(path.clone()).await?;
                 self.modified = false;
                 Ok(())
-            },
+            }
             None => Err(Error::internal(
-                "Cannot save configuration that wasn't loaded from a file"
+                "Cannot save configuration that wasn't loaded from a file",
             )),
         }
     }
@@ -313,12 +321,12 @@ impl Config {
                 } else {
                     format!("{}.{}", section_prefix, key)
                 };
-                
+
                 output.push_str(&format!("\n[{}]\n", section_name));
                 self.write_conf_table(output, nested_table, &section_name)?;
             }
         }
-        
+
         Ok(())
     }
 
@@ -337,10 +345,8 @@ impl Config {
                 }
             }
             Value::Array(arr) => {
-                let items: Result<Vec<String>> = arr
-                    .iter()
-                    .map(|v| self.format_conf_value(v))
-                    .collect();
+                let items: Result<Vec<String>> =
+                    arr.iter().map(|v| self.format_conf_value(v)).collect();
                 Ok(items?.join(" "))
             }
             Value::Table(_) => Err(Error::type_error(
@@ -359,7 +365,7 @@ impl Config {
         // This is a simplified TOML serializer
         // In practice, you'd use the NOML library for proper TOML serialization
         Err(Error::internal(
-            "Basic TOML serialization not implemented - use NOML library"
+            "Basic TOML serialization not implemented - use NOML library",
         ))
     }
 
@@ -388,7 +394,8 @@ impl Config {
                 for (key, other_value) in other_table {
                     match self_table.get_mut(key) {
                         Some(self_value) => {
-                            if let (Value::Table(_), Value::Table(_)) = (&*self_value, other_value) {
+                            if let (Value::Table(_), Value::Table(_)) = (&*self_value, other_value)
+                            {
                                 // Create a temporary config for recursive merging
                                 let mut temp_config = Config::new();
                                 temp_config.values = self_value.clone();
@@ -413,6 +420,75 @@ impl Config {
         }
         Ok(())
     }
+
+    // =====================================================================
+    // Validation Methods (Feature-gated)
+    // =====================================================================
+
+    /// Set validation rules for this configuration
+    #[cfg(feature = "validation")]
+    pub fn set_validation_rules(&mut self, rules: ValidationRuleSet) {
+        self.validation_rules = Some(rules);
+    }
+
+    /// Validate the current configuration against all registered rules
+    #[cfg(feature = "validation")]
+    pub fn validate(&mut self) -> Result<Vec<ValidationError>> {
+        match &mut self.validation_rules {
+            Some(rules) => {
+                if let Value::Table(table) = &self.values {
+                    let mut errors = Vec::new();
+
+                    // Validate each key-value pair
+                    for (key, value) in table {
+                        errors.extend(rules.validate(key, value));
+                    }
+
+                    // Also validate for required keys (if any RequiredKeyValidator exists)
+                    // This is handled by individual rule implementations
+
+                    Ok(errors)
+                } else {
+                    Err(Error::validation(
+                        "Configuration root must be a table for validation",
+                    ))
+                }
+            }
+            None => Ok(Vec::new()), // No rules = no errors
+        }
+    }
+
+    /// Validate and return only critical errors
+    #[cfg(feature = "validation")]
+    pub fn validate_critical_only(&mut self) -> Result<Vec<ValidationError>> {
+        let all_errors = self.validate()?;
+        Ok(all_errors
+            .into_iter()
+            .filter(|e| e.severity == crate::validation::ValidationSeverity::Critical)
+            .collect())
+    }
+
+    /// Check if configuration is valid (has no critical errors)
+    #[cfg(feature = "validation")]
+    pub fn is_valid(&mut self) -> Result<bool> {
+        let critical_errors = self.validate_critical_only()?;
+        Ok(critical_errors.is_empty())
+    }
+
+    /// Validate a specific value at a path
+    #[cfg(feature = "validation")]
+    pub fn validate_path(&mut self, path: &str) -> Result<Vec<ValidationError>> {
+        // Get the value first to avoid borrowing conflicts, clone to own it
+        let value = self
+            .get(path)
+            .ok_or_else(|| Error::key_not_found(path))?
+            .clone();
+
+        match &mut self.validation_rules {
+            Some(rules) => Ok(rules.validate(path, &value)),
+            None => Ok(Vec::new()),
+        }
+    }
 }
 
 impl Default for Config {
@@ -431,6 +507,8 @@ impl From<Value> for Config {
             modified: false,
             #[cfg(feature = "noml")]
             noml_document: None,
+            #[cfg(feature = "validation")]
+            validation_rules: None,
         }
     }
 }
@@ -448,11 +526,8 @@ mod tests {
 
     #[test]
     fn test_config_from_string() {
-        let config = Config::from_string(
-            "key = value\nport = 8080",
-            Some("conf")
-        ).unwrap();
-        
+        let config = Config::from_string("key = value\nport = 8080", Some("conf")).unwrap();
+
         assert_eq!(config.get("key").unwrap().as_string().unwrap(), "value");
         assert_eq!(config.get("port").unwrap().as_integer().unwrap(), 8080);
     }
@@ -461,10 +536,10 @@ mod tests {
     fn test_config_modification() {
         let mut config = Config::new();
         assert!(!config.is_modified());
-        
+
         config.set("key", "value").unwrap();
         assert!(config.is_modified());
-        
+
         config.mark_clean();
         assert!(!config.is_modified());
     }
@@ -474,13 +549,13 @@ mod tests {
         let mut config1 = Config::new();
         config1.set("a", 1).unwrap();
         config1.set("b.x", 2).unwrap();
-        
+
         let mut config2 = Config::new();
         config2.set("b.y", 3).unwrap();
         config2.set("c", 4).unwrap();
-        
+
         config1.merge(&config2).unwrap();
-        
+
         assert_eq!(config1.get("a").unwrap().as_integer().unwrap(), 1);
         assert_eq!(config1.get("b.x").unwrap().as_integer().unwrap(), 2);
         assert_eq!(config1.get("b.y").unwrap().as_integer().unwrap(), 3);

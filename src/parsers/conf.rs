@@ -1,9 +1,9 @@
 //! # CONF Format Parser
 //!
 //! High-performance parser for standard .conf configuration files.
-//! 
+//!
 //! Supports the common configuration format used by many Unix/Linux applications:
-//! 
+//!
 //! ```conf
 //! # Comments start with #
 //! key = value
@@ -11,11 +11,11 @@
 //! number = 42
 //! float = 3.14
 //! boolean = true
-//! 
+//!
 //! # Sections
 //! [section]
 //! nested_key = value
-//! 
+//!
 //! # Arrays (space or comma separated)
 //! array = item1 item2 item3
 //! comma_array = item1, item2, item3
@@ -58,7 +58,7 @@ impl<'a> ConfParser<'a> {
 
         while !self.is_at_end() {
             self.skip_whitespace_and_comments();
-            
+
             if self.is_at_end() {
                 break;
             }
@@ -71,13 +71,14 @@ impl<'a> ConfParser<'a> {
 
             // Parse key-value pair
             let (key, value) = self.parse_key_value()?;
-            
+
             match &current_section {
                 Some(section) => {
                     // Add to section
-                    let section_table = root.entry(section.clone())
+                    let section_table = root
+                        .entry(section.clone())
                         .or_insert_with(|| Value::table(BTreeMap::new()));
-                    
+
                     if let Value::Table(table) = section_table {
                         table.insert(key, value);
                     }
@@ -96,7 +97,7 @@ impl<'a> ConfParser<'a> {
     fn parse_section_header(&mut self) -> Result<String> {
         self.expect('[')?;
         let start = self.position;
-        
+
         // Find the closing bracket
         while let Some(ch) = self.peek() {
             if ch == ']' {
@@ -111,10 +112,10 @@ impl<'a> ConfParser<'a> {
             }
             self.advance();
         }
-        
+
         let section_name = self.input[start..self.position].trim().to_string();
         self.expect(']')?;
-        
+
         Ok(section_name)
     }
 
@@ -125,14 +126,14 @@ impl<'a> ConfParser<'a> {
         self.expect('=')?;
         self.skip_whitespace();
         let value = self.parse_value()?;
-        
+
         Ok((key, value))
     }
 
     /// Parse a configuration key
     fn parse_key(&mut self) -> Result<String> {
         let start = self.position;
-        
+
         while let Some(ch) = self.peek() {
             if ch.is_alphanumeric() || ch == '_' || ch == '-' || ch == '.' {
                 self.advance();
@@ -140,22 +141,18 @@ impl<'a> ConfParser<'a> {
                 break;
             }
         }
-        
+
         if start == self.position {
-            return Err(Error::parse(
-                "Expected key name",
-                self.line,
-                self.column,
-            ));
+            return Err(Error::parse("Expected key name", self.line, self.column));
         }
-        
+
         Ok(self.input[start..self.position].to_string())
     }
 
     /// Parse a configuration value
     fn parse_value(&mut self) -> Result<Value> {
         self.skip_whitespace();
-        
+
         match self.peek() {
             Some('"') => self.parse_quoted_string(),
             Some('\'') => self.parse_single_quoted_string(),
@@ -173,7 +170,7 @@ impl<'a> ConfParser<'a> {
         self.expect('"')?;
         let _start = self.position;
         let mut result = String::new();
-        
+
         while let Some(ch) = self.peek() {
             if ch == '"' {
                 break;
@@ -190,11 +187,13 @@ impl<'a> ConfParser<'a> {
                         result.push('\\');
                         result.push(other);
                     }
-                    None => return Err(Error::parse(
-                        "Unterminated escape sequence",
-                        self.line,
-                        self.column,
-                    )),
+                    None => {
+                        return Err(Error::parse(
+                            "Unterminated escape sequence",
+                            self.line,
+                            self.column,
+                        ))
+                    }
                 }
                 self.advance();
             } else {
@@ -202,7 +201,7 @@ impl<'a> ConfParser<'a> {
                 self.advance();
             }
         }
-        
+
         self.expect('"')?;
         Ok(Value::string(result))
     }
@@ -211,14 +210,14 @@ impl<'a> ConfParser<'a> {
     fn parse_single_quoted_string(&mut self) -> Result<Value> {
         self.expect('\'')?;
         let start = self.position;
-        
+
         while let Some(ch) = self.peek() {
             if ch == '\'' {
                 break;
             }
             self.advance();
         }
-        
+
         let content = self.input[start..self.position].to_string();
         self.expect('\'')?;
         Ok(Value::string(content))
@@ -228,18 +227,18 @@ impl<'a> ConfParser<'a> {
     fn parse_array(&mut self) -> Result<Value> {
         self.expect('[')?;
         let mut items = Vec::new();
-        
+
         self.skip_whitespace();
-        
+
         if self.peek() == Some(']') {
             self.advance();
             return Ok(Value::array(items));
         }
-        
+
         loop {
             items.push(self.parse_value()?);
             self.skip_whitespace();
-            
+
             match self.peek() {
                 Some(',') => {
                     self.advance();
@@ -249,14 +248,16 @@ impl<'a> ConfParser<'a> {
                     self.advance();
                     break;
                 }
-                _ => return Err(Error::parse(
-                    "Expected ',' or ']' in array",
-                    self.line,
-                    self.column,
-                )),
+                _ => {
+                    return Err(Error::parse(
+                        "Expected ',' or ']' in array",
+                        self.line,
+                        self.column,
+                    ))
+                }
             }
         }
-        
+
         Ok(Value::array(items))
     }
 
@@ -265,12 +266,12 @@ impl<'a> ConfParser<'a> {
     fn parse_number(&mut self) -> Result<Value> {
         let start = self.position;
         let mut has_dot = false;
-        
+
         // Handle sign
         if self.peek() == Some('-') || self.peek() == Some('+') {
             self.advance();
         }
-        
+
         // Parse digits and optional decimal point
         while let Some(ch) = self.peek() {
             if ch.is_ascii_digit() {
@@ -282,32 +283,32 @@ impl<'a> ConfParser<'a> {
                 break;
             }
         }
-        
+
         let number_str = &self.input[start..self.position];
-        
+
         if has_dot {
-            number_str.parse::<f64>()
-                .map(Value::float)
-                .map_err(|_| Error::parse(
+            number_str.parse::<f64>().map(Value::float).map_err(|_| {
+                Error::parse(
                     format!("Invalid float: {}", number_str),
                     self.line,
                     self.column,
-                ))
+                )
+            })
         } else {
-            number_str.parse::<i64>()
-                .map(Value::integer)
-                .map_err(|_| Error::parse(
+            number_str.parse::<i64>().map(Value::integer).map_err(|_| {
+                Error::parse(
                     format!("Invalid integer: {}", number_str),
                     self.line,
                     self.column,
-                ))
+                )
+            })
         }
     }
 
     /// Parse an unquoted value (string, boolean, or array)
     fn parse_unquoted_value(&mut self) -> Result<Value> {
         let start = self.position;
-        
+
         // Read until end of line, comment, or special character
         while let Some(ch) = self.peek() {
             if ch == '\n' || ch == '\r' || ch == '#' {
@@ -315,13 +316,13 @@ impl<'a> ConfParser<'a> {
             }
             self.advance();
         }
-        
+
         let raw_value = self.input[start..self.position].trim();
-        
+
         if raw_value.is_empty() {
             return Ok(Value::null());
         }
-        
+
         // Try to parse as boolean
         match raw_value.to_lowercase().as_str() {
             "true" | "yes" | "on" => return Ok(Value::bool(true)),
@@ -329,7 +330,7 @@ impl<'a> ConfParser<'a> {
             "null" | "nil" | "" => return Ok(Value::null()),
             _ => {}
         }
-        
+
         // Check if it's a space or comma separated array
         if raw_value.contains(' ') || raw_value.contains(',') {
             let items: Vec<Value> = raw_value
@@ -338,12 +339,12 @@ impl<'a> ConfParser<'a> {
                 .filter(|s| !s.is_empty())
                 .map(|s| self.parse_simple_value(s))
                 .collect::<Result<Vec<_>>>()?;
-            
+
             if items.len() > 1 {
                 return Ok(Value::array(items));
             }
         }
-        
+
         // Parse as simple value
         self.parse_simple_value(raw_value)
     }
@@ -354,12 +355,12 @@ impl<'a> ConfParser<'a> {
         if let Ok(i) = value.parse::<i64>() {
             return Ok(Value::integer(i));
         }
-        
+
         // Try float
         if let Ok(f) = value.parse::<f64>() {
             return Ok(Value::float(f));
         }
-        
+
         // Default to string
         Ok(Value::string(value.to_string()))
     }
@@ -379,7 +380,7 @@ impl<'a> ConfParser<'a> {
     fn skip_whitespace_and_comments(&mut self) {
         loop {
             self.skip_whitespace();
-            
+
             // Skip comments
             if self.peek() == Some('#') {
                 while let Some(ch) = self.peek() {
@@ -390,13 +391,13 @@ impl<'a> ConfParser<'a> {
                 }
                 continue;
             }
-            
+
             // Skip newlines
             if self.peek() == Some('\n') || self.peek() == Some('\r') {
                 self.advance();
                 continue;
             }
-            
+
             break;
         }
     }
@@ -472,7 +473,10 @@ mod tests {
     #[test]
     fn test_quoted_strings() {
         let config = parse(r#"quoted = "hello world""#).unwrap();
-        assert_eq!(config.get("quoted").unwrap().as_string().unwrap(), "hello world");
+        assert_eq!(
+            config.get("quoted").unwrap().as_string().unwrap(),
+            "hello world"
+        );
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use config_lib::*;
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::thread;
@@ -9,7 +9,7 @@ use std::thread;
 
 fn bench_config_parsing(c: &mut Criterion) {
     let mut group = c.benchmark_group("config_parsing");
-    
+
     // Small config for latency-critical operations
     let small_config = r#"
 app_name = "test"
@@ -51,7 +51,7 @@ batch_size = 100
 
     // Large config for stress testing
     let large_config = generate_large_config(1000); // 1000 keys
-    
+
     group.bench_function("small_config_parse", |b| {
         b.iter(|| {
             let config = Config::from_string(black_box(small_config), Some("conf")).unwrap();
@@ -78,8 +78,9 @@ batch_size = 100
 
 fn bench_config_access(c: &mut Criterion) {
     let mut group = c.benchmark_group("config_access");
-    
-    let config = Config::from_string(r#"
+
+    let config = Config::from_string(
+        r#"
 app_name = "test"
 port = 8080
 debug = true
@@ -93,7 +94,10 @@ max_connections = 100
 [cache]
 size = 256
 ttl = 3600
-"#, Some("conf")).unwrap();
+"#,
+        Some("conf"),
+    )
+    .unwrap();
 
     group.bench_function("simple_key_access", |b| {
         b.iter(|| {
@@ -128,12 +132,16 @@ ttl = 3600
 
 fn bench_enterprise_cache(c: &mut Criterion) {
     let mut group = c.benchmark_group("enterprise_cache");
-    
-    let config = EnterpriseConfig::from_string(r#"
+
+    let config = EnterpriseConfig::from_string(
+        r#"
 app_name = "enterprise-db"
 port = 8080
 cache_size = 1000
-"#, Some("conf")).unwrap();
+"#,
+        Some("conf"),
+    )
+    .unwrap();
 
     group.bench_function("cached_access", |b| {
         b.iter(|| {
@@ -157,8 +165,10 @@ cache_size = 1000
 
 fn bench_concurrent_access(c: &mut Criterion) {
     let mut group = c.benchmark_group("concurrent_access");
-    
-    let config = Arc::new(EnterpriseConfig::from_string(r#"
+
+    let config = Arc::new(
+        EnterpriseConfig::from_string(
+            r#"
 app_name = "enterprise-db"
 port = 8080
 threads = 16
@@ -167,7 +177,11 @@ threads = 16
 host = "localhost"
 port = 5432
 max_connections = 1000
-"#, Some("conf")).unwrap());
+"#,
+            Some("conf"),
+        )
+        .unwrap(),
+    );
 
     // Simulate high concurrency typical of enterprise DB systems
     for thread_count in [1, 2, 4, 8, 16, 32].iter() {
@@ -177,7 +191,7 @@ max_connections = 1000
             |b, &thread_count| {
                 b.iter(|| {
                     let mut handles = vec![];
-                    
+
                     for _ in 0..thread_count {
                         let config_clone = Arc::clone(&config);
                         let handle = thread::spawn(move || {
@@ -191,7 +205,7 @@ max_connections = 1000
                         });
                         handles.push(handle);
                     }
-                    
+
                     for handle in handles {
                         handle.join().unwrap();
                     }
@@ -205,7 +219,7 @@ max_connections = 1000
 
 fn bench_memory_allocation(c: &mut Criterion) {
     let mut group = c.benchmark_group("memory_allocation");
-    
+
     group.bench_function("value_creation", |b| {
         b.iter(|| {
             let mut values = Vec::new();
@@ -234,7 +248,7 @@ fn bench_memory_allocation(c: &mut Criterion) {
 
 fn bench_serialization(c: &mut Criterion) {
     let mut group = c.benchmark_group("serialization");
-    
+
     let config = Config::from_string(generate_large_config(100).as_str(), Some("conf")).unwrap();
 
     group.bench_function("serialize_to_string", |b| {
@@ -251,17 +265,23 @@ fn bench_serialization(c: &mut Criterion) {
 fn bench_stress_test(c: &mut Criterion) {
     let mut group = c.benchmark_group("stress_test");
     group.sample_size(10); // Fewer samples for stress tests
-    
-    let config = Arc::new(EnterpriseConfig::from_string(r#"
+
+    let config = Arc::new(
+        EnterpriseConfig::from_string(
+            r#"
 app_name = "high-performance-db"
 port = 8080
 max_connections = 1000000
-"#, Some("conf")).unwrap());
+"#,
+            Some("conf"),
+        )
+        .unwrap(),
+    );
 
     group.bench_function("million_operations", |b| {
         b.iter(|| {
             let config_clone = Arc::clone(&config);
-            
+
             // Simulate 1M operations in batches
             for batch in 0..1000 {
                 for _ in 0..1000 {
@@ -280,7 +300,7 @@ max_connections = 1000000
 
 fn generate_large_config(num_keys: usize) -> String {
     let mut config = String::new();
-    
+
     for i in 0..num_keys {
         config.push_str(&format!("key_{} = \"value_{}\"\n", i, i));
         if i % 10 == 0 {
@@ -288,7 +308,7 @@ fn generate_large_config(num_keys: usize) -> String {
             config.push_str(&format!("nested_key = {}\n", i));
         }
     }
-    
+
     config
 }
 

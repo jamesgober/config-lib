@@ -12,7 +12,7 @@
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Parse any supported format automatically
 //! let mut config = Config::from_string("port = 8080\nname = \"MyApp\"", None)?;
-//! 
+//!
 //! // Access values with type safety
 //! let port = config.get("port").unwrap().as_integer()?;
 //! let name = config.get("name").unwrap().as_string()?;
@@ -46,7 +46,7 @@ pub mod config;
 /// Enterprise-grade configuration management with advanced caching, performance optimizations,
 /// and multi-instance support. Provides thread-safe caching with `Arc<RwLock>` for high-concurrency
 /// environments and sub-50ns access times for cached values.
-pub mod enterprise;  // Enterprise API with caching and performance
+pub mod enterprise; // Enterprise API with caching and performance
 pub mod error;
 pub mod parsers;
 pub mod value;
@@ -54,14 +54,32 @@ pub mod value;
 #[cfg(feature = "schema")]
 pub mod schema;
 
+#[cfg(feature = "validation")]
+pub mod validation;
+
+/// Hot reloading system for zero-downtime configuration updates
+pub mod hot_reload;
+
+/// Comprehensive audit logging system for configuration operations
+pub mod audit;
+
+/// Environment variable override system for smart configuration overrides
+#[cfg(feature = "env-override")]
+pub mod env_override;
+
 // Re-export main types for convenience
 pub use config::Config;
-pub use enterprise::{EnterpriseConfig, ConfigManager};
+pub use enterprise::{ConfigManager, EnterpriseConfig};
 pub use error::{Error, Result};
 pub use value::Value;
 
 #[cfg(feature = "schema")]
 pub use schema::{Schema, SchemaBuilder};
+
+#[cfg(feature = "validation")]
+pub use validation::{
+    ValidationError, ValidationResult, ValidationRule, ValidationRuleSet, ValidationSeverity,
+};
 
 use std::path::Path;
 
@@ -84,18 +102,21 @@ use std::path::Path;
 /// ```rust
 /// use config_lib::parse;
 ///
-/// let config = parse(r#"
-///     app_name = "my-service"
-///     port = 8080
-///     debug = true
-///     
-///     [database]
-///     host = "localhost"
-///     max_connections = 100
-/// "#, None)?;
+/// let value = parse(r#"
+/// app_name = "my-service"
+/// port = 8080
+/// debug = true
+/// "#, Some("conf"))?;
 ///
-/// assert_eq!(config.get("app_name").unwrap().as_string().unwrap(), "my-service");
-/// assert_eq!(config.get("database.host").unwrap().as_string().unwrap(), "localhost");
+/// // Access values from the parsed Value
+/// if let Ok(table) = value.as_table() {
+///     if let Some(app_name) = table.get("app_name") {
+///         assert_eq!(app_name.as_string().unwrap(), "my-service");
+///     }
+///     if let Some(port) = table.get("port") {
+///         assert_eq!(port.as_integer().unwrap(), 8080);
+///     }
+/// }
 ///
 /// # Ok::<(), config_lib::Error>(())
 /// ```

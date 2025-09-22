@@ -1,0 +1,172 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  docs:
+    name: Documentation Build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+
+    - name: Build documentation
+      run: cargo doc --all-features --no-deps --document-private-items
+
+    - name: Check for missing docs
+      run: cargo doc --all-features --no-deps -- -D missing_docs
+
+    - name: Test documentation examples
+      run: cargo test --doc --all-features
+
+    - name: Deploy docs to GitHub Pages
+      if: github.ref == 'refs/heads/main'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./target/doc
+        cname: config-lib.jamesgober.dev
+
+  examples:
+    name: Example Testing
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+
+    - name: Build all examples
+      run: cargo build --examples --all-features
+
+    - name: Test examples
+      shell: bash
+      run: |
+        set -e
+        for example in examples/*.rs; do
+          example_name=$(basename "$example" .rs)
+          echo "Testing example: $example_name"
+          
+          # Skip examples that require specific files or setup
+          case "$example_name" in
+            "hot_reload_demo"|"config_trace")
+              echo "Skipping $example_name (requires setup)"
+              continue
+              ;;
+          esac
+          
+          timeout 30s cargo run --example "$example_name" --features xml,hcl,env-override,validation,json || {
+            echo "Example $example_name failed or timed out"
+            exit 1
+          }
+        done
+
+  readme-sync:
+    name: README Sync Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install cargo-readme
+      run: cargo install cargo-readme
+
+    - name: Check README is up to date
+      run: |
+        cargo readme > README_generated.md
+        if ! diff README.md README_generated.md; then
+          echo "README.md is not up to date with lib.rs documentation"
+          echo "Run 'cargo readme > README.md' to update"
+          exit 1
+        fi
+
+  api-docs:
+    name: API Documentation Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+
+    - name: Check API documentation coverage
+      run: |
+        # Build docs and capture warnings
+        cargo doc --all-features --no-deps 2> doc_warnings.txt || true
+        
+        # Check for missing documentation warnings
+        if grep -q "missing documentation" doc_warnings.txt; then
+          echo "Missing documentation found:"
+          grep "missing documentation" doc_warnings.txt
+          echo ""
+          echo "Please add documentation for all public items."
+          exit 1
+        fi
+
+    - name: Validate documentation links
+      run: |
+        # Check for broken internal links in documentation
+        cargo doc --all-features --no-deps
+        
+        # Install htmlproofer if available (optional check)
+        if command -v htmlproofer &> /dev/null; then
+          htmlproofer target/doc --disable-external --check-html --enforce-https
+        fi
+
+  changelog:
+    name: Changelog Validation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check for changelog entry
+      run: |
+        # Check if CHANGELOG.md was modified
+        if git diff --name-only origin/main...HEAD | grep -q "CHANGELOG.md"; then
+          echo "✅ Changelog updated"
+        else
+          echo "⚠️  Consider updating CHANGELOG.md for your changes"
+          # Don't fail the build, just warn
+        fi
+
+    - name: Validate changelog format
+      run: |
+        # Basic validation of changelog format
+        if ! grep -q "## \[Unreleased\]" CHANGELOG.md; then
+          echo "❌ Missing [Unreleased] section in changelog"
+          exit 1
+        fi

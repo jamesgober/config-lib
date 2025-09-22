@@ -99,6 +99,13 @@ pub enum Error {
         feature: String,
     },
 
+    /// Concurrency errors - lock failures, thread synchronization issues
+    #[error("Concurrency error: {message}")]
+    Concurrency {
+        /// Description of the concurrency error
+        message: String,
+    },
+
     /// NOML library errors (when using NOML format)
     #[cfg(feature = "noml")]
     #[error("NOML error: {source}")]
@@ -153,10 +160,7 @@ impl Error {
     }
 
     /// Create a key not found error with suggestions
-    pub fn key_not_found_with_suggestions(
-        key: impl Into<String>,
-        available: Vec<String>,
-    ) -> Self {
+    pub fn key_not_found_with_suggestions(key: impl Into<String>, available: Vec<String>) -> Self {
         Self::KeyNotFound {
             key: key.into(),
             available,
@@ -195,6 +199,13 @@ impl Error {
     pub fn feature_not_enabled(feature: impl Into<String>) -> Self {
         Self::FeatureNotEnabled {
             feature: feature.into(),
+        }
+    }
+
+    /// Create a concurrency error
+    pub fn concurrency(message: impl Into<String>) -> Self {
+        Self::Concurrency {
+            message: message.into(),
         }
     }
 
@@ -252,10 +263,7 @@ impl Error {
     }
 
     /// Create an internal error with context
-    pub fn internal_with_context(
-        message: impl Into<String>,
-        context: impl Into<String>,
-    ) -> Self {
+    pub fn internal_with_context(message: impl Into<String>, context: impl Into<String>) -> Self {
         Self::Internal {
             message: message.into(),
             context: Some(context.into()),

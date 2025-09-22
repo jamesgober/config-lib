@@ -114,16 +114,14 @@ impl Value {
     pub fn as_bool(&self) -> Result<bool> {
         match self {
             Value::Bool(b) => Ok(*b),
-            Value::String(s) => {
-                match s.to_lowercase().as_str() {
-                    "true" | "yes" | "1" | "on" => Ok(true),
-                    "false" | "no" | "0" | "off" => Ok(false),
-                    _ => Err(Error::type_error(
-                        "Cannot convert to boolean",
-                        "bool",
-                        self.type_name(),
-                    )),
-                }
+            Value::String(s) => match s.to_lowercase().as_str() {
+                "true" | "yes" | "1" | "on" => Ok(true),
+                "false" | "no" | "0" | "off" => Ok(false),
+                _ => Err(Error::type_error(
+                    "Cannot convert to boolean",
+                    "bool",
+                    self.type_name(),
+                )),
             },
             _ => Err(Error::type_error(
                 "Cannot convert to boolean",
@@ -138,11 +136,9 @@ impl Value {
         match self {
             Value::Integer(i) => Ok(*i),
             Value::Float(f) => Ok(*f as i64),
-            Value::String(s) => s.parse::<i64>().map_err(|_| Error::type_error(
-                "Cannot convert to integer",
-                "integer", 
-                self.type_name(),
-            )),
+            Value::String(s) => s.parse::<i64>().map_err(|_| {
+                Error::type_error("Cannot convert to integer", "integer", self.type_name())
+            }),
             _ => Err(Error::type_error(
                 "Cannot convert to integer",
                 "integer",
@@ -156,11 +152,9 @@ impl Value {
         match self {
             Value::Float(f) => Ok(*f),
             Value::Integer(i) => Ok(*i as f64),
-            Value::String(s) => s.parse::<f64>().map_err(|_| Error::type_error(
-                "Cannot convert to float",
-                "float",
-                self.type_name(),
-            )),
+            Value::String(s) => s.parse::<f64>().map_err(|_| {
+                Error::type_error("Cannot convert to float", "float", self.type_name())
+            }),
             _ => Err(Error::type_error(
                 "Cannot convert to float",
                 "float",
@@ -175,7 +169,7 @@ impl Value {
             Value::String(s) => Ok(s.as_str()),
             _ => Err(Error::type_error(
                 "Cannot convert to string",
-                "string", 
+                "string",
                 self.type_name(),
             )),
         }
@@ -276,7 +270,8 @@ impl Value {
             return Err(Error::key_not_found(path));
         }
 
-        let (last_key, parent_path) = parts.split_last()
+        let (last_key, parent_path) = parts
+            .split_last()
             .ok_or_else(|| Error::key_not_found(path))?;
 
         // Navigate to parent
@@ -284,23 +279,29 @@ impl Value {
         for part in parent_path {
             match current {
                 Value::Table(table) => {
-                    current = table.get_mut(*part)
+                    current = table
+                        .get_mut(*part)
                         .ok_or_else(|| Error::key_not_found(*part))?;
                 }
-                _ => return Err(Error::type_error(
-                    format!("Cannot navigate into {} when looking for key '{}'", current.type_name(), part),
-                    "table",
-                    current.type_name(),
-                )),
+                _ => {
+                    return Err(Error::type_error(
+                        format!(
+                            "Cannot navigate into {} when looking for key '{}'",
+                            current.type_name(),
+                            part
+                        ),
+                        "table",
+                        current.type_name(),
+                    ))
+                }
             }
         }
 
         // Get the final value
         match current {
-            Value::Table(table) => {
-                table.get_mut(*last_key)
-                    .ok_or_else(|| Error::key_not_found(*last_key))
-            }
+            Value::Table(table) => table
+                .get_mut(*last_key)
+                .ok_or_else(|| Error::key_not_found(*last_key)),
             _ => Err(Error::type_error(
                 format!("Cannot get key '{}' from {}", last_key, current.type_name()),
                 "table",
@@ -320,7 +321,8 @@ impl Value {
             return Err(Error::key_not_found(path));
         }
 
-        let (last_key, parent_path) = parts.split_last()
+        let (last_key, parent_path) = parts
+            .split_last()
             .ok_or_else(|| Error::key_not_found(path))?;
 
         // Navigate to parent, creating tables as needed
@@ -328,9 +330,9 @@ impl Value {
         for part in parent_path {
             if let Value::Table(table) = current {
                 // ZERO-COPY: Use entry API to avoid string allocation when possible
-                let entry = table.entry(part.to_string()).or_insert_with(|| {
-                    Value::table(BTreeMap::new())
-                });
+                let entry = table
+                    .entry(part.to_string())
+                    .or_insert_with(|| Value::table(BTreeMap::new()));
                 current = entry;
             } else {
                 return Err(Error::type_error(
@@ -366,7 +368,8 @@ impl Value {
             return Err(Error::key_not_found(path));
         }
 
-        let (last_key, parent_path) = parts.split_last()
+        let (last_key, parent_path) = parts
+            .split_last()
             .ok_or_else(|| Error::key_not_found(path))?;
 
         // Navigate to parent
@@ -374,14 +377,21 @@ impl Value {
         for part in parent_path {
             match current {
                 Value::Table(table) => {
-                    current = table.get_mut(*part)
+                    current = table
+                        .get_mut(*part)
                         .ok_or_else(|| Error::key_not_found(*part))?;
                 }
-                _ => return Err(Error::type_error(
-                    format!("Cannot navigate into {} when removing key '{}'", current.type_name(), part),
-                    "table",
-                    current.type_name(),
-                )),
+                _ => {
+                    return Err(Error::type_error(
+                        format!(
+                            "Cannot navigate into {} when removing key '{}'",
+                            current.type_name(),
+                            part
+                        ),
+                        "table",
+                        current.type_name(),
+                    ))
+                }
             }
         }
 
@@ -390,7 +400,11 @@ impl Value {
             Ok(table.remove(*last_key))
         } else {
             Err(Error::type_error(
-                format!("Cannot remove key '{}' from {}", last_key, current.type_name()),
+                format!(
+                    "Cannot remove key '{}' from {}",
+                    last_key,
+                    current.type_name()
+                ),
                 "table",
                 current.type_name(),
             ))
@@ -593,23 +607,27 @@ mod tests {
         let mut inner_table = BTreeMap::new();
         inner_table.insert("inner_key".to_string(), Value::string("inner_value"));
         table.insert("outer_key".to_string(), Value::table(inner_table));
-        
+
         let value = Value::table(table);
-        
+
         assert_eq!(
-            value.get("outer_key.inner_key").unwrap().as_string().unwrap(),
+            value
+                .get("outer_key.inner_key")
+                .unwrap()
+                .as_string()
+                .unwrap(),
             "inner_value"
         );
     }
 
-    #[test] 
+    #[test]
     fn test_enterprise_error_handling() {
         let mut value = Value::table(BTreeMap::new());
-        
+
         // Test proper error handling instead of panics
         assert!(value.get_mut_nested("nonexistent.key").is_err());
         assert!(value.remove("nonexistent.key").is_err());
-        
+
         // Test successful operations
         assert!(value.set_nested("test.key", Value::string("value")).is_ok());
         assert!(value.get("test.key").is_some());

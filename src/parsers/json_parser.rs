@@ -9,12 +9,8 @@ use std::collections::BTreeMap;
 /// Parse JSON format configuration  
 pub fn parse(source: &str) -> Result<Value> {
     let json_value: serde_json::Value = serde_json::from_str(source)
-        .map_err(|e| Error::parse(
-            format!("JSON parse error: {}", e),
-            e.line(),
-            e.column(),
-        ))?;
-    
+        .map_err(|e| Error::parse(format!("JSON parse error: {}", e), e.line(), e.column()))?;
+
     convert_json_value(json_value)
 }
 
@@ -31,16 +27,14 @@ fn convert_json_value(json_value: serde_json::Value) -> Result<Value> {
             } else {
                 Err(Error::parse(
                     format!("Invalid number: {}", n),
-                    1, 1, // JSON parser doesn't give us position info
+                    1,
+                    1, // JSON parser doesn't give us position info
                 ))
             }
         }
         serde_json::Value::String(s) => Ok(Value::String(s)),
         serde_json::Value::Array(arr) => {
-            let converted: Result<Vec<Value>> = arr
-                .into_iter()
-                .map(convert_json_value)
-                .collect();
+            let converted: Result<Vec<Value>> = arr.into_iter().map(convert_json_value).collect();
             Ok(Value::Array(converted?))
         }
         serde_json::Value::Object(obj) => {
@@ -79,10 +73,8 @@ fn convert_to_json_value(value: &Value) -> Result<serde_json::Value> {
         }
         Value::String(s) => Ok(serde_json::Value::String(s.clone())),
         Value::Array(arr) => {
-            let converted: Result<Vec<serde_json::Value>> = arr
-                .iter()
-                .map(convert_to_json_value)
-                .collect();
+            let converted: Result<Vec<serde_json::Value>> =
+                arr.iter().map(convert_to_json_value).collect();
             Ok(serde_json::Value::Array(converted?))
         }
         Value::Table(table) => {
@@ -103,7 +95,8 @@ mod tests {
 
     #[test]
     fn test_basic_json() {
-        let config = parse(r#"
+        let config = parse(
+            r#"
         {
             "name": "test",
             "port": 8080,
@@ -113,26 +106,34 @@ mod tests {
                 "max_connections": 100
             }
         }
-        "#).unwrap();
-        
+        "#,
+        )
+        .unwrap();
+
         assert_eq!(config.get("name").unwrap().as_string().unwrap(), "test");
         assert_eq!(config.get("port").unwrap().as_integer().unwrap(), 8080);
-        assert_eq!(config.get("database.host").unwrap().as_string().unwrap(), "localhost");
+        assert_eq!(
+            config.get("database.host").unwrap().as_string().unwrap(),
+            "localhost"
+        );
     }
 
     #[test]
     fn test_json_arrays() {
-        let config = parse(r#"
+        let config = parse(
+            r#"
         {
             "servers": ["alpha", "beta", "gamma"],
             "ports": [8001, 8002, 8003]
         }
-        "#).unwrap();
-        
+        "#,
+        )
+        .unwrap();
+
         let servers = config.get("servers").unwrap().as_array().unwrap();
         assert_eq!(servers.len(), 3);
         assert_eq!(servers[0].as_string().unwrap(), "alpha");
-        
+
         let ports = config.get("ports").unwrap().as_array().unwrap();
         assert_eq!(ports[0].as_integer().unwrap(), 8001);
     }
@@ -143,7 +144,7 @@ mod tests {
         table.insert("name".to_string(), Value::String("test".to_string()));
         table.insert("port".to_string(), Value::Integer(8080));
         let config = Value::Table(table);
-        
+
         let json = serialize(&config).unwrap();
         assert!(json.contains("\"name\": \"test\""));
         assert!(json.contains("\"port\": 8080"));
@@ -163,14 +164,11 @@ pub fn to_json_value(value: &Value) -> Result<serde_json::Value> {
         Value::Integer(i) => Ok(serde_json::Value::Number(serde_json::Number::from(*i))),
         Value::Float(f) => Ok(serde_json::Value::Number(
             serde_json::Number::from_f64(*f)
-                .ok_or_else(|| Error::serialize("Invalid float value".to_string()))?
+                .ok_or_else(|| Error::serialize("Invalid float value".to_string()))?,
         )),
         Value::String(s) => Ok(serde_json::Value::String(s.clone())),
         Value::Array(arr) => {
-            let converted: Result<Vec<serde_json::Value>> = arr
-                .iter()
-                .map(to_json_value)
-                .collect();
+            let converted: Result<Vec<serde_json::Value>> = arr.iter().map(to_json_value).collect();
             Ok(serde_json::Value::Array(converted?))
         }
         Value::Table(table) => {

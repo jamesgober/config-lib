@@ -157,12 +157,7 @@ impl SchemaBuilder {
     }
 
     /// Add a field with default value
-    pub fn field_with_default(
-        mut self,
-        name: &str,
-        field_type: FieldType,
-        default: Value,
-    ) -> Self {
+    pub fn field_with_default(mut self, name: &str, field_type: FieldType, default: Value) -> Self {
         self.fields.insert(
             name.to_string(),
             FieldSchema {
@@ -255,12 +250,7 @@ impl Schema {
     }
 
     /// Validate a single field
-    fn validate_field(
-        &self,
-        value: &Value,
-        schema: &FieldSchema,
-        path: &str,
-    ) -> Result<()> {
+    fn validate_field(&self, value: &Value, schema: &FieldSchema, path: &str) -> Result<()> {
         self.validate_type(value, &schema.field_type, path)
     }
 
@@ -272,10 +262,10 @@ impl Schema {
             (Value::Integer(_), FieldType::Integer) => Ok(()),
             (Value::Float(_), FieldType::Float) => Ok(()),
             (Value::String(_), FieldType::String) => Ok(()),
-            
+
             // Allow integer to float conversion
             (Value::Integer(_), FieldType::Float) => Ok(()),
-            
+
             // Array validation
             (Value::Array(arr), FieldType::Array(element_type)) => {
                 for (i, element) in arr.iter().enumerate() {
@@ -284,7 +274,7 @@ impl Schema {
                 }
                 Ok(())
             }
-            
+
             // Table validation
             (Value::Table(table), FieldType::Table(table_schema)) => {
                 // Create a temporary schema for nested validation
@@ -293,7 +283,7 @@ impl Schema {
                 };
                 nested_schema.validate_table(table, path)
             }
-            
+
             // Union type validation
             (value, FieldType::Union(types)) => {
                 for union_type in types {
@@ -303,24 +293,17 @@ impl Schema {
                 }
                 Err(Error::schema(
                     path.to_string(),
-                    format!(
-                        "Value does not match any of the union types: {:?}",
-                        types
-                    ),
+                    format!("Value does not match any of the union types: {:?}", types),
                 ))
             }
-            
+
             // Any type always validates
             (_, FieldType::Any) => Ok(()),
-            
+
             // Type mismatch
             _ => Err(Error::schema(
                 path.to_string(),
-                format!(
-                    "Expected {:?}, found {}",
-                    field_type,
-                    value.type_name()
-                ),
+                format!("Expected {:?}, found {}", field_type, value.type_name()),
             )),
         }
     }
