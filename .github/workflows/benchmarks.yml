@@ -1,0 +1,136 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+
+    - name: Run benchmarks
+      run: cargo bench --features xml,hcl,env-override,validation,json
+
+    - name: Store benchmark result
+      uses: benchmark-action/github-action-benchmark@v1
+      if: github.ref == 'refs/heads/main'
+      with:
+        tool: 'cargo'
+        output-file-path: target/criterion/benchmarks.json
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+        # Comment on PR if performance regression detected
+        comment-on-alert: true
+        alert-threshold: '200%'
+        fail-on-alert: false
+
+  benchmark-comparison:
+    name: Benchmark Comparison
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+
+    - name: Install critcmp
+      run: cargo install critcmp
+
+    - name: Run baseline benchmarks
+      run: |
+        git checkout ${{ github.event.pull_request.base.sha }}
+        cargo bench --features xml,hcl,env-override,validation,json -- --save-baseline baseline
+
+    - name: Run PR benchmarks
+      run: |
+        git checkout ${{ github.event.pull_request.head.sha }}
+        cargo bench --features xml,hcl,env-override,validation,json -- --save-baseline pr
+
+    - name: Compare benchmarks
+      run: critcmp baseline pr
+
+  memory-usage:
+    name: Memory Usage Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+
+    - name: Install valgrind
+      run: sudo apt-get install valgrind
+
+    - name: Build tests
+      run: cargo test --no-run --features xml,hcl,env-override,validation,json
+
+    - name: Run memory analysis
+      run: |
+        valgrind --tool=massif --massif-out-file=massif.out \
+        cargo test --features xml,hcl,env-override,validation,json -- --nocapture
+
+    - name: Analyze memory usage
+      run: |
+        ms_print massif.out > memory_report.txt
+        cat memory_report.txt
+
+  compile-time:
+    name: Compile Time Benchmarks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+
+    - name: Clean build
+      run: cargo clean
+
+    - name: Time clean build
+      run: |
+        echo "Clean build timing:"
+        time cargo build --release --features xml,hcl,env-override,validation,json
+
+    - name: Time incremental build
+      run: |
+        echo "Incremental build timing:"
+        touch src/lib.rs
+        time cargo build --release --features xml,hcl,env-override,validation,json
+
+    - name: Check binary size
+      run: |
+        echo "Binary sizes:"
+        ls -lh target/release/config-lib 2>/dev/null || echo "No binary found"
+        find target/release -name "*.so" -o -name "*.dll" -o -name "*.dylib" | xargs ls -lh
