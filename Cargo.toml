@@ -74,7 +74,7 @@ default = ["conf"]
 # Config Formats
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 conf = []                              # CONF format parsing (built-in)
-noml = []                              # NOML format parsing (placeholder feature)
+noml = []                              # NOML format parsing (temporarily disabled)
 toml = []                              # TOML format parsing (placeholder feature)
 json = ["dep:serde_json"]              # JSON format parsing
 
@@ -116,7 +116,7 @@ regex = { version = "1.0", optional = true }
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 quick-xml = { version = "0.31", optional = true }   # High-performance XML parser
 
-# NOML Language Library (commented out until path is resolved)
+# NOML Language Library (temporarily disabled for compilation)
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 # noml = { path = "../../NOML/noml-rust", optional = true }
 
