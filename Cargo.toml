@@ -80,9 +80,16 @@ json = ["dep:serde_json"]              # JSON format parsing
 
 # Additional Features
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
-async   = ["dep:tokio"]                # Enable async file operations
-chrono  = ["dep:chrono"]               # Enable DateTime support
-schema  = []                           # Enable schema validation
+async       = ["dep:tokio"]            # Enable async file operations
+chrono      = ["dep:chrono"]           # Enable DateTime support
+schema      = []                       # Enable schema validation
+validation  = ["dep:regex"]            # Enable configuration validation rules
+
+# Enterprise Format Support
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+xml         = ["dep:quick-xml"]        # XML format parsing (zero-copy)
+hcl         = []                       # HashiCorp Configuration Language (basic)
+env-override = []                      # Smart environment variable overrides
 
 
 
@@ -103,6 +110,11 @@ tokio = { version = "1.0", features = ["fs", "io-util"], optional = true }
 chrono = { version = "0.4", features = ["serde"], optional = true }
 serde_json = { version = "1.0", optional = true }
 base64 = { version = "0.21", optional = true }
+regex = { version = "1.0", optional = true }
+
+# Enterprise Format Parsers
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+quick-xml = { version = "0.31", optional = true }   # High-performance XML parser
 
 # NOML Language Library (commented out until path is resolved)
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
@@ -121,3 +133,17 @@ tempfile = "3.8"
 [[bench]]
 name = "enterprise_benchmarks"
 harness = false
+
+# Optimized Release Profile for Maximum Performance
+#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+[profile.release]
+opt-level = 3           # Maximum optimization level
+lto = "fat"             # Full link-time optimization
+codegen-units = 1       # Single codegen unit for better optimization
+panic = "abort"         # Smaller binary, better performance
+overflow-checks = false # Disable overflow checks in release
+debug = false           # No debug info for smaller binary
+
+[profile.bench]
+inherits = "release"    # Benchmarks use release optimizations
+debug = true            # Keep debug info for profiling
