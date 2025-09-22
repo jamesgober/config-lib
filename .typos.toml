@@ -1,0 +1,56 @@
+[default]
+# Extend the default configuration
+extend-ignore-identifiers-re = [
+    # Technical terms and abbreviations
+    "noml",
+    "toml", 
+    "hcl",
+    "vals",
+    "configs",
+    "structs",
+    "impls",
+    "repr",
+    "cfg",
+    "benchs",
+    "clippy",
+    "rustfmt",
+    "deser",
+    "ser",
+    "deserialize",
+    "serialize",
+    # File extensions and paths
+    ".*\\.rs$",
+    ".*\\.toml$",
+    ".*\\.yml$",
+    ".*\\.yaml$",
+    ".*\\.json$",
+    ".*\\.xml$",
+    ".*\\.conf$",
+    ".*\\.properties$",
+    ".*\\.ini$",
+]
+
+extend-ignore-words-re = [
+    # Common technical terms
+    "performant",
+    "config",
+    "configs",
+    "validator",
+    "validators",
+    "env",
+    "vars",
+]
+
+[default.extend-identifiers]
+# Allow specific identifiers that might be flagged as typos
+"dont" = "don't"
+"wont" = "won't"
+"cant" = "can't"
+
+[files]
+# Extend the default set of files to check
+extend-exclude = [
+    "target/",
+    "*.lock",
+    "CHANGELOG.md", # May contain version numbers that look like typos
+]
