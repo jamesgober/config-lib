@@ -289,7 +289,7 @@ impl<'a> ConfParser<'a> {
         if has_dot {
             number_str.parse::<f64>().map(Value::float).map_err(|_| {
                 Error::parse(
-                    format!("Invalid float: {}", number_str),
+                    format!("Invalid float: {number_str}"),
                     self.line,
                     self.column,
                 )
@@ -297,7 +297,7 @@ impl<'a> ConfParser<'a> {
         } else {
             number_str.parse::<i64>().map(Value::integer).map_err(|_| {
                 Error::parse(
-                    format!("Invalid integer: {}", number_str),
+                    format!("Invalid integer: {number_str}"),
                     self.line,
                     self.column,
                 )
@@ -334,7 +334,7 @@ impl<'a> ConfParser<'a> {
         // Check if it's a space or comma separated array
         if raw_value.contains(' ') || raw_value.contains(',') {
             let items: Vec<Value> = raw_value
-                .split(|c| c == ' ' || c == ',')
+                .split([' ', ','])
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty())
                 .map(|s| self.parse_simple_value(s))
@@ -428,12 +428,12 @@ impl<'a> ConfParser<'a> {
         match self.advance() {
             Some(ch) if ch == expected => Ok(()),
             Some(ch) => Err(Error::parse(
-                format!("Expected '{}', found '{}'", expected, ch),
+                format!("Expected '{expected}', found '{ch}'"),
                 self.line,
                 self.column,
             )),
             None => Err(Error::parse(
-                format!("Expected '{}', found end of input", expected),
+                format!("Expected '{expected}', found end of input"),
                 self.line,
                 self.column,
             )),
@@ -466,8 +466,8 @@ mod tests {
     #[test]
     fn test_booleans() {
         let config = parse("bool1 = true\nbool2 = false").unwrap();
-        assert_eq!(config.get("bool1").unwrap().as_bool().unwrap(), true);
-        assert_eq!(config.get("bool2").unwrap().as_bool().unwrap(), false);
+        assert!(config.get("bool1").unwrap().as_bool().unwrap());
+        assert!(!config.get("bool2").unwrap().as_bool().unwrap());
     }
 
     #[test]
