@@ -264,7 +264,10 @@ impl EnvOverrideSystem {
             }
             serde_json::Value::String(s) => Value::string(s),
             serde_json::Value::Array(arr) => {
-                let values: Vec<Value> = arr.into_iter().map(|v| self.convert_json_value(v)).collect();
+                let values: Vec<Value> = arr
+                    .into_iter()
+                    .map(|v| self.convert_json_value(v))
+                    .collect();
                 Value::array(values)
             }
             serde_json::Value::Object(obj) => {
@@ -351,7 +354,7 @@ mod tests {
         assert_eq!(system.parse_scalar_value("true"), Value::bool(true));
         assert_eq!(system.parse_scalar_value("false"), Value::bool(false));
         assert_eq!(system.parse_scalar_value("123"), Value::integer(123));
-        assert_eq!(system.parse_scalar_value("3.14"), Value::float(3.14));
+        assert_eq!(system.parse_scalar_value("3.141"), Value::float(3.141));
         assert_eq!(system.parse_scalar_value("hello"), Value::string("hello"));
     }
 
