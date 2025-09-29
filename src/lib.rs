@@ -68,7 +68,7 @@ pub mod audit;
 pub mod env_override;
 
 // Re-export main types for convenience
-pub use config::Config;
+pub use config::{Config, ConfigBuilder, ConfigValue};
 pub use enterprise::{ConfigManager, EnterpriseConfig};
 pub use error::{Error, Result};
 pub use value::Value;
