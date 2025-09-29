@@ -80,15 +80,15 @@ json = ["dep:serde_json"]              # JSON format parsing
 
 # Additional Features
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
-async       = ["dep:tokio", "noml?/async"]  # Enable async file operations + NOML async
+async       = ["dep:tokio", "noml?/async"]   # Enable async file operations + NOML async
 chrono      = ["dep:chrono", "noml?/chrono"] # Enable DateTime support + NOML chrono
-schema      = []                       # Enable schema validation
-validation  = ["dep:regex"]            # Enable configuration validation rules
+schema      = []                             # Enable schema validation
+validation  = ["dep:regex"]                  # Enable configuration validation rules
 
 # Enterprise Format Support
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
-xml         = ["dep:quick-xml"]        # XML format parsing (zero-copy)
-hcl         = []                       # HashiCorp Configuration Language (basic)
+xml          = ["dep:quick-xml"]       # XML format parsing (zero-copy)
+hcl          = []                      # HashiCorp Configuration Language (basic)
 env-override = []                      # Smart environment variable overrides
 
 
@@ -123,6 +123,7 @@ noml = { version = "0.9", optional = true, features = [] }
 
 
 
+
 [dev-dependencies]
 #▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
@@ -130,13 +131,23 @@ tokio-test = "0.4"                     # Async testing utilities
 criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3.8"
 
+
+
+
+
 [[bench]]
+#▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░
 name = "enterprise_benchmarks"
 harness = false
 
+
+
+
+
 # Optimized Release Profile for Maximum Performance
-#☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
+
 [profile.release]
+#▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░
 opt-level = 3           # Maximum optimization level
 lto = "fat"             # Full link-time optimization
 codegen-units = 1       # Single codegen unit for better optimization
@@ -145,5 +156,6 @@ overflow-checks = false # Disable overflow checks in release
 debug = false           # No debug info for smaller binary
 
 [profile.bench]
+#▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░
 inherits = "release"    # Benchmarks use release optimizations
 debug = true            # Keep debug info for profiling
