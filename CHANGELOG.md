@@ -23,6 +23,7 @@
   - Fixed 3 unused variables in examples by prefixing with underscore
   - Resolved TODO comment in enterprise.rs with performance explanation for Arc<Value> optimization
   - Removed problematic GitHub Actions release workflow that was causing CI failures
+  - Fixed ConfigBuilder compilation error when validation feature is enabled by properly handling mutable config when validation rules are present
 
 ### Updated
 - **📚 Documentation**:
