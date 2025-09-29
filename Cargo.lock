@@ -501,6 +501,8 @@ dependencies = [
 [[package]]
 name = "noml"
 version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c8f9f5195f67b24e0697e4e84e8184c9cf47e233bcbec690abd63087456af91"
 dependencies = [
  "chrono",
  "indexmap",
