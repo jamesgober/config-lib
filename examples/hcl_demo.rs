@@ -55,7 +55,7 @@ fn main() -> Result<()> {
         println!("1. Terraform Configuration:");
         println!("---------------------------");
 
-        let config = Config::from_string(terraform_config, Some("hcl"))?;
+        let _config = Config::from_string(terraform_config, Some("hcl"))?;
 
         println!("   ✅ Terraform HCL parsing successful!");
         println!("   📝 Parsed configuration structure");
@@ -100,7 +100,7 @@ fn main() -> Result<()> {
         println!("2. Vault Configuration:");
         println!("-----------------------");
 
-        let config = Config::from_string(vault_config, Some("hcl"))?;
+        let _config = Config::from_string(vault_config, Some("hcl"))?;
 
         println!("   ✅ Vault HCL parsing successful!");
         println!("   🔐 Security policy configuration loaded\n");
@@ -216,7 +216,7 @@ fn main() -> Result<()> {
         println!("4. Nomad Job Specification:");
         println!("---------------------------");
 
-        let config = Config::from_string(nomad_config, Some("hcl"))?;
+        let _config = Config::from_string(nomad_config, Some("hcl"))?;
 
         println!("   ✅ Nomad HCL parsing successful!");
         println!("   🚀 Job specification loaded\n");
