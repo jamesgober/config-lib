@@ -256,6 +256,11 @@ impl Schema {
 
     /// Validate a value against a type
     fn validate_type(&self, value: &Value, field_type: &FieldType, path: &str) -> Result<()> {
+        Self::validate_type_impl(value, field_type, path)
+    }
+
+    /// Implementation of type validation (static to avoid clippy warning)
+    fn validate_type_impl(value: &Value, field_type: &FieldType, path: &str) -> Result<()> {
         match (value, field_type) {
             (Value::Null, FieldType::Null) => Ok(()),
             (Value::Bool(_), FieldType::Bool) => Ok(()),
@@ -270,7 +275,7 @@ impl Schema {
             (Value::Array(arr), FieldType::Array(element_type)) => {
                 for (i, element) in arr.iter().enumerate() {
                     let element_path = format!("{path}[{i}]");
-                    self.validate_type(element, element_type, &element_path)?;
+                    Self::validate_type_impl(element, element_type, &element_path)?;
                 }
                 Ok(())
             }
@@ -287,7 +292,7 @@ impl Schema {
             // Union type validation
             (value, FieldType::Union(types)) => {
                 for union_type in types {
-                    if self.validate_type(value, union_type, path).is_ok() {
+                    if Self::validate_type_impl(value, union_type, path).is_ok() {
                         return Ok(());
                     }
                 }
