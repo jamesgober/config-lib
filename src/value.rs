@@ -255,19 +255,39 @@ impl Value {
             return Some(self);
         }
 
+        // First try nested table access
         let parts: Vec<&str> = path.split('.').collect();
         let mut current = self;
+        let mut found_nested = true;
 
         for part in parts {
             match current {
                 Value::Table(table) => {
-                    current = table.get(part)?;
+                    if let Some(next) = table.get(part) {
+                        current = next;
+                    } else {
+                        found_nested = false;
+                        break;
+                    }
                 }
-                _ => return None,
+                _ => {
+                    found_nested = false;
+                    break;
+                }
             }
         }
 
-        Some(current)
+        // If nested access succeeds, return it
+        if found_nested {
+            return Some(current);
+        }
+
+        // Fallback: try flat key access for formats like INI that use dotted keys
+        if let Value::Table(table) = self {
+            table.get(path)
+        } else {
+            None
+        }
     }
 
     /// Get a mutable reference to a value by path (ENTERPRISE ERROR HANDLING)
