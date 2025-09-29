@@ -1,0 +1,5 @@
+[default.extend-words]
+# Allow technical terms and brand names
+HashiCorp = "HashiCorp"
+hashicorp = "hashicorp"
+DevOps = "DevOps"
