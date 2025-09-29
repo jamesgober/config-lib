@@ -209,7 +209,17 @@ impl PropertiesParser {
             }
         }
 
-        let code_point = u32::from_str_radix(&hex_digits, 16).unwrap();
+        let code_point = match u32::from_str_radix(&hex_digits, 16) {
+            Ok(cp) => cp,
+            Err(_) => {
+                return Err(Error::Parse {
+                    message: format!("Invalid hex digits in unicode escape: {hex_digits}"),
+                    line: self.line,
+                    column: self.column,
+                    file: None,
+                });
+            }
+        };
         if let Some(unicode_char) = char::from_u32(code_point) {
             Ok(unicode_char.to_string())
         } else {
