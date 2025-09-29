@@ -118,7 +118,7 @@ impl<'a> XmlParser<'a> {
                         "XML parsing error".to_string(),
                         std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
-                            format!("XML error: {}", e),
+                            format!("XML error: {e}"),
                         ),
                     ))
                 }
@@ -255,7 +255,7 @@ mod tests {
         "#;
 
         let result = parse_xml(xml).unwrap();
-        println!("Parsed XML: {:#?}", result);
+        println!("Parsed XML: {result:#?}");
 
         // Test passes if parsing doesn't panic
         assert!(matches!(result, Value::Table(_)));
