@@ -11,6 +11,8 @@
         <span>&nbsp;│&nbsp;</span>
         <span>API</span>
         <span>&nbsp;│&nbsp;</span>
+        <a href="./FORMATS.md" title="Formats"><b>FORMATS</b></a>
+        <span>&nbsp;│&nbsp;</span>
         <a href="./GUIDELINES.md" title="Developer Guidelines"><b>GUIDELINES</b></a>
     </sup>
 </div>
@@ -36,6 +38,9 @@
   - [Modification & Persistence](#config-modification)
   - [Validation & Schema](#schema-api)
 - **[ConfigBuilder API](#configbuilder-api)**
+  - [Default Settings](#default-settings)
+  - [Multi-Source Loading](#multi-source-loading)
+  - [Environment Integration](#environment-integration)
 - **[Value API](#value-api)**
   - [Type Construction](#value-construction)
   - [Type Checking](#value-checking)
@@ -802,29 +807,135 @@ let config = ConfigBuilder::new()
 
 #### **ConfigBuilder::with_defaults()**
 
-Set default values that are used when keys are missing.
+Set default values that are used when keys are missing from the loaded configuration. This is the primary method for implementing preset/fallback configuration values.
 
-**Signature:** `pub fn with_defaults(mut self, defaults: HashMap<String, ConfigValue>) -> Self`
+**Signature:** `pub fn with_defaults(mut self, defaults: HashMap<String, Value>) -> Self`
 
-**Example:**
+**Parameters:**
+- `defaults` - HashMap of key-value pairs to use as defaults
+
+**Returns:**
+- `Self` - Builder for method chaining
+
+**Description:**
+Defaults are applied first, then configuration files override them. This ensures your application always has sensible values while allowing customization through configuration files. Supports nested keys using dot notation (e.g., `"database.host"`).
+
+**Examples:**
+
+**Basic Usage:**
 ```rust
-use config_lib::{ConfigBuilder, ConfigValue};
+use config_lib::{ConfigBuilder, Value};
 use std::collections::HashMap;
 
-// Set up default values
+// Set up essential application defaults
 let mut defaults = HashMap::new();
-defaults.insert("server.port".to_string(), ConfigValue::Integer(8080));
-defaults.insert("app.debug".to_string(), ConfigValue::Bool(false));
-defaults.insert("database.timeout".to_string(), ConfigValue::Integer(30));
+defaults.insert("server.port".to_string(), Value::Integer(8080));
+defaults.insert("app.debug".to_string(), Value::Bool(false));
+defaults.insert("database.timeout".to_string(), Value::Integer(30));
+defaults.insert("app.name".to_string(), Value::String("MyApp".to_string()));
 
 let config = ConfigBuilder::new()
     .with_defaults(defaults)
     .from_file("app.conf")?  // File values override defaults
     .build()?;
 
-// Defaults are available even if not in file
-let port = config.get("server.port")?.as_integer()?;  // From file or default
-let timeout = config.get("database.timeout")?.as_integer()?;  // From default
+// Defaults are available even if not in configuration file
+let port = config.get("server.port")?.as_integer()?;      // From file or 8080
+let timeout = config.get("database.timeout")?.as_integer()?; // From file or 30
+let debug = config.get("app.debug")?.as_bool()?;          // From file or false
+
+# Ok::<(), config_lib::Error>(())
+```
+
+**Comprehensive Production Defaults:**
+```rust
+use config_lib::{ConfigBuilder, Value};
+use std::collections::HashMap;
+
+// Production-ready defaults with security and performance in mind
+let defaults = HashMap::from([
+    // Application defaults
+    ("app.name".to_string(), Value::String("ProductionApp".to_string())),
+    ("app.version".to_string(), Value::String("1.0.0".to_string())),
+    ("app.environment".to_string(), Value::String("production".to_string())),
+    ("app.debug".to_string(), Value::Bool(false)),
+    
+    // Server defaults (secure by default)
+    ("server.host".to_string(), Value::String("127.0.0.1".to_string())),
+    ("server.port".to_string(), Value::Integer(8443)),
+    ("server.ssl_enabled".to_string(), Value::Bool(true)),
+    ("server.timeout".to_string(), Value::Integer(30)),
+    ("server.workers".to_string(), Value::Integer(4)),
+    
+    // Database defaults
+    ("database.host".to_string(), Value::String("localhost".to_string())),
+    ("database.port".to_string(), Value::Integer(5432)),
+    ("database.pool_size".to_string(), Value::Integer(10)),
+    ("database.connection_timeout".to_string(), Value::Integer(60)),
+    ("database.ssl_mode".to_string(), Value::String("require".to_string())),
+    
+    // Caching defaults
+    ("cache.enabled".to_string(), Value::Bool(true)),
+    ("cache.ttl".to_string(), Value::Integer(3600)),
+    ("cache.max_size".to_string(), Value::String("128MB".to_string())),
+    
+    // Logging defaults
+    ("logging.level".to_string(), Value::String("warn".to_string())),
+    ("logging.file".to_string(), Value::String("/var/log/app.log".to_string())),
+    ("logging.max_size".to_string(), Value::String("100MB".to_string())),
+    ("logging.rotate".to_string(), Value::Bool(true)),
+    
+    // Feature flags (conservative defaults)
+    ("features.analytics".to_string(), Value::Bool(false)),
+    ("features.monitoring".to_string(), Value::Bool(true)),
+    ("features.api_versioning".to_string(), Value::Bool(true)),
+]);
+
+let config = ConfigBuilder::new()
+    .with_defaults(defaults)
+    .from_file("production.conf")?
+    .build()?;
+
+// All configuration guaranteed to have values
+let app_name = config.get("app.name")?.as_string()?;
+let ssl_enabled = config.get("server.ssl_enabled")?.as_bool()?;
+let pool_size = config.get("database.pool_size")?.as_integer()?;
+
+# Ok::<(), config_lib::Error>(())
+```
+
+**Type-Safe Default Patterns:**
+```rust
+use config_lib::{ConfigBuilder, Value};
+use std::collections::HashMap;
+
+// Helper function for creating typed defaults
+fn create_server_defaults() -> HashMap<String, Value> {
+    HashMap::from([
+        ("server.host".to_string(), Value::String("localhost".to_string())),
+        ("server.port".to_string(), Value::Integer(8080)),
+        ("server.ssl_enabled".to_string(), Value::Bool(false)),
+        ("server.timeout".to_string(), Value::Integer(30)),
+    ])
+}
+
+fn create_database_defaults() -> HashMap<String, Value> {
+    HashMap::from([
+        ("database.host".to_string(), Value::String("localhost".to_string())),
+        ("database.port".to_string(), Value::Integer(5432)),
+        ("database.pool_size".to_string(), Value::Integer(10)),
+        ("database.ssl_mode".to_string(), Value::String("prefer".to_string())),
+    ])
+}
+
+// Combine defaults from multiple sources
+let mut all_defaults = create_server_defaults();
+all_defaults.extend(create_database_defaults());
+
+let config = ConfigBuilder::new()
+    .with_defaults(all_defaults)
+    .from_file("app.conf")?
+    .build()?;
 
 # Ok::<(), config_lib::Error>(())
 ```
@@ -924,6 +1035,199 @@ fn create_app_schema() -> config_lib::Schema {
 <a href="#top">&uarr; <b>TOP</b></a>
 <br>
 <br>
+
+---
+
+<h2 id="default-settings">Default Settings</h2>
+
+config-lib provides comprehensive support for default/preset configuration values that serve as fallbacks when keys are missing from configuration files. This ensures applications always have sensible defaults while allowing configuration files to override specific values.
+
+### **Default Setting Strategies**
+
+#### **1. ConfigBuilder Defaults (Recommended)**
+
+The primary method for setting defaults using the builder pattern:
+
+```rust
+use config_lib::{ConfigBuilder, Value};
+use std::collections::HashMap;
+
+let defaults = HashMap::from([
+    ("server.port".to_string(), Value::Integer(8080)),
+    ("app.debug".to_string(), Value::Bool(false)),
+    ("database.timeout".to_string(), Value::Integer(30)),
+]);
+
+let config = ConfigBuilder::new()
+    .with_defaults(defaults)     // Defaults applied first
+    .from_file("app.conf")?      // File overrides defaults
+    .build()?;
+```
+
+#### **2. Enterprise Config Defaults**
+
+High-performance defaults with caching for enterprise applications:
+
+```rust
+use config_lib::enterprise::EnterpriseConfig;
+
+let mut config = EnterpriseConfig::new();
+
+// Set cached defaults
+config.set_default("server.port", Value::Integer(8080));
+config.set_default("cache.enabled", Value::Bool(true));
+
+// Load file with defaults as fallback
+config = EnterpriseConfig::from_file("production.conf")?;
+
+// Sub-50ns access with automatic fallback to defaults
+let port = config.get_or_default("server.port");
+```
+
+#### **3. Inline Defaults with get_or()**
+
+Provide defaults at access time for maximum flexibility:
+
+```rust
+use config_lib::Config;
+
+let config = Config::from_file("app.conf")?;
+
+// Inline defaults (type-safe)
+let port = config.get_or("server.port", 8080);
+let debug = config.get_or("app.debug", false);
+let name = config.get_or("app.name", "DefaultApp".to_string());
+```
+
+#### **4. Configuration Merging**
+
+Merge multiple configuration sources with priority ordering:
+
+```rust
+use config_lib::Config;
+
+// Base configuration with all defaults
+let mut base = Config::from_string(r#"
+server.port = 8080
+app.debug = false
+database.timeout = 30
+"#, Some("conf"))?;
+
+// User configuration overrides defaults
+let user = Config::from_file("user.conf")?;
+base.merge(&user)?;
+
+// Environment-specific overrides
+let env = Config::from_file("production.conf")?;
+base.merge(&env)?;
+
+// Final priority: defaults < user.conf < production.conf
+```
+
+### **Best Practices**
+
+#### **Security-First Defaults**
+```rust
+// Secure defaults for production
+let secure_defaults = HashMap::from([
+    ("server.host".to_string(), Value::String("127.0.0.1".to_string())), // Localhost only
+    ("server.ssl_enabled".to_string(), Value::Bool(true)),                // SSL required
+    ("database.ssl_mode".to_string(), Value::String("require".to_string())), // DB SSL required
+    ("logging.level".to_string(), Value::String("warn".to_string())),      // Minimal logging
+    ("features.debug".to_string(), Value::Bool(false)),                   // No debug info
+]);
+```
+
+#### **Environment-Specific Defaults**
+```rust
+// Different defaults per environment
+let defaults = match env::var("ENVIRONMENT").as_deref() {
+    Ok("production") => HashMap::from([
+        ("logging.level".to_string(), Value::String("error".to_string())),
+        ("database.pool_size".to_string(), Value::Integer(20)),
+        ("cache.enabled".to_string(), Value::Bool(true)),
+    ]),
+    Ok("development") => HashMap::from([
+        ("logging.level".to_string(), Value::String("debug".to_string())),
+        ("database.pool_size".to_string(), Value::Integer(5)),
+        ("cache.enabled".to_string(), Value::Bool(false)),
+    ]),
+    _ => HashMap::from([
+        ("logging.level".to_string(), Value::String("info".to_string())),
+        ("database.pool_size".to_string(), Value::Integer(10)),
+        ("cache.enabled".to_string(), Value::Bool(true)),
+    ]),
+};
+```
+
+#### **Validation with Defaults**
+```rust
+# #[cfg(feature = "validation")]
+# {
+use config_lib::validation::{Validator, ValidationRule};
+
+// Ensure defaults meet validation requirements
+let defaults = HashMap::from([
+    ("server.port".to_string(), Value::Integer(8080)),  // Valid port range
+    ("app.name".to_string(), Value::String("ValidApp".to_string())), // Valid pattern
+]);
+
+let validator = Validator::new()
+    .add_rule("server.port", ValidationRule::IntegerRange(1, 65535))
+    .add_rule("app.name", ValidationRule::StringPattern(r"^[a-zA-Z][a-zA-Z0-9_-]*$"));
+
+let config = ConfigBuilder::new()
+    .with_defaults(defaults)        // Validated defaults
+    .from_file("app.conf")?
+    .with_validation(validator)     // Validates defaults + file
+    .build()?;
+# }
+```
+
+### **Performance Considerations**
+
+- **Enterprise Config**: Use for high-frequency access (sub-50ns cached defaults)
+- **ConfigBuilder**: Best for application startup with comprehensive defaults
+- **Inline get_or()**: Lowest overhead for occasional access
+- **Merging**: Good for complex multi-source configurations
+
+### **Common Patterns**
+
+```rust
+// Pattern 1: Complete application configuration
+struct AppConfig {
+    server_port: i64,
+    debug_mode: bool,
+    db_pool_size: i64,
+}
+
+impl AppConfig {
+    fn from_config_with_defaults(config: &Config) -> Result<Self> {
+        Ok(AppConfig {
+            server_port: config.get_or("server.port", 8080),
+            debug_mode: config.get_or("app.debug", false),
+            db_pool_size: config.get_or("database.pool_size", 10),
+        })
+    }
+}
+
+// Pattern 2: Feature flag defaults
+let feature_defaults = HashMap::from([
+    ("features.analytics".to_string(), Value::Bool(false)),     // Opt-in
+    ("features.caching".to_string(), Value::Bool(true)),        // Opt-out
+    ("features.monitoring".to_string(), Value::Bool(true)),     // Always on
+]);
+
+// Pattern 3: Tiered default priority
+let config = ConfigBuilder::new()
+    .with_defaults(system_defaults)      // Lowest priority
+    .merge_defaults(app_defaults)        // Medium priority
+    .merge_defaults(user_defaults)       // High priority
+    .from_file("config.conf")?           // Highest priority
+    .build()?;
+```
+
+---
 
 <h2 id="value-api">Value API</h2>
 
