@@ -446,7 +446,7 @@ key3="quote\"here"
         let content = r#"
 string_val=hello
 int_val=42
-float_val=3.14
+float_val=1.234
 bool_true=true
 bool_false=false
 bool_yes=yes
@@ -457,7 +457,7 @@ bool_no=no
         if let Value::Table(map) = result {
             assert_eq!(map.get("string_val").unwrap().as_string().unwrap(), "hello");
             assert_eq!(map.get("int_val").unwrap().as_integer().unwrap(), 42);
-            assert_eq!(map.get("float_val").unwrap().as_float().unwrap(), 3.14);
+            assert_eq!(map.get("float_val").unwrap().as_float().unwrap(), 1.234);
             assert!(map.get("bool_true").unwrap().as_bool().unwrap());
             assert!(!map.get("bool_false").unwrap().as_bool().unwrap());
             assert!(map.get("bool_yes").unwrap().as_bool().unwrap());
