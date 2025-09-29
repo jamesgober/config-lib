@@ -578,7 +578,7 @@ mod tests {
         assert_eq!(Value::null(), Value::Null);
         assert_eq!(Value::bool(true), Value::Bool(true));
         assert_eq!(Value::integer(42), Value::Integer(42));
-        assert_eq!(Value::float(3.14), Value::Float(3.14));
+        assert_eq!(Value::float(1.234), Value::Float(1.234));
         assert_eq!(Value::string("test"), Value::String("test".to_string()));
     }
 
@@ -587,7 +587,7 @@ mod tests {
         let null = Value::null();
         let bool_val = Value::bool(true);
         let int_val = Value::integer(42);
-        let float_val = Value::float(3.14);
+        let float_val = Value::float(5.678);
         let string_val = Value::string("test");
         let array_val = Value::array(vec![Value::integer(1), Value::integer(2)]);
         let table_val = Value::table(BTreeMap::new());
@@ -605,12 +605,12 @@ mod tests {
     fn test_value_conversion() {
         let bool_val = Value::bool(true);
         let int_val = Value::integer(42);
-        let float_val = Value::float(3.14);
+        let float_val = Value::float(1.234);
         let string_val = Value::string("test");
 
-        assert_eq!(bool_val.as_bool().unwrap(), true);
+        assert!(bool_val.as_bool().unwrap());
         assert_eq!(int_val.as_integer().unwrap(), 42);
-        assert_eq!(float_val.as_float().unwrap(), 3.14);
+        assert_eq!(float_val.as_float().unwrap(), 1.234);
         assert_eq!(string_val.as_string().unwrap(), "test");
     }
 
