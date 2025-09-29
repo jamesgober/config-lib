@@ -199,7 +199,7 @@ mod tests {
             Ok(_) => panic!("Expected table result"),
             Err(e) => {
                 // Some HCL syntax might not be fully supported by hcl-rs
-                println!("HCL parsing note: {}", e);
+                println!("HCL parsing note: {e}");
             }
         }
     }
