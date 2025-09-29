@@ -458,9 +458,9 @@ mod tests {
 
     #[test]
     fn test_numbers() {
-        let config = parse("int = 42\nfloat = 3.14").unwrap();
+        let config = parse("int = 42\nfloat = 1.234").unwrap();
         assert_eq!(config.get("int").unwrap().as_integer().unwrap(), 42);
-        assert_eq!(config.get("float").unwrap().as_float().unwrap(), 3.14);
+        assert_eq!(config.get("float").unwrap().as_float().unwrap(), 1.234);
     }
 
     #[test]
