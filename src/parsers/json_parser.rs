@@ -126,32 +126,66 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_basic_json() {
+    fn test_basic_json() -> crate::Result<()> {
         let config = parse(
             r#"
         {
             "name": "test",
             "port": 8080,
-            "debug": true,
             "database": {
-                "host": "localhost",
-                "max_connections": 100
+                "host": "localhost"
             }
         }
         "#,
-        )
-        .unwrap();
+        )?;
 
-        assert_eq!(config.get("name").unwrap().as_string().unwrap(), "test");
-        assert_eq!(config.get("port").unwrap().as_integer().unwrap(), 8080);
         assert_eq!(
-            config.get("database.host").unwrap().as_string().unwrap(),
+            config
+                .get("name")
+                .ok_or_else(|| crate::Error::KeyNotFound {
+                    key: "name".to_string(),
+                    available: vec![
+                        "name".to_string(),
+                        "port".to_string(),
+                        "database".to_string()
+                    ],
+                })?
+                .as_string()?,
+            "test"
+        );
+        assert_eq!(
+            config
+                .get("port")
+                .ok_or_else(|| crate::Error::KeyNotFound {
+                    key: "port".to_string(),
+                    available: vec![
+                        "name".to_string(),
+                        "port".to_string(),
+                        "database".to_string()
+                    ],
+                })?
+                .as_integer()?,
+            8080
+        );
+        assert_eq!(
+            config
+                .get("database.host")
+                .ok_or_else(|| crate::Error::KeyNotFound {
+                    key: "database.host".to_string(),
+                    available: vec![
+                        "name".to_string(),
+                        "port".to_string(),
+                        "database".to_string()
+                    ],
+                })?
+                .as_string()?,
             "localhost"
         );
+        Ok(())
     }
 
     #[test]
-    fn test_json_arrays() {
+    fn test_json_arrays() -> crate::Result<()> {
         let config = parse(
             r#"
         {
@@ -159,26 +193,39 @@ mod tests {
             "ports": [8001, 8002, 8003]
         }
         "#,
-        )
-        .unwrap();
+        )?;
 
-        let servers = config.get("servers").unwrap().as_array().unwrap();
+        let servers = config
+            .get("servers")
+            .ok_or_else(|| crate::Error::KeyNotFound {
+                key: "servers".to_string(),
+                available: vec!["servers".to_string(), "ports".to_string()],
+            })?
+            .as_array()?;
         assert_eq!(servers.len(), 3);
-        assert_eq!(servers[0].as_string().unwrap(), "alpha");
+        assert_eq!(servers[0].as_string()?, "alpha");
 
-        let ports = config.get("ports").unwrap().as_array().unwrap();
-        assert_eq!(ports[0].as_integer().unwrap(), 8001);
+        let ports = config
+            .get("ports")
+            .ok_or_else(|| crate::Error::KeyNotFound {
+                key: "ports".to_string(),
+                available: vec!["servers".to_string(), "ports".to_string()],
+            })?
+            .as_array()?;
+        assert_eq!(ports[0].as_integer()?, 8001);
+        Ok(())
     }
 
     #[test]
-    fn test_json_serialization() {
+    fn test_json_serialization() -> crate::Result<()> {
         let mut table = BTreeMap::new();
         table.insert("name".to_string(), Value::String("test".to_string()));
         table.insert("port".to_string(), Value::Integer(8080));
         let config = Value::Table(table);
 
-        let json = serialize(&config).unwrap();
+        let json = serialize(&config)?;
         assert!(json.contains("\"name\": \"test\""));
         assert!(json.contains("\"port\": 8080"));
+        Ok(())
     }
 }
