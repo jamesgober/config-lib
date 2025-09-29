@@ -10,6 +10,26 @@
 
 ## [Unreleased]
 
+### Added
+- **🚀 API Enhancements**:
+  - ConfigValue wrapper struct for ergonomic value access with methods like `as_string()`, `as_integer()`, `as_string_or(default)`
+  - ConfigBuilder pattern for fluent configuration creation with `.format()` and `.from_string()`/`.from_file()` methods
+  - Enhanced Config API with `.key()` method for ergonomic value access and `.has()` method for checking key existence
+  - `.get_or(path, default)` convenience method for safe value access with fallback defaults
+
+### Fixed
+- **🔧 Code Quality Improvements**:
+  - Updated 17 format string warnings to modern Rust format syntax (`format!("{var}")` instead of `format!("{}", var)`)
+  - Fixed 3 unused variables in examples by prefixing with underscore
+  - Resolved TODO comment in enterprise.rs with performance explanation for Arc<Value> optimization
+  - Removed problematic GitHub Actions release workflow that was causing CI failures
+
+### Updated
+- **📚 Documentation**:
+  - Comprehensive README.md rewrite with feature overview, performance metrics, and enterprise focus
+  - Added new_api_demo.rs example demonstrating ConfigValue, ConfigBuilder, and convenience methods
+  - Enhanced public API exports to include ConfigValue and ConfigBuilder types
+
 
 
 
