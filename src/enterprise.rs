@@ -62,7 +62,7 @@ impl FastCache {
 ///
 /// - **Multi-Tier Caching**: Fast cache for hot values + main cache for all values
 /// - **Lock-Free Performance**: Optimized access patterns to minimize lock contention  
-/// - **Thread Safety**: All operations are safe for concurrent access via Arc<RwLock>
+/// - **Thread Safety**: All operations are safe for concurrent access via `Arc<RwLock>`
 /// - **Poison Recovery**: Graceful handling of lock poisoning without panics
 /// - **Format Preservation**: Maintains original file format during save operations
 /// - **Sub-50ns Access**: Achieves sub-50 nanosecond access times for cached values
@@ -121,6 +121,12 @@ pub struct EnterpriseConfig {
 pub struct ConfigManager {
     /// Named configuration instances
     configs: Arc<RwLock<HashMap<String, EnterpriseConfig>>>,
+}
+
+impl Default for EnterpriseConfig {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EnterpriseConfig {
@@ -413,7 +419,7 @@ impl EnterpriseConfig {
             "toml" => crate::parsers::toml_parser::parse(content),
             #[cfg(feature = "noml")]
             "noml" => crate::parsers::noml_parser::parse(content),
-            _ => Err(Error::general(format!("Unsupported format: {}", format))),
+            _ => Err(Error::general(format!("Unsupported format: {format}"))),
         }
     }
 
@@ -477,6 +483,7 @@ impl EnterpriseConfig {
     }
 
     /// Collect all keys recursively
+    #[allow(clippy::only_used_in_recursion)]
     fn collect_keys(&self, table: &BTreeMap<String, Value>, prefix: &str) -> Vec<String> {
         let mut keys = Vec::new();
 
@@ -484,7 +491,7 @@ impl EnterpriseConfig {
             let full_key = if prefix.is_empty() {
                 key.clone()
             } else {
-                format!("{}.{}", prefix, key)
+                format!("{prefix}.{key}")
             };
 
             keys.push(full_key.clone());
@@ -516,16 +523,16 @@ impl EnterpriseConfig {
                     .map_err(|e| Error::general(format!("JSON serialize error: {}", e)))
             }
             _ => Err(Error::general(format!(
-                "Serialization not supported for format: {}",
-                format
+                "Serialization not supported for format: {format}"
             ))),
         }
     }
 
     /// Convert value to string representation
+    #[allow(clippy::only_used_in_recursion)]
     fn value_to_string(&self, value: &Value) -> String {
         match value {
-            Value::String(s) => format!("\"{}\"", s),
+            Value::String(s) => format!("\"{s}\""),
             Value::Integer(i) => i.to_string(),
             Value::Float(f) => f.to_string(),
             Value::Bool(b) => b.to_string(),
