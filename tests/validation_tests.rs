@@ -361,9 +361,7 @@ fn benchmark_validation_performance() {
     // Replicate settings to create larger config
     for i in 0..20 {
         for (key, value) in &settings {
-            config
-                .set(&format!("{key}_{i}"), value.clone())
-                .unwrap();
+            config.set(&format!("{key}_{i}"), value.clone()).unwrap();
         }
     }
 
