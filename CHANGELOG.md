@@ -91,6 +91,7 @@
   - Resolved NOML variable interpolation syntax issues in multi_format example
   - Fixed array positioning in CONF parser - arrays now accessible at root level
   - All 19 examples now build and run successfully for CI/CD readiness
+- **🔧 INI Format Key Access**: Fixed critical bug where INI section keys (e.g., `database.host`) were not accessible via `Config::get()` despite being present in the key list. The `Value::get()` method now includes a fallback to check flat keys when nested table navigation fails, maintaining backward compatibility while supporting INI format's dotted key structure.
 
 ### Performance Metrics
 - **Cache Performance**: 24.9ns cached access (50% better than 50ns target)
@@ -194,5 +195,11 @@ Project creation and starting point.
 <!-- FOOT LINKS
 ################################################# -->
 [Unreleased]: https://github.com/jamesgober/metrics-lib/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/jamesgober/metrics-lib/compare/v0.1.0...v0.4.0
+[0.9.0]: https://github.com/jamesgober/metrics-lib/compare/v0.8.0...v0.9.0 <!-- 0.9.x: Stable Beta/RC -->
+[0.8.0]: https://github.com/jamesgober/metrics-lib/compare/v0.7.0...v0.8.0 <!-- 0.8.x: Stable for testing -->
+[0.7.0]: https://github.com/jamesgober/metrics-lib/compare/v0.6.0...v0.7.0 <!-- 0.7.x: Clean, Optimize, Polish -->
+[0.6.0]: https://github.com/jamesgober/metrics-lib/compare/v0.5.0...v0.6.0 <!-- 0.6.x: Finalize -->
+[0.5.0]: https://github.com/jamesgober/metrics-lib/compare/v0.4.5...v0.5.0 <!-- 0.5.x: API -->
+[0.4.5]: https://github.com/jamesgober/metrics-lib/compare/v0.4.0...v0.4.5 
+[0.4.0]: https://github.com/jamesgober/metrics-lib/compare/v0.1.0...v0.4.0 <!-- 0.4.x: Raw Build -->
 [0.1.0]: https://github.com/jamesgober/metrics-lib/releases/tag/v0.1.0
