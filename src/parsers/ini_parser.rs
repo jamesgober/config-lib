@@ -1,7 +1,7 @@
 //! INI format parser implementation
 //!
 //! Supports standard INI format with:
-//! - Sections: [section_name]
+//! - Sections: \[section_name\]
 //! - Key-value pairs: key=value or key:value
 //! - Comments: ; comment or # comment
 //! - Escape sequences: \n, \t, \\, etc.
@@ -152,7 +152,7 @@ impl<'a> IniParser<'a> {
         let ch = self.current_char();
         if ch != '=' && ch != ':' {
             return Err(Error::Parse {
-                message: format!("Expected '=' or ':' after key '{}'", key),
+                message: format!("Expected '=' or ':' after key '{key}'"),
                 line: self.line,
                 column: 1,
                 file: None,
@@ -166,7 +166,7 @@ impl<'a> IniParser<'a> {
 
         // Store the key-value pair
         let full_key = match &self.current_section {
-            Some(section) => format!("{}.{}", section, key),
+            Some(section) => format!("{section}.{key}"),
             None => key,
         };
 
@@ -458,10 +458,10 @@ bool_no=no
             assert_eq!(map.get("string_val").unwrap().as_string().unwrap(), "hello");
             assert_eq!(map.get("int_val").unwrap().as_integer().unwrap(), 42);
             assert_eq!(map.get("float_val").unwrap().as_float().unwrap(), 3.14);
-            assert_eq!(map.get("bool_true").unwrap().as_bool().unwrap(), true);
-            assert_eq!(map.get("bool_false").unwrap().as_bool().unwrap(), false);
-            assert_eq!(map.get("bool_yes").unwrap().as_bool().unwrap(), true);
-            assert_eq!(map.get("bool_no").unwrap().as_bool().unwrap(), false);
+            assert!(map.get("bool_true").unwrap().as_bool().unwrap());
+            assert!(!map.get("bool_false").unwrap().as_bool().unwrap());
+            assert!(map.get("bool_yes").unwrap().as_bool().unwrap());
+            assert!(!map.get("bool_no").unwrap().as_bool().unwrap());
         } else {
             panic!("Expected table");
         }
