@@ -38,7 +38,7 @@ fn test_conf_parsing() {
         "test-app"
     );
     assert_eq!(config.get("port").unwrap().as_integer().unwrap(), 8080);
-    assert_eq!(config.get("debug").unwrap().as_bool().unwrap(), true);
+    assert!(config.get("debug").unwrap().as_bool().unwrap());
     assert_eq!(config.get("version").unwrap().as_float().unwrap(), 1.0);
 
     // Nested values
@@ -187,10 +187,7 @@ fn test_config_modification() {
 
     // Add nested value
     config.set("section.nested", true).unwrap();
-    assert_eq!(
-        config.get("section.nested").unwrap().as_bool().unwrap(),
-        true
-    );
+    assert!(config.get("section.nested").unwrap().as_bool().unwrap());
 
     // Mark clean
     config.mark_clean();
@@ -215,7 +212,7 @@ fn test_value_conversions() {
     assert!((value.as_float().unwrap() - std::f64::consts::PI).abs() < f64::EPSILON);
 
     let value = config.get("str_bool").unwrap();
-    assert_eq!(value.as_bool().unwrap(), true);
+    assert!(value.as_bool().unwrap());
 
     // Integer to float conversion
     config.set("int_val", 100).unwrap();
@@ -301,10 +298,7 @@ fn test_serialization_roundtrip() {
     // Verify values preserved
     assert_eq!(reparsed.get("key").unwrap().as_string().unwrap(), "value");
     assert_eq!(reparsed.get("port").unwrap().as_integer().unwrap(), 8080);
-    assert_eq!(
-        reparsed.get("section.nested").unwrap().as_bool().unwrap(),
-        true
-    );
+    assert!(reparsed.get("section.nested").unwrap().as_bool().unwrap());
 }
 
 /// Test error handling
