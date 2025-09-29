@@ -1,22 +1,5 @@
 <h1 align="center">
-    <img width="90px" height="auto" src="https://raw.githubusercontent.com/jamesgober/jamesgober/main/media/icons/hexagon-3.svg" alt="Triple Hexa| Version | Focus | Status |
-|----|---------|-------|--------|
-| **0.4.x** | ✅ Core functionality & enterprise features | Released |
-| **0.5.x** | ✅ API enhancements & builder patterns | **Current** |
-| **0.6.x** | 🔮 API expansion & additional functionality | **Next** |
-| **0.7.x** | 🛡️ API finalization & bulletproofing | **Planned** |
-| **0.8.x** | ⚡ Peak performance optimization & security | **Planned** |
-| **0.9.x** | 🧪 Beta/RC with community testing | **Planned** |
-| **1.0.x** | 🎉 Stable release | **Goal** |-----|--------|
-| **0.4.x** | ✅ Core functionality & enterprise features | Released |
-| **0.5.x** | ✅ API enhancements & builder patterns | **Current** |
-| **0.6.x** | 🔮 API expansion & additional functionality | **Next** |
-| **0.7.x** | 🛡️ API finalization & bulletproofing | **Planned** |
-| **0.8.x** | ⚡ Peak performance optimization & security | **Planned** |
-| **0.9.x** | 🧪 Beta/RC with community testing | **Planned** |
-| **1.0.x** | 🎉 Stable release | **Goal** |** | ✅ Core functionality & enterprise features | Released |
-| **0.5.x** | ✅ API consistency improvements, builder patterns | **Current** |
-| **0.6.x** | 🔮 Advanced integrations, cloud-native features | Q1 2026 |">
+    <img width="90px" height="auto" src="https://raw.githubusercontent.com/jamesgober/jamesgober/main/media/icons/hexagon-3.svg" alt="Triple Hexagon">
     <br>
     <b>config-lib</b>
 </h1>
