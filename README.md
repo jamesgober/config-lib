@@ -189,6 +189,7 @@ config-lib = { version = "0.5.0", features = [
 
 | Version | Focus | Status |
 |---------|-------|--------|
+| **0.4.x** | ✅ Core functionality & enterprise features | Released |
 | **0.5.x** | � API expansion & additional functionality | **Current** |
 | **0.6.x** | 🛡️ API finalization & bulletproofing | **Next** |
 | **0.7.x** | 🎨 Code cleanup, optimization & polish | **Planned** |
