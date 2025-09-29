@@ -243,7 +243,7 @@ impl ValidationRule for RangeValidator {
                 return ValidationResult::Invalid(ValidationError::new(
                     path,
                     self.name(),
-                    format!("Value {} is below minimum {}", numeric_value, min),
+                    format!("Value {numeric_value} is below minimum {min}"),
                 ));
             }
         }
@@ -253,7 +253,7 @@ impl ValidationRule for RangeValidator {
                 return ValidationResult::Invalid(ValidationError::new(
                     path,
                     self.name(),
-                    format!("Value {} exceeds maximum {}", numeric_value, max),
+                    format!("Value {numeric_value} exceeds maximum {max}"),
                 ));
             }
         }
@@ -291,7 +291,7 @@ impl RequiredKeyValidator {
                     ValidationError::new(
                         key,
                         "required_key_validator",
-                        format!("Required key '{}' is missing", key),
+                        format!("Required key '{key}' is missing"),
                     )
                     .with_severity(ValidationSeverity::Critical),
                 );
