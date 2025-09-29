@@ -356,7 +356,7 @@ key2=value2
     }
 
     #[test]
-    fn test_sections() {
+    fn test_sections() -> crate::Result<()> {
         let content = r#"
 [section1]
 key1=value1
@@ -365,19 +365,32 @@ key1=value1
 key2=value2
         "#;
 
-        let result = parse_ini(content).unwrap();
+        let result = parse_ini(content)?;
         if let Value::Table(map) = result {
-            assert_eq!(
-                map.get("section1.key1").unwrap().as_string().unwrap(),
-                "value1"
-            );
-            assert_eq!(
-                map.get("section2.key2").unwrap().as_string().unwrap(),
-                "value2"
-            );
+            let key1 = map
+                .get("section1.key1")
+                .ok_or_else(|| crate::Error::KeyNotFound {
+                    key: "section1.key1".to_string(),
+                    available: map.keys().cloned().collect(),
+                })?;
+            assert_eq!(key1.as_string()?, "value1");
+
+            let key2 = map
+                .get("section2.key2")
+                .ok_or_else(|| crate::Error::KeyNotFound {
+                    key: "section2.key2".to_string(),
+                    available: map.keys().cloned().collect(),
+                })?;
+            assert_eq!(key2.as_string()?, "value2");
         } else {
-            panic!("Expected table");
+            return Err(crate::Error::Parse {
+                message: "Expected table".to_string(),
+                line: 0,
+                column: 0,
+                file: None,
+            });
         }
+        Ok(())
     }
 
     #[test]
