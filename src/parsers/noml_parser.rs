@@ -9,15 +9,23 @@
 //! - Native types (@size, @duration, etc.)
 //! - Format preservation for round-trip editing
 
-use crate::error::{Error, Result};
+use crate::error::Result;
+#[cfg(not(feature = "noml"))]
+use crate::error::Error;
 use crate::value::Value;
 use std::collections::BTreeMap;
 
 /// Parse NOML format configuration using the noml library
 #[cfg(feature = "noml")]
 pub fn parse(source: &str) -> Result<Value> {
-    let noml_value = noml::parse(source)?;
-    convert_noml_value(noml_value)
+    // Parse the document
+    let document = noml::parse_string(source, None)?;
+    
+    // Resolve dynamic features (env vars, includes, etc.)
+    let mut resolver = noml::Resolver::new();
+    let resolved = resolver.resolve(&document)?;
+    
+    convert_noml_value(resolved)
 }
 
 /// Parse NOML format configuration (fallback when NOML is not available)
@@ -53,7 +61,9 @@ fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
         }
         #[cfg(feature = "chrono")]
         noml::Value::DateTime(dt) => Ok(Value::DateTime(dt)),
-        noml::Value::Binary(data) => {
+        #[cfg(not(feature = "chrono"))]
+        noml::Value::DateTime(_) => Ok(Value::String("datetime not supported without chrono feature".to_string())),
+        noml::Value::Binary(_data) => {
             // Convert binary data to base64 string for compatibility
             #[cfg(feature = "base64")]
             {
@@ -103,7 +113,7 @@ mod tests {
         
         assert_eq!(config.get("name").unwrap().as_string().unwrap(), "test");
         assert_eq!(config.get("port").unwrap().as_integer().unwrap(), 8080);
-        assert_eq!(config.get("debug").unwrap().as_bool().unwrap(), true);
+        assert!(config.get("debug").unwrap().as_bool().unwrap());
     }
 
     #[test] 
