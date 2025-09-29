@@ -464,17 +464,17 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Value::Null => write!(f, "null"),
-            Value::Bool(b) => write!(f, "{}", b),
-            Value::Integer(i) => write!(f, "{}", i),
-            Value::Float(fl) => write!(f, "{}", fl),
-            Value::String(s) => write!(f, "{}", s),
+            Value::Bool(b) => write!(f, "{b}"),
+            Value::Integer(i) => write!(f, "{i}"),
+            Value::Float(fl) => write!(f, "{fl}"),
+            Value::String(s) => write!(f, "{s}"),
             Value::Array(arr) => {
                 write!(f, "[")?;
                 for (i, item) in arr.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", item)?;
+                    write!(f, "{item}")?;
                 }
                 write!(f, "]")
             }
@@ -484,7 +484,7 @@ impl fmt::Display for Value {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}: {}", key, value)?;
+                    write!(f, "{key}: {value}")?;
                 }
                 write!(f, "}}")
             }
