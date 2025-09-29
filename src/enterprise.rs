@@ -645,7 +645,7 @@ mod tests {
         }
 
         // Test default value
-        if let Some(_) = config.get("timeout") {
+        if config.get("timeout").is_some() {
             panic!("Should not find timeout key");
         }
 
@@ -692,7 +692,7 @@ mod tests {
 
         if let Value::Table(table) = value {
             assert_eq!(table.get("port").unwrap().as_integer().unwrap(), 8080);
-            assert_eq!(table.get("debug").unwrap().as_bool().unwrap(), true);
+            assert!(table.get("debug").unwrap().as_bool().unwrap());
         } else {
             panic!("Expected table value");
         }
