@@ -21,11 +21,17 @@ fn main() -> config_lib::Result<()> {
     println!("\n=== Database Section ===");
     println!(
         "Host: {}",
-        config.get("database.host").unwrap().as_string().unwrap()
+        config
+            .get("database.host")
+            .and_then(|v| v.as_string().ok())
+            .unwrap_or("<not found>")
     );
     println!(
         "Port: {}",
-        config.get("database.port").unwrap().as_integer().unwrap()
+        config
+            .get("database.port")
+            .map(|v| v.as_integer().unwrap_or(-1))
+            .unwrap_or(-1)
     );
     println!(
         "Username: {}",

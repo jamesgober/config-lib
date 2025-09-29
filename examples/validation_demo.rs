@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "To use this demo, run with: cargo run --features validation --example validation_demo"
         );
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(feature = "validation")]

@@ -15,7 +15,7 @@ fn main() -> config_lib::Result<()> {
     println!("2. Content format: {}", content_format);
 
     // Step 2: Final format selection (mimicking Config::from_file)
-    let final_format = path_format.unwrap_or_else(|| content_format);
+    let final_format = path_format.unwrap_or(content_format);
     println!("3. Final format: {}", final_format);
 
     // Step 3: Parse with explicit format

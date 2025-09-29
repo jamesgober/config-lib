@@ -33,11 +33,15 @@ fn main() -> config_lib::Result<()> {
         println!("app_name key not found");
     }
 
-    // Test database.host
-    if let Some(host) = config.get("database.host") {
-        println!("Database Host: {}", host.as_string().unwrap());
-    } else {
-        println!("database.host key not found");
+    // Debug: print all available keys
+    match config.keys() {
+        Ok(keys) => {
+            println!("\\n🔍 All available keys:");
+            for key in keys {
+                println!("  - {}", key);
+            }
+        }
+        Err(e) => println!("Error getting keys: {}", e),
     }
 
     Ok(())
