@@ -90,7 +90,7 @@ impl EnvOverrideSystem {
                     let nested_path = if path.is_empty() {
                         key.clone()
                     } else {
-                        format!("{}.{}", path, key)
+                        format!("{path}.{key}")
                     };
 
                     // Check for environment override
@@ -104,7 +104,7 @@ impl EnvOverrideSystem {
             }
             Value::Array(ref mut array) => {
                 for (index, val) in array.iter_mut().enumerate() {
-                    let nested_path = format!("{}[{}]", path, index);
+                    let nested_path = format!("{path}[{index}]");
                     self.apply_overrides_recursive(val, nested_path)?;
                 }
             }
@@ -173,7 +173,7 @@ impl EnvOverrideSystem {
             let cache = self
                 .cache
                 .read()
-                .map_err(|e| Error::internal(format!("Cache read error: {}", e)))?;
+                .map_err(|e| Error::internal(format!("Cache read error: {e}")))?;
 
             if let Some(cached_value) = cache.get(key) {
                 return Ok(cached_value.clone());
@@ -187,7 +187,7 @@ impl EnvOverrideSystem {
             let mut cache = self
                 .cache
                 .write()
-                .map_err(|e| Error::internal(format!("Cache write error: {}", e)))?;
+                .map_err(|e| Error::internal(format!("Cache write error: {e}")))?;
 
             cache.insert(key.to_string(), env_value.clone());
         }
@@ -285,7 +285,7 @@ impl EnvOverrideSystem {
         let mut cache = self
             .cache
             .write()
-            .map_err(|e| Error::internal(format!("Cache clear error: {}", e)))?;
+            .map_err(|e| Error::internal(format!("Cache clear error: {e}")))?;
         cache.clear();
         Ok(())
     }
@@ -295,7 +295,7 @@ impl EnvOverrideSystem {
         let cache = self
             .cache
             .read()
-            .map_err(|e| Error::internal(format!("Cache stats error: {}", e)))?;
+            .map_err(|e| Error::internal(format!("Cache stats error: {e}")))?;
 
         let total_entries = cache.len();
         let hit_entries = cache.values().filter(|v| v.is_some()).count();
