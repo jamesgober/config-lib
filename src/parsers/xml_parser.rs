@@ -61,7 +61,11 @@ impl<'a> XmlParser<'a> {
                     if let Some((tag_name, element_map)) = stack.pop() {
                         // If element only contains text, unwrap it
                         let value = if element_map.len() == 1 && element_map.contains_key("text") {
-                            element_map.get("text").unwrap().clone()
+                            if let Some(text_value) = element_map.get("text") {
+                                text_value.clone()
+                            } else {
+                                Value::table(element_map)
+                            }
                         } else {
                             Value::table(element_map)
                         };
@@ -186,7 +190,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_simple_xml() {
+    fn test_basic_xml_parsing() -> crate::Result<()> {
         let xml = r#"
         <configuration>
             <database>
@@ -195,13 +199,13 @@ mod tests {
                 <enabled>true</enabled>
             </database>
             <app>
-                <name>MyApp</name>
-                <version>1.0.0</version>
+                <name>TestApp</name>
+                <version>1.0</version>
             </app>
         </configuration>
         "#;
 
-        let result = parse_xml(xml).unwrap();
+        let result = parse_xml(xml)?;
 
         if let Value::Table(config) = result {
             if let Some(Value::Table(db)) = config.get("configuration").and_then(|v| {
@@ -215,15 +219,26 @@ mod tests {
                 assert_eq!(db.get("port"), Some(&Value::integer(5432)));
                 assert_eq!(db.get("enabled"), Some(&Value::bool(true)));
             } else {
-                panic!("Expected database configuration");
+                return Err(crate::Error::Parse {
+                    message: "Expected database configuration".to_string(),
+                    line: 0,
+                    column: 0,
+                    file: None,
+                });
             }
         } else {
-            panic!("Expected table result");
+            return Err(crate::Error::Parse {
+                message: "Expected table result".to_string(),
+                line: 0,
+                column: 0,
+                file: None,
+            });
         }
+        Ok(())
     }
 
     #[test]
-    fn test_xml_with_attributes() {
+    fn test_xml_with_attributes() -> crate::Result<()> {
         let xml = r#"
         <config>
             <server host="localhost" port="8080" ssl="true">
@@ -232,7 +247,7 @@ mod tests {
         </config>
         "#;
 
-        let result = parse_xml(xml).unwrap();
+        let result = parse_xml(xml)?;
 
         if let Value::Table(config) = result {
             if let Some(Value::Table(server_config)) = config.get("config").and_then(|v| {
@@ -250,15 +265,26 @@ mod tests {
                     Some(&Value::string("MainServer"))
                 );
             } else {
-                panic!("Expected server configuration");
+                return Err(crate::Error::Parse {
+                    message: "Expected server configuration".to_string(),
+                    line: 0,
+                    column: 0,
+                    file: None,
+                });
             }
         } else {
-            panic!("Expected table result");
+            return Err(crate::Error::Parse {
+                message: "Expected table result".to_string(),
+                line: 0,
+                column: 0,
+                file: None,
+            });
         }
+        Ok(())
     }
 
     #[test]
-    fn test_self_closing_tags() {
+    fn test_self_closing_tags() -> crate::Result<()> {
         let xml = r#"
         <config>
             <feature name="auth" enabled="true" />
@@ -266,10 +292,11 @@ mod tests {
         </config>
         "#;
 
-        let result = parse_xml(xml).unwrap();
+        let result = parse_xml(xml)?;
         println!("Parsed XML: {result:#?}");
 
         // Test passes if parsing doesn't panic
         assert!(matches!(result, Value::Table(_)));
+        Ok(())
     }
 }
