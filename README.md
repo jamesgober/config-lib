@@ -11,6 +11,7 @@
 
 <p align="center">
     <a href="https://crates.io/crates/config-lib"><img src="https://img.shields.io/crates/v/config-lib.svg" alt="Crates.io"></a>
+    <a href="https://crates.io/crates/config-lib" alt="Download"><img alt="Crates.io Downloads" src="https://img.shields.io/crates/d/config-lib?color=%230099ff"></a>
     <a href="https://docs.rs/config-lib"><img src="https://docs.rs/config-lib/badge.svg" alt="Documentation"></a>
     <a href="https://github.com/jamesgober/config-lib/actions"><img src="https://github.com/jamesgober/config-lib/workflows/CI%2FCD/badge.svg" alt="CI Status"></a>
     <a href="https://github.com/jamesgober/config-lib/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
