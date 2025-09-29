@@ -129,9 +129,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         host = env("DB_HOST", "localhost")
         port = 5432
         
-        # Variable interpolation
-        connection_string = "postgresql://${database.host}:${database.port}/myapp"
-        
         # Arrays with different syntax
         features = ["auth", "cache", "monitoring"]
         "#;
@@ -149,10 +146,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "  🗄️  DB Host: {}",
             noml_config.get("database.host").unwrap().as_string()?
-        );
-        println!(
-            "  🔗 Connection: {}",
-            noml_config.get("connection_string").unwrap().as_string()?
         );
 
         // Native types are converted to basic types

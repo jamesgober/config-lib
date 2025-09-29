@@ -17,6 +17,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         debug = true
         version = 1.0
         
+        # Array values  
+        servers = ["alpha","beta","gamma"]
+        allowed_ips = ["192.168.1.1","10.0.0.1","127.0.0.1"]
+        
         # Database settings
         [database]
         host = "localhost"
@@ -24,10 +28,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         username = "user"
         password = "secret"
         max_connections = 100
-        
-        # Array values
-        servers = alpha beta gamma
-        allowed_ips = "192.168.1.1" "10.0.0.1" "127.0.0.1"
     "#;
 
     let mut config = Config::from_string(config_content, Some("conf"))?;
@@ -64,13 +64,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Port: {}", db_port);
     println!("  Max Connections: {}", max_conn);
 
-    // 4. Access arrays
+    // 4. Access arrays (now at root level)
     println!("\n📊 Array values:");
-    let servers = config.get("servers").unwrap().as_array()?;
-    println!("  Servers: {:?}", servers);
+    
+    let servers = config.get("servers");
+    if let Some(servers_val) = servers {
+        if let Ok(servers_array) = servers_val.as_array() {
+            println!("  Servers: {:?}", servers_array);
+        } else {
+            println!("  Servers value is not an array: {:?}", servers_val);
+        }
+    } else {
+        println!("  Servers not found");
+    }
 
-    let allowed_ips = config.get("allowed_ips").unwrap().as_array()?;
-    println!("  Allowed IPs: {:?}", allowed_ips);
+    let allowed_ips = config.get("allowed_ips");
+    if let Some(ips_val) = allowed_ips {
+        if let Ok(ips_array) = ips_val.as_array() {
+            println!("  Allowed IPs: {:?}", ips_array);
+        } else {
+            println!("  Allowed IPs value is not an array: {:?}", ips_val);
+        }
+    } else {
+        println!("  Allowed IPs not found");
+    }
 
     // 5. Modify configuration
     println!("\n✏️  Modifying configuration:");
