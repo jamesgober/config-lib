@@ -28,7 +28,7 @@ jobs:
       run: cargo doc --features "json,chrono,validation,xml,hcl,env-override,async" --no-deps --document-private-items
 
     - name: Check for missing docs
-      run: cargo doc --features "json,chrono,validation,xml,hcl,env-override,async" --no-deps -- -D missing_docs
+      run: RUSTDOCFLAGS="-D missing_docs" cargo doc --features "json,chrono,validation,xml,hcl,env-override,async" --no-deps
 
     - name: Test documentation examples
       run: cargo test --doc --features "json,chrono,validation,xml,hcl,env-override,async"

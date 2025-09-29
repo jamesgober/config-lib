@@ -1,0 +1,15 @@
+[default.extend-words]
+HashiCorp = "HashiCorp"
+Hashi = "HashiCorp"
+
+[type.toml]
+extend-glob = ["*.toml"]
+
+[type.rust]
+extend-glob = ["*.rs"]
+
+[type.markdown] 
+extend-glob = ["*.md"]
+
+[type.yaml]
+extend-glob = ["*.yml", "*.yaml"]
