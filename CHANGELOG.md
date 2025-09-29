@@ -10,6 +10,29 @@
 
 ## [Unreleased]
 
+### Fixed
+- **🚨 Critical Parser Availability Crisis**:
+  - Re-enabled TOML and NOML parsing in main parser logic (were disabled with "disabled for CI/CD" comment)
+  - Removed redundant fallback logic for TOML/NOML that was causing inconsistent behavior
+  - Fixed parser availability mismatch where formats were advertised but not accessible through main API
+
+### Added
+- **🔧 API Consistency Improvements**:
+  - Added standardized `parse()` function to Properties parser to match other parsers' API patterns
+  - Added standardized `parse()` function to INI parser (in addition to existing `parse_ini()`)
+  - Added standardized `parse()` function to XML parser (in addition to existing `parse_xml()`)
+  - Added standardized `parse()` function to HCL parser (in addition to existing `parse_hcl()`)
+  - All parsers now follow consistent `module::parse()` calling convention
+
+### Changed
+- **🛠️ Parser Integration Refactoring**:
+  - Updated main parser to use standardized `properties_parser::parse()` instead of manual instantiation
+  - Updated main parser to use standardized `ini_parser::parse()` instead of `parse_ini()`
+  - Updated main parser to use standardized `xml_parser::parse()` instead of `parse_xml()`
+  - Updated main parser to use standardized `hcl_parser::parse()` instead of `parse_hcl()`
+  - Unified error handling patterns across all format parsers
+  - All 8 supported formats (CONF, Properties, INI, JSON, XML, HCL, NOML, TOML) now have consistent API patterns
+
 
 
 
@@ -231,7 +254,7 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/metrics-lib/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/jamesgober/metrics-lib/compare/v0.5.0...HEAD
 [0.9.0]: https://github.com/jamesgober/metrics-lib/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/jamesgober/metrics-lib/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/jamesgober/metrics-lib/compare/v0.6.0...v0.7.0
