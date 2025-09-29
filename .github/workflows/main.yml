@@ -1,0 +1,166 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Core testing and validation
+  test:
+    name: Test Suite
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        rust: [stable, 1.82]  # MSRV is 1.82
+        include:
+          - os: ubuntu-latest
+            rust: beta
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+        components: rustfmt, clippy
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+      with:
+        key: ${{ matrix.os }}-${{ matrix.rust }}
+
+    - name: Check formatting
+      if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
+      run: cargo fmt --all -- --check
+
+    - name: Run clippy
+      if: matrix.rust == 'stable'
+      run: cargo clippy --all-targets --features "json,chrono,validation,xml,hcl,env-override,async" -- -D warnings
+
+    - name: Run tests
+      run: cargo test --verbose --features "json,chrono,validation,xml,hcl,env-override,async"
+
+    - name: Build examples
+      run: cargo build --examples --features "json,chrono,validation,xml,hcl,env-override,async"
+
+    - name: Test documentation
+      if: matrix.rust == 'stable'
+      run: cargo test --doc --features "json,chrono,validation,xml,hcl,env-override,async"
+
+  # Documentation and examples
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+
+    - name: Build documentation
+      run: cargo doc --features "json,chrono,validation,xml,hcl,env-override,async" --no-deps --document-private-items
+
+    - name: Check for missing docs
+      run: RUSTDOCFLAGS="-D missing_docs" cargo doc --features "json,chrono,validation,xml,hcl,env-override,async" --no-deps
+
+    - name: Test examples
+      run: |
+        # Test each example
+        for example in examples/*.rs; do
+          example_name=$(basename "$example" .rs)
+          echo "Testing example: $example_name"
+          timeout 30s cargo run --example "$example_name" --features "json,chrono,validation,xml,hcl,env-override,async" || {
+            echo "Example $example_name failed or timed out"
+            exit 1
+          }
+        done
+
+  # Performance benchmarks
+  benchmarks:
+    name: Performance
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+
+    - name: Run benchmarks
+      run: cargo bench --features "json,chrono,validation,xml,hcl,env-override"
+
+  # Security and feature tests
+  security:
+    name: Security & Features
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+
+    - name: Test minimal dependencies
+      run: |
+        cargo test --no-default-features --features conf
+        cargo test --no-default-features --features json
+        cargo test --no-default-features --features xml
+        cargo test --no-default-features --features hcl
+        cargo test --no-default-features --features validation
+        cargo test --no-default-features --features env-override
+        cargo test --no-default-features --features chrono
+        cargo test --no-default-features --features async
+
+    - name: Run security audit
+      run: |
+        cargo install cargo-audit
+        cargo audit
+
+  # Cross-compilation (only on main branch pushes)
+  cross-compile:
+    name: Cross Compile
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    strategy:
+      matrix:
+        target: 
+          - x86_64-unknown-linux-musl
+          - x86_64-pc-windows-gnu
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install cross
+      run: cargo install cross
+
+    - name: Cross compile
+      run: cross build --target ${{ matrix.target }} --features "json,chrono,validation,xml,hcl,env-override"
