@@ -57,11 +57,8 @@ fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
             Ok(Value::Table(converted))
         }
         #[cfg(feature = "chrono")]
-        noml::Value::DateTime(dt) => Ok(Value::DateTime(dt)),
-        #[cfg(not(feature = "chrono"))]
-        noml::Value::DateTime(_) => Ok(Value::String(
-            "datetime not supported without chrono feature".to_string(),
-        )),
+        noml::Value::DateTime(_) => Ok(Value::String("datetime_value".to_string())),
+        // Handle NOML-specific types by converting to basic types
         noml::Value::Binary(_data) => {
             // Convert binary data to base64 string for compatibility
             #[cfg(feature = "base64")]
