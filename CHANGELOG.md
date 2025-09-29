@@ -10,6 +10,19 @@
 
 ## [Unreleased]
 
+
+
+
+
+
+
+
+
+<br>
+
+
+## [0.4.5] - 2025-09-29
+
 ### Added
 - **🚀 Enterprise Configuration Formats**:
   - XML Configuration Support - Zero-copy XML parsing with quick-xml for Java/.NET environments
@@ -118,12 +131,6 @@
 - **Architecture**: Validated hybrid parsing approach (string + DSL when needed)
 - **Dependency Management**: Migrated to published crates for CI/CD compatibility
 - **Compliance**: Zero warnings, zero errors, production-ready codebase
-
-
-
-
-
-
 
 
 
