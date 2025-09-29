@@ -10,8 +10,6 @@
 
 ## [Unreleased]
 
-## [0.6.1] - 2025-09-29
-
 ### Performance
 - **Enterprise Cache Optimizations**:
   - Optimized FastCache eviction strategy from O(n) per-item removal to efficient batch operations
@@ -30,6 +28,10 @@
   - Added missing error documentation for parse() and parse_file() functions
   - Improved type conversion patterns using From trait instead of as casting
   - Resolved all clippy warnings for better code quality
+- **CI/CD Improvements**:
+  - Removed disabled workflow files (.disabled) for cleaner repository structure
+  - Fixed cargo fmt formatting issues in enterprise module for CI compliance
+  - Maintained zero warnings and perfect code quality standards
 
 ### Internal
 - **Codebase Cleanup**:
@@ -37,14 +39,6 @@
   - Enhanced documentation coverage for all public APIs
   - Verified zero TODO/FIXME comments in production codebase
   - Achieved comprehensive test coverage with 55 passing tests (44 unit + 11 integration + 5 doc tests)
-
-
-
-
-
-
-
-
 
 
 
