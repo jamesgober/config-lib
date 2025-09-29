@@ -2,6 +2,12 @@ use crate::error::{Error, Result};
 use crate::value::Value;
 use std::collections::BTreeMap;
 
+/// Parse Properties format configuration
+pub fn parse(source: &str) -> Result<Value> {
+    let mut parser = PropertiesParser::new(source.to_string());
+    parser.parse()
+}
+
 /// High-performance Java Properties format parser
 ///
 /// Properties format specification:
