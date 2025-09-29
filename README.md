@@ -162,24 +162,26 @@ println!("Connecting to {}:{}", host, port);
 ### **Multi-Format Support**
 
 ```rust
-use config_lib::{ConfigBuilder, ConfigValue};
+use config_lib::Config;
 
-// All 8 formats now fully operational (TOML/NOML re-enabled)
-let config = ConfigBuilder::new()
-    .format("toml")  // TOML now works reliably!
-    .from_string(r#"
+// All 8 formats now fully operational
+let config = Config::from_string(r#"
 [server]
 port = 8080
 host = "localhost"
-"#)?;
+"#, Some("toml"))?;
 
 // Consistent API patterns across all parsers
-let port = config.key("server.port").as_integer()?;
-let timeout = config.key("timeout").as_integer().unwrap_or(30);
-let name = config.key("app.name").as_string_or("DefaultApp");
+let port = config.get("server.port")?.as_integer()?;
+let timeout = config.get("server.timeout")
+    .and_then(|v| v.as_integer().ok())
+    .unwrap_or(30);
+let name = config.get("app.name")
+    .and_then(|v| v.as_string().ok())
+    .unwrap_or_else(|| "DefaultApp".to_string());
 
 // Check existence
-if config.has("server.ssl") {
+if config.contains_key("server.ssl") {
     println!("SSL configuration found");
 }
 ```
@@ -190,15 +192,17 @@ if config.has("server.ssl") {
 use config_lib::EnterpriseConfig;
 
 // High-performance cached configuration
-let mut config = EnterpriseConfig::new();
-config.load_from_file("app.conf")?;
+let config = EnterpriseConfig::from_string(r#"
+database.host = "localhost"
+server.port = 8080
+"#, Some("conf"))?;
 
 // Sub-50ns cached access (24.9ns average)
-let cached_value = config.get_cached("database.host")?;
+let cached_value = config.get("database.host");
 
 // View cache performance stats
-let stats = config.cache_stats()?;
-println!("Cache hit ratio: {:.2}%", stats.hit_ratio * 100.0);
+let (hits, misses, ratio) = config.cache_stats();
+println!("Cache hit ratio: {:.2}%", ratio * 100.0);
 ```
 
 ### **Preset Configuration Settings**

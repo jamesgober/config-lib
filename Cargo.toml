@@ -21,7 +21,7 @@ documentation = "https://docs.rs/config-lib"
 
 # Project Information
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
-description = "A configuration parsing library supporting CONF, NOML, TOML, and JSON formats."
+description = "Enterprise-grade multi-format configuration library supporting 8 formats (CONF, INI, Properties, JSON, XML, HCL, TOML, NOML) with sub-50ns caching, hot reloading, and comprehensive validation."
 
 
 # Categories (5 NAX)
@@ -80,8 +80,8 @@ json = ["dep:serde_json"]              # JSON format parsing
 
 # Additional Features
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
-async       = ["dep:tokio"]            # Enable async file operations
-chrono      = ["dep:chrono"]           # Enable DateTime support
+async       = ["dep:tokio", "noml?/async"]  # Enable async file operations + NOML async
+chrono      = ["dep:chrono", "noml?/chrono"] # Enable DateTime support + NOML chrono
 schema      = []                       # Enable schema validation
 validation  = ["dep:regex"]            # Enable configuration validation rules
 
@@ -118,7 +118,7 @@ quick-xml = { version = "0.31", optional = true }   # High-performance XML parse
 
 # NOML Language Library (Published Crate)
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
-noml = { version = "0.9", optional = true, features = ["chrono"] }
+noml = { version = "0.9", optional = true, features = [] }
 
 
 
