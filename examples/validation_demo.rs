@@ -46,12 +46,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     println!("❌ Found validation errors:");
                     for error in errors {
-                        println!("  {}", error);
+                        println!("  {error}");
                     }
                 }
             }
             Err(e) => {
-                println!("❌ Validation failed: {}", e);
+                println!("❌ Validation failed: {e}");
             }
         }
 
@@ -78,12 +78,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     println!("❌ Found validation errors:");
                     for error in errors {
-                        println!("  {}", error);
+                        println!("  {error}");
                     }
                 }
             }
             Err(e) => {
-                println!("❌ Validation failed: {}", e);
+                println!("❌ Validation failed: {e}");
             }
         }
 
@@ -94,7 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Critical errors found: {}", critical_errors.len());
             }
             Err(e) => {
-                println!("❌ Critical validation failed: {}", e);
+                println!("❌ Critical validation failed: {e}");
             }
         }
 
@@ -102,10 +102,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("\n=== Testing is_valid() Method ===");
         match invalid_config.is_valid() {
             Ok(is_valid) => {
-                println!("Configuration is valid: {}", is_valid);
+                println!("Configuration is valid: {is_valid}");
             }
             Err(e) => {
-                println!("❌ Validation check failed: {}", e);
+                println!("❌ Validation check failed: {e}");
             }
         }
 

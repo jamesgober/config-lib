@@ -9,7 +9,7 @@ key1=value2
     "#;
 
     let result = parse_ini(content)?;
-    println!("Parsed INI result: {:#?}", result);
+    println!("Parsed INI result: {result:#?}");
 
     Ok(())
 }

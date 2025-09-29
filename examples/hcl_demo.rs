@@ -234,7 +234,7 @@ fn main() -> Result<()> {
         }
         let duration = start.elapsed();
 
-        println!("   Parsed 1000 HCL configs in: {:?}", duration);
+        println!("   Parsed 1000 HCL configs in: {duration:?}");
         println!("   Average per parse: {:?}", duration / 1000);
         println!("   ✅ High performance confirmed!\n");
     }

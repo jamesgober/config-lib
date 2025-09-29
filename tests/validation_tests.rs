@@ -51,7 +51,7 @@ fn test_validation_performance() {
 
     // Add 1000 configuration keys
     for i in 0..1000 {
-        config.set(&format!("key_{}", i), i as i64).unwrap();
+        config.set(&format!("key_{i}"), i as i64).unwrap();
     }
 
     // Create validation rules
@@ -103,7 +103,7 @@ fn test_validation_error_reporting() {
         assert!(!error.path.is_empty());
         assert!(!error.rule.is_empty());
         assert!(!error.message.is_empty());
-        println!("Validation error: {}", error);
+        println!("Validation error: {error}");
     }
 }
 
@@ -362,7 +362,7 @@ fn benchmark_validation_performance() {
     for i in 0..20 {
         for (key, value) in &settings {
             config
-                .set(&format!("{}_{}", key, i), value.clone())
+                .set(&format!("{key}_{i}"), value.clone())
                 .unwrap();
         }
     }

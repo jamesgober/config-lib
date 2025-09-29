@@ -225,7 +225,7 @@ fn bench_memory_allocation(c: &mut Criterion) {
             let mut values = Vec::new();
             for i in 0..1000 {
                 values.push(Value::integer(black_box(i)));
-                values.push(Value::string(format!("value_{}", i)));
+                values.push(Value::string(format!("value_{i}")));
                 values.push(Value::bool(i % 2 == 0));
             }
             black_box(values);
@@ -236,7 +236,7 @@ fn bench_memory_allocation(c: &mut Criterion) {
         b.iter(|| {
             let mut table = BTreeMap::new();
             for i in 0..100 {
-                table.insert(format!("key_{}", i), Value::integer(i));
+                table.insert(format!("key_{i}"), Value::integer(i));
             }
             let value = Value::table(table);
             black_box(value);
@@ -302,10 +302,10 @@ fn generate_large_config(num_keys: usize) -> String {
     let mut config = String::new();
 
     for i in 0..num_keys {
-        config.push_str(&format!("key_{} = \"value_{}\"\n", i, i));
+        config.push_str(&format!("key_{i} = \"value_{i}\"\n"));
         if i % 10 == 0 {
             config.push_str(&format!("[section_{}]\n", i / 10));
-            config.push_str(&format!("nested_key = {}\n", i));
+            config.push_str(&format!("nested_key = {i}\n"));
         }
     }
 

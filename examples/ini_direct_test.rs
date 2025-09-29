@@ -5,7 +5,7 @@ fn main() -> config_lib::Result<()> {
 
     println!("=== Testing INI Parser Directly ===");
     let result = parse_ini(&content)?;
-    println!("Parsed result: {:#?}", result);
+    println!("Parsed result: {result:#?}");
 
     Ok(())
 }

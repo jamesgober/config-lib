@@ -4,7 +4,7 @@ fn main() -> config_lib::Result<()> {
     let content = std::fs::read_to_string("test.ini").unwrap();
 
     println!("=== Content ===");
-    println!("{}", content);
+    println!("{content}");
 
     println!("\n=== Detection Process ===");
 
@@ -87,8 +87,7 @@ fn contains_ini_features(content: &str) -> bool {
     }
 
     println!(
-        "INI detection details: has_section={}, has_ini_comment={}, has_key_value_in_section={}",
-        has_section, has_ini_comment, has_key_value_in_section
+        "INI detection details: has_section={has_section}, has_ini_comment={has_ini_comment}, has_key_value_in_section={has_key_value_in_section}"
     );
 
     has_section && has_key_value_in_section || has_ini_comment

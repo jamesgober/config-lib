@@ -17,8 +17,8 @@ host = "localhost"
     let host = config.key("server.host").as_string()?;
     let name = config.key("app.name").as_string_or("MyApp");
 
-    println!("Server: {}:{}", host, port);
-    println!("App name: {}", name);
+    println!("Server: {host}:{port}");
+    println!("App name: {name}");
 
     // Check if values exist
     println!("Has server config: {}", config.has("server"));
@@ -28,8 +28,8 @@ host = "localhost"
     let timeout = config.key("timeout").as_integer().unwrap_or(30);
     let debug = config.key("debug").as_bool().unwrap_or(false);
 
-    println!("Timeout: {}", timeout);
-    println!("Debug mode: {}", debug);
+    println!("Timeout: {timeout}");
+    println!("Debug mode: {debug}");
 
     Ok(())
 }

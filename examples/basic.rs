@@ -40,16 +40,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("📋 Reading configuration values:");
 
     let app_name = config.get("app_name").unwrap().as_string()?;
-    println!("  App Name: {}", app_name);
+    println!("  App Name: {app_name}");
 
     let port = config.get("port").unwrap().as_integer()?;
-    println!("  Port: {}", port);
+    println!("  Port: {port}");
 
     let debug = config.get("debug").unwrap().as_bool()?;
-    println!("  Debug: {}", debug);
+    println!("  Debug: {debug}");
 
     let version = config.get("version").unwrap().as_float()?;
-    println!("  Version: {}", version);
+    println!("  Version: {version}");
 
     // 3. Access nested values
     println!("\n🗄️  Database configuration:");
@@ -60,9 +60,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap()
         .as_integer()?;
 
-    println!("  Host: {}", db_host);
-    println!("  Port: {}", db_port);
-    println!("  Max Connections: {}", max_conn);
+    println!("  Host: {db_host}");
+    println!("  Port: {db_port}");
+    println!("  Max Connections: {max_conn}");
 
     // 4. Access arrays (now at root level)
     println!("\n📊 Array values:");
@@ -70,9 +70,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let servers = config.get("servers");
     if let Some(servers_val) = servers {
         if let Ok(servers_array) = servers_val.as_array() {
-            println!("  Servers: {:?}", servers_array);
+            println!("  Servers: {servers_array:?}");
         } else {
-            println!("  Servers value is not an array: {:?}", servers_val);
+            println!("  Servers value is not an array: {servers_val:?}");
         }
     } else {
         println!("  Servers not found");
@@ -81,9 +81,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let allowed_ips = config.get("allowed_ips");
     if let Some(ips_val) = allowed_ips {
         if let Ok(ips_array) = ips_val.as_array() {
-            println!("  Allowed IPs: {:?}", ips_array);
+            println!("  Allowed IPs: {ips_array:?}");
         } else {
-            println!("  Allowed IPs value is not an array: {:?}", ips_val);
+            println!("  Allowed IPs value is not an array: {ips_val:?}");
         }
     } else {
         println!("  Allowed IPs not found");
@@ -137,16 +137,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match config.keys() {
         Ok(keys) => {
             for key in keys {
-                println!("  - {}", key);
+                println!("  - {key}");
             }
         }
-        Err(e) => println!("Error getting keys: {}", e),
+        Err(e) => println!("Error getting keys: {e}"),
     }
 
     // 8. Serialize back to string
     println!("\n💾 Serialized configuration:");
     let serialized = config.serialize()?;
-    println!("{}", serialized);
+    println!("{serialized}");
 
     println!("\n🎉 Example completed successfully!");
 

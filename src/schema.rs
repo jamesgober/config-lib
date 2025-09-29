@@ -220,7 +220,7 @@ impl Schema {
             let field_path = if path.is_empty() {
                 field_name.clone()
             } else {
-                format!("{}.{}", path, field_name)
+                format!("{path}.{field_name}")
             };
 
             match table.get(field_name) {
@@ -231,7 +231,7 @@ impl Schema {
                     if field_schema.required {
                         return Err(Error::schema(
                             field_path,
-                            format!("Required field '{}' is missing", field_name),
+                            format!("Required field '{field_name}' is missing"),
                         ));
                     }
                 }
@@ -269,7 +269,7 @@ impl Schema {
             // Array validation
             (Value::Array(arr), FieldType::Array(element_type)) => {
                 for (i, element) in arr.iter().enumerate() {
-                    let element_path = format!("{}[{}]", path, i);
+                    let element_path = format!("{path}[{i}]");
                     self.validate_type(element, element_type, &element_path)?;
                 }
                 Ok(())
@@ -293,7 +293,7 @@ impl Schema {
                 }
                 Err(Error::schema(
                     path.to_string(),
-                    format!("Value does not match any of the union types: {:?}", types),
+                    format!("Value does not match any of the union types: {types:?}"),
                 ))
             }
 

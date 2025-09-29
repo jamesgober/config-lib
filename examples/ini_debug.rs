@@ -20,9 +20,9 @@ fn main() -> config_lib::Result<()> {
 
     for key in test_keys {
         if let Some(value) = config.get(key) {
-            println!("✅ {}: {:?}", key, value);
+            println!("✅ {key}: {value:?}");
         } else {
-            println!("❌ {} not found", key);
+            println!("❌ {key} not found");
         }
     }
 
@@ -38,10 +38,10 @@ fn main() -> config_lib::Result<()> {
         Ok(keys) => {
             println!("\\n🔍 All available keys:");
             for key in keys {
-                println!("  - {}", key);
+                println!("  - {key}");
             }
         }
-        Err(e) => println!("Error getting keys: {}", e),
+        Err(e) => println!("Error getting keys: {e}"),
     }
 
     Ok(())

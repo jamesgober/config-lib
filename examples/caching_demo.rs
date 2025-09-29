@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "   database.host = {:?}",
         host1.as_ref().map(|v| v.as_string())
     );
-    println!("   Access time: {:?}", duration1);
+    println!("   Access time: {duration1:?}");
 
     let (hits, misses, ratio) = config.cache_stats();
     println!(
@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "   database.host = {:?}",
         host2.as_ref().map(|v| v.as_string())
     );
-    println!("   Access time: {:?}", duration2);
+    println!("   Access time: {duration2:?}");
 
     let (hits, misses, ratio) = config.cache_stats();
     println!(
@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Performance comparison
     if duration2 < duration1 {
         let speedup = duration1.as_nanos() as f64 / duration2.as_nanos() as f64;
-        println!("   🚀 Cache is {:.1}x faster!\n", speedup);
+        println!("   🚀 Cache is {speedup:.1}x faster!\n");
     }
 
     // Multiple fast accesses
@@ -82,7 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     let total_duration = start.elapsed();
-    println!("\n   1000x3 accesses in {:?}", total_duration);
+    println!("\n   1000x3 accesses in {total_duration:?}");
     println!("   Average per access: {:?}", total_duration / 3000);
 
     let (hits, misses, ratio) = config.cache_stats();

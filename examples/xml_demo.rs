@@ -46,7 +46,7 @@ fn main() -> Result<()> {
         }
 
         if let Some(app_name) = config.get("configuration.appSettings.add") {
-            println!("   App Configuration: {:#?}", app_name);
+            println!("   App Configuration: {app_name:#?}");
         }
 
         println!("   ✅ XML parsing successful!\n");
@@ -133,7 +133,7 @@ fn main() -> Result<()> {
         let config = Config::from_string(aspnet_config, Some("xml"))?;
 
         if let Some(env) = config.get("configuration.appSettings") {
-            println!("   App Settings: {:#?}", env);
+            println!("   App Settings: {env:#?}");
         }
 
         println!("   ✅ ASP.NET XML parsing successful!\n");
@@ -151,7 +151,7 @@ fn main() -> Result<()> {
         }
         let duration = start.elapsed();
 
-        println!("   Parsed 1000 XML configs in: {:?}", duration);
+        println!("   Parsed 1000 XML configs in: {duration:?}");
         println!("   Average per parse: {:?}", duration / 1000);
         println!("   ✅ High performance confirmed!\n");
     }

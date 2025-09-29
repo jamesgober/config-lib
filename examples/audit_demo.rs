@@ -49,21 +49,21 @@ fn main() -> config_lib::Result<()> {
         logger.log_access("database_host", Some("demo_user"));
     }
     let host = config.get("database_host").unwrap().as_string().unwrap();
-    println!("   Database Host: {}", host);
+    println!("   Database Host: {host}");
 
     // Access database port
     if let Some(logger) = get_audit_logger() {
         logger.log_access("database_port", Some("demo_user"));
     }
     let port = config.get("database_port").unwrap().as_integer().unwrap();
-    println!("   Database Port: {}", port);
+    println!("   Database Port: {port}");
 
     // Access debug setting
     if let Some(logger) = get_audit_logger() {
         logger.log_access("debug_enabled", Some("demo_user"));
     }
     let debug = config.get("debug_enabled").unwrap().as_bool().unwrap();
-    println!("   Debug Enabled: {}", debug);
+    println!("   Debug Enabled: {debug}");
 
     // Simulate configuration modifications
     println!("\n4. Modifying configuration values...");
@@ -141,7 +141,7 @@ fn main() -> config_lib::Result<()> {
     if let Some(logger) = get_audit_logger() {
         logger.log_reload(config_path, true, None);
     }
-    println!("   Successful reload from {}", config_path);
+    println!("   Successful reload from {config_path}");
 
     // Failed reload
     if let Some(logger) = get_audit_logger() {
@@ -185,7 +185,7 @@ fn main() -> config_lib::Result<()> {
     println!("\n9. File audit log contents:");
     if let Ok(contents) = std::fs::read_to_string("config_audit.log") {
         for line in contents.lines() {
-            println!("   {}", line);
+            println!("   {line}");
         }
     }
 

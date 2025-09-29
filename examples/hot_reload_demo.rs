@@ -16,7 +16,7 @@ fn main() -> config_lib::Result<()> {
     file.flush()?;
     drop(file);
 
-    println!("1. Created initial config file: {}", config_path);
+    println!("1. Created initial config file: {config_path}");
 
     // Create hot-reloadable configuration
     let (hot_config, event_receiver) = HotReloadConfig::from_file(config_path)?
@@ -50,7 +50,7 @@ fn main() -> config_lib::Result<()> {
 
     // Simulate application running and config changes
     for i in 1..=3 {
-        println!("\n3.{} Waiting 2 seconds...", i);
+        println!("\n3.{i} Waiting 2 seconds...");
         thread::sleep(Duration::from_secs(2));
 
         // Update configuration
@@ -58,11 +58,11 @@ fn main() -> config_lib::Result<()> {
         writeln!(file, "server_port={}", 8080 + i * 10)?;
         writeln!(file, "debug_mode={}", i % 2 == 0)?;
         writeln!(file, "max_connections={}", 100 + i * 50)?;
-        writeln!(file, "# Updated at iteration {}", i)?;
+        writeln!(file, "# Updated at iteration {i}")?;
         file.flush()?;
         drop(file);
 
-        println!("   📝 Updated config file (iteration {})", i);
+        println!("   📝 Updated config file (iteration {i})");
 
         // Wait for reload and display new values
         thread::sleep(Duration::from_millis(600)); // Wait for polling + reload
