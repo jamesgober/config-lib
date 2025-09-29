@@ -40,22 +40,18 @@ pub fn parse_string(source: &str, format: Option<&str>) -> Result<Value> {
 
     match detected_format {
         "conf" => conf::parse(source),
-        "properties" => {
-            let mut parser = properties_parser::PropertiesParser::new(source.to_string());
-            parser.parse()
-        }
-        "ini" => ini_parser::parse_ini(source),
+        "properties" => properties_parser::parse(source),
+        "ini" => ini_parser::parse(source),
         #[cfg(feature = "json")]
         "json" => json_parser::parse(source),
         #[cfg(feature = "xml")]
-        "xml" => xml_parser::parse_xml(source),
+        "xml" => xml_parser::parse(source),
         #[cfg(feature = "hcl")]
-        "hcl" => hcl_parser::parse_hcl(source),
-        // NOML and TOML disabled for CI/CD
-        // #[cfg(feature = "noml")]
-        // "noml" => noml_parser::parse(source),
-        // #[cfg(feature = "toml")]
-        // "toml" => toml_parser::parse(source),
+        "hcl" => hcl_parser::parse(source),
+        #[cfg(feature = "noml")]
+        "noml" => noml_parser::parse(source),
+        #[cfg(feature = "toml")]
+        "toml" => toml_parser::parse(source),
         _ => {
             #[cfg(not(feature = "json"))]
             if detected_format == "json" {
@@ -72,21 +68,11 @@ pub fn parse_string(source: &str, format: Option<&str>) -> Result<Value> {
                 return Err(Error::feature_not_enabled("hcl"));
             }
 
-            // NOML format parsing
-            #[cfg(feature = "noml")]
-            if detected_format == "noml" {
-                return noml_parser::parse(source);
-            }
             #[cfg(not(feature = "noml"))]
             if detected_format == "noml" {
                 return Err(Error::feature_not_enabled("noml"));
             }
 
-            // TOML format parsing (via NOML)
-            #[cfg(feature = "toml")]
-            if detected_format == "toml" {
-                return toml_parser::parse(source);
-            }
             #[cfg(not(feature = "toml"))]
             if detected_format == "toml" {
                 return Err(Error::feature_not_enabled("toml"));
