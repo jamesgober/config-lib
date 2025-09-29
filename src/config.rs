@@ -426,6 +426,31 @@ impl Config {
     // Validation Methods (Feature-gated)
     // =====================================================================
 
+    // --- CONVENIENCE METHODS & BUILDER PATTERN ---
+
+    /// Get a value by path with a more ergonomic API
+    pub fn key(&self, path: &str) -> ConfigValue {
+        ConfigValue::new(self.get(path))
+    }
+
+    /// Check if configuration has any value at the given path
+    pub fn has(&self, path: &str) -> bool {
+        self.contains_key(path)
+    }
+
+    /// Get a value with a default fallback
+    pub fn get_or<V>(&self, path: &str, default: V) -> V 
+    where 
+        V: TryFrom<Value> + Clone,
+        V::Error: std::fmt::Debug,
+    {
+        self.get(path)
+            .and_then(|v| V::try_from(v.clone()).ok())
+            .unwrap_or(default)
+    }
+
+    // --- VALIDATION SUPPORT ---
+
     /// Set validation rules for this configuration
     #[cfg(feature = "validation")]
     pub fn set_validation_rules(&mut self, rules: ValidationRuleSet) {
@@ -493,6 +518,134 @@ impl Config {
 }
 
 impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Ergonomic wrapper for accessing configuration values
+pub struct ConfigValue<'a> {
+    value: Option<&'a Value>,
+}
+
+impl<'a> ConfigValue<'a> {
+    fn new(value: Option<&'a Value>) -> Self {
+        Self { value }
+    }
+
+    /// Get as string with default fallback
+    pub fn as_string(&self) -> Result<String> {
+        match self.value {
+            Some(v) => v.as_string().map(|s| s.to_string()),
+            None => Err(Error::key_not_found("value not found")),
+        }
+    }
+
+    /// Get as string with custom default
+    pub fn as_string_or(&self, default: &str) -> String {
+        self.value
+            .and_then(|v| v.as_string().ok())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| default.to_string())
+    }
+
+    /// Get as integer with default fallback
+    pub fn as_integer(&self) -> Result<i64> {
+        match self.value {
+            Some(v) => v.as_integer(),
+            None => Err(Error::key_not_found("value not found")),
+        }
+    }
+
+    /// Get as integer with custom default
+    pub fn as_integer_or(&self, default: i64) -> i64 {
+        self.value
+            .and_then(|v| v.as_integer().ok())
+            .unwrap_or(default)
+    }
+
+    /// Get as boolean with default fallback
+    pub fn as_bool(&self) -> Result<bool> {
+        match self.value {
+            Some(v) => v.as_bool(),
+            None => Err(Error::key_not_found("value not found")),
+        }
+    }
+
+    /// Get as boolean with custom default
+    pub fn as_bool_or(&self, default: bool) -> bool {
+        self.value
+            .and_then(|v| v.as_bool().ok())
+            .unwrap_or(default)
+    }
+
+    /// Check if the value exists
+    pub fn exists(&self) -> bool {
+        self.value.is_some()
+    }
+
+    /// Get the underlying Value reference if it exists
+    pub fn value(&self) -> Option<&'a Value> {
+        self.value
+    }
+}
+
+/// Builder pattern for Config creation
+pub struct ConfigBuilder {
+    format: Option<String>,
+    #[cfg(feature = "validation")]
+    validation_rules: Option<ValidationRuleSet>,
+}
+
+impl ConfigBuilder {
+    /// Create a new ConfigBuilder
+    pub fn new() -> Self {
+        Self {
+            format: None,
+            #[cfg(feature = "validation")]
+            validation_rules: None,
+        }
+    }
+
+    /// Set the configuration format
+    pub fn format<S: Into<String>>(mut self, format: S) -> Self {
+        self.format = Some(format.into());
+        self
+    }
+
+    /// Set validation rules
+    #[cfg(feature = "validation")]
+    pub fn validation_rules(mut self, rules: ValidationRuleSet) -> Self {
+        self.validation_rules = Some(rules);
+        self
+    }
+
+    /// Build Config from string
+    pub fn from_string(self, source: &str) -> Result<Config> {
+        let config = Config::from_string(source, self.format.as_deref())?;
+        
+        #[cfg(feature = "validation")]
+        if let Some(rules) = self.validation_rules {
+            config.set_validation_rules(rules);
+        }
+        
+        Ok(config)
+    }
+
+    /// Build Config from file
+    pub fn from_file<P: AsRef<Path>>(self, path: P) -> Result<Config> {
+        let config = Config::from_file(path)?;
+        
+        #[cfg(feature = "validation")]
+        if let Some(rules) = self.validation_rules {
+            config.set_validation_rules(rules);
+        }
+        
+        Ok(config)
+    }
+}
+
+impl Default for ConfigBuilder {
     fn default() -> Self {
         Self::new()
     }
