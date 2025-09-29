@@ -1,5 +1,22 @@
 <h1 align="center">
-    <img width="90px" height="auto" src="https://raw.githubusercontent.com/jamesgober/jamesgober/main/media/icons/hexagon-3.svg" alt="Triple Hexagon">
+    <img width="90px" height="auto" src="https://raw.githubusercontent.com/jamesgober/jamesgober/main/media/icons/hexagon-3.svg" alt="Triple Hexa| Version | Focus | Status |
+|----|---------|-------|--------|
+| **0.4.x** | ✅ Core functionality & enterprise features | Released |
+| **0.5.x** | ✅ API enhancements & builder patterns | **Current** |
+| **0.6.x** | 🔮 API expansion & additional functionality | **Next** |
+| **0.7.x** | 🛡️ API finalization & bulletproofing | **Planned** |
+| **0.8.x** | ⚡ Peak performance optimization & security | **Planned** |
+| **0.9.x** | 🧪 Beta/RC with community testing | **Planned** |
+| **1.0.x** | 🎉 Stable release | **Goal** |-----|--------|
+| **0.4.x** | ✅ Core functionality & enterprise features | Released |
+| **0.5.x** | ✅ API enhancements & builder patterns | **Current** |
+| **0.6.x** | 🔮 API expansion & additional functionality | **Next** |
+| **0.7.x** | 🛡️ API finalization & bulletproofing | **Planned** |
+| **0.8.x** | ⚡ Peak performance optimization & security | **Planned** |
+| **0.9.x** | 🧪 Beta/RC with community testing | **Planned** |
+| **1.0.x** | 🎉 Stable release | **Goal** |** | ✅ Core functionality & enterprise features | Released |
+| **0.5.x** | ✅ API consistency improvements, builder patterns | **Current** |
+| **0.6.x** | 🔮 Advanced integrations, cloud-native features | Q1 2026 |">
     <br>
     <b>config-lib</b>
 </h1>
@@ -13,7 +30,7 @@
 <p align="center">
     <a href="https://crates.io/crates/config-lib"><img src="https://img.shields.io/crates/v/config-lib.svg" alt="Crates.io"></a>
     <a href="https://docs.rs/config-lib"><img src="https://docs.rs/config-lib/badge.svg" alt="Documentation"></a>
-    <a href="https://github.com/jamesgober/config-lib/actions"><img src="https://github.com/jamesgober/config-lib/workflows/CI/badge.svg" alt="CI Status"></a>
+    <a href="https://github.com/jamesgober/config-lib/actions"><img src="https://github.com/jamesgober/config-lib/workflows/CI%2FCD/badge.svg" alt="CI Status"></a>
     <a href="https://github.com/jamesgober/config-lib/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
 </p>
 
@@ -82,6 +99,31 @@ config.set("app.version", "1.0.0")?;
 println!("Connecting to {}:{}", host, port);
 ```
 
+### ✨ **New in v0.5.0: Enhanced API**
+
+```rust
+use config_lib::{ConfigBuilder, ConfigValue};
+
+// Fluent configuration creation
+let config = ConfigBuilder::new()
+    .format("conf")
+    .from_string(r#"
+[server]
+port = 8080
+host = "localhost"
+"#)?;
+
+// Ergonomic value access with defaults
+let port = config.key("server.port").as_integer()?;
+let timeout = config.key("timeout").as_integer().unwrap_or(30);
+let name = config.key("app.name").as_string_or("DefaultApp");
+
+// Check existence
+if config.has("server.ssl") {
+    println!("SSL configuration found");
+}
+```
+
 ### 🔥 **Enterprise Caching**
 
 ```rust
@@ -124,10 +166,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-config-lib = "0.4.5"
+config-lib = "0.5.0"
 
 # Optional enterprise features
-config-lib = { version = "0.4.5", features = [
+config-lib = { version = "0.5.0", features = [
     "json",           # JSON format support
     "xml",            # XML format support  
     "hcl",            # HCL format support
@@ -139,7 +181,7 @@ config-lib = { version = "0.4.5", features = [
 
 ---
 
-## 🎯 **Current Status: v0.4.5**
+## 🎯 **Current Status: v0.5.0**
 
 **Stability**: ✅ **Production Ready** - Raw development version with stable core functionality
 
@@ -149,6 +191,7 @@ config-lib = { version = "0.4.5", features = [
 - ✅ Hot reloading and audit logging
 - ✅ Environment variable overrides and validation
 - ✅ Comprehensive test suite (60+ tests, 100% passing)
+- ✅ Enhanced API with ConfigBuilder and ConfigValue (v0.5.0)
 - ✅ Zero unsafe code, production-ready error handling
 
 **Performance Achievements**:
@@ -163,9 +206,8 @@ config-lib = { version = "0.4.5", features = [
 
 | Version | Focus | Status |
 |---------|-------|--------|
-| **0.4.x** | ✅ Core functionality & enterprise features | **Current** |
-| **0.5.x** | � API expansion & additional functionality | **Next** |
-| **0.6.x** | 🛡️ API finalization & bulletproofing | **Planned** |
+| **0.5.x** | � API expansion & additional functionality | **Current** |
+| **0.6.x** | 🛡️ API finalization & bulletproofing | **Next** |
 | **0.7.x** | 🎨 Code cleanup, optimization & polish | **Planned** |
 | **0.8.x** | ⚡ Peak performance optimization & security | **Planned** |
 | **0.9.x** | 🧪 Beta/RC with community testing | **Planned** |

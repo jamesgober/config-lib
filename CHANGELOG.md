@@ -10,6 +10,20 @@
 
 ## [Unreleased]
 
+
+
+
+
+
+
+
+
+
+<br>
+
+
+## [0.5.0] - 2025-09-29
+
 ### Added
 - **🚀 API Enhancements**:
   - ConfigValue wrapper struct for ergonomic value access with methods like `as_string()`, `as_integer()`, `as_string_or(default)`
@@ -30,11 +44,6 @@
   - Comprehensive README.md rewrite with feature overview, performance metrics, and enterprise focus
   - Added new_api_demo.rs example demonstrating ConfigValue, ConfigBuilder, and convenience methods
   - Enhanced public API exports to include ConfigValue and ConfigBuilder types
-
-
-
-
-
 
 
 
@@ -223,11 +232,11 @@ Project creation and starting point.
 <!-- FOOT LINKS
 ################################################# -->
 [Unreleased]: https://github.com/jamesgober/metrics-lib/compare/v0.4.0...HEAD
-[0.9.0]: https://github.com/jamesgober/metrics-lib/compare/v0.8.0...v0.9.0 <!-- 0.9.x: Stable Beta/RC -->
-[0.8.0]: https://github.com/jamesgober/metrics-lib/compare/v0.7.0...v0.8.0 <!-- 0.8.x: Stable for testing -->
-[0.7.0]: https://github.com/jamesgober/metrics-lib/compare/v0.6.0...v0.7.0 <!-- 0.7.x: Clean, Optimize, Polish -->
-[0.6.0]: https://github.com/jamesgober/metrics-lib/compare/v0.5.0...v0.6.0 <!-- 0.6.x: Finalize -->
-[0.5.0]: https://github.com/jamesgober/metrics-lib/compare/v0.4.5...v0.5.0 <!-- 0.5.x: API -->
+[0.9.0]: https://github.com/jamesgober/metrics-lib/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/jamesgober/metrics-lib/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/jamesgober/metrics-lib/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/jamesgober/metrics-lib/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/jamesgober/metrics-lib/compare/v0.4.5...v0.5.0
 [0.4.5]: https://github.com/jamesgober/metrics-lib/compare/v0.4.0...v0.4.5 
-[0.4.0]: https://github.com/jamesgober/metrics-lib/compare/v0.1.0...v0.4.0 <!-- 0.4.x: Raw Build -->
+[0.4.0]: https://github.com/jamesgober/metrics-lib/compare/v0.1.0...v0.4.0
 [0.1.0]: https://github.com/jamesgober/metrics-lib/releases/tag/v0.1.0
