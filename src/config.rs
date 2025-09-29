@@ -93,13 +93,23 @@ impl Config {
 
         let values = parsers::parse_string(source, Some(detected_format))?;
 
+        #[cfg(feature = "noml")]
         let mut config = Self {
             values,
             file_path: None,
             format: detected_format.to_string(),
             modified: false,
-            #[cfg(feature = "noml")]
             noml_document: None,
+            #[cfg(feature = "validation")]
+            validation_rules: None,
+        };
+
+        #[cfg(not(feature = "noml"))]
+        let config = Self {
+            values,
+            file_path: None,
+            format: detected_format.to_string(),
+            modified: false,
             #[cfg(feature = "validation")]
             validation_rules: None,
         };
