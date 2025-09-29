@@ -66,7 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 4. Access arrays (now at root level)
     println!("\n📊 Array values:");
-    
+
     let servers = config.get("servers");
     if let Some(servers_val) = servers {
         if let Ok(servers_array) = servers_val.as_array() {
