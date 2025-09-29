@@ -10,6 +10,13 @@
 
 ## [Unreleased]
 
+
+
+<br>
+
+
+## [0.9.0] - 2025-09-29
+
 ### Performance
 - **Enterprise Cache Optimizations**:
   - Optimized FastCache eviction strategy from O(n) per-item removal to efficient batch operations
@@ -39,6 +46,7 @@
   - Enhanced documentation coverage for all public APIs
   - Verified zero TODO/FIXME comments in production codebase
   - Achieved comprehensive test coverage with 55 passing tests (44 unit + 11 integration + 5 doc tests)
+
 
 
 
@@ -285,10 +293,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/metrics-lib/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/jamesgober/metrics-lib/compare/v0.9.0...HEAD
 [0.9.0]: https://github.com/jamesgober/metrics-lib/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/jamesgober/metrics-lib/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/jamesgober/metrics-lib/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/jamesgober/metrics-lib/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/jamesgober/metrics-lib/compare/v0.4.5...v0.5.0
 [0.4.5]: https://github.com/jamesgober/metrics-lib/compare/v0.4.0...v0.4.5 
