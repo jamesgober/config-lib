@@ -267,7 +267,7 @@ impl Config {
                         return Ok(noml::serialize_document(document)?);
                     }
                     // Fallback to basic serialization
-                    return self.serialize_as_toml();
+                    self.serialize_as_toml()
                 }
                 #[cfg(not(feature = "toml"))]
                 return Err(Error::feature_not_enabled("toml"));
