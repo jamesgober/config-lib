@@ -231,8 +231,7 @@ impl AuditSink for FileSink {
                 .open(&self.file_path)
                 .map_err(|e| format!("Failed to open audit log file: {e}"))?;
 
-            writeln!(file, "{event}")
-                .map_err(|e| format!("Failed to write to audit log: {e}"))?;
+            writeln!(file, "{event}").map_err(|e| format!("Failed to write to audit log: {e}"))?;
         }
         Ok(())
     }
@@ -502,7 +501,7 @@ mod tests {
             .with_new_value(Value::String("new".to_string()))
             .with_metadata("operation", "set");
 
-        let display = format!("{}", event);
+        let display = format!("{event}");
         assert!(display.contains("Modification"));
         assert!(display.contains("Warning"));
         assert!(display.contains("test.key"));
