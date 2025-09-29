@@ -17,6 +17,15 @@
 
 ## [0.9.0] - 2025-09-29
 
+### Security
+- **Production Safety Hardening**:
+  - Eliminated all production code safety violations (unwrap/panic/expect calls)
+  - Fixed critical safety issue in enterprise module's table mutation logic
+  - Replaced unsafe unwrap calls with proper error handling in XML parser
+  - Enhanced HCL parser with robust error handling for malformed assignments
+  - Improved audit module with graceful mutex lock poisoning recovery
+  - Achieved zero clippy violations with strict safety lint enforcement
+
 ### Performance
 - **Enterprise Cache Optimizations**:
   - Optimized FastCache eviction strategy from O(n) per-item removal to efficient batch operations

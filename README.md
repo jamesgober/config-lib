@@ -205,28 +205,143 @@ let (hits, misses, ratio) = config.cache_stats();
 println!("Cache hit ratio: {:.2}%", ratio * 100.0);
 ```
 
-### **Preset Configuration Settings**
+### **Default Configuration Settings**
+
+config-lib provides multiple powerful methods for setting default/preset values that serve as fallbacks when keys are missing from configuration files. This ensures your application always has sensible defaults while allowing configuration files to override specific values.
+
+#### **Method 1: ConfigBuilder with Presets (Recommended)**
 
 ```rust
-use config_lib::{ConfigBuilder, ConfigValue};
+use config_lib::{ConfigBuilder, Value};
 use std::collections::HashMap;
 
-// Set up default/preset values before loading files
-let mut preset_values = HashMap::new();
-preset_values.insert("app.name".to_string(), ConfigValue::String("MyApplication".to_string()));
-preset_values.insert("server.timeout".to_string(), ConfigValue::Integer(30));
-preset_values.insert("database.pool_size".to_string(), ConfigValue::Integer(10));
-preset_values.insert("logging.level".to_string(), ConfigValue::String("info".to_string()));
+// Set up comprehensive default values before loading config files
+let mut defaults = HashMap::new();
+defaults.insert("app.name".to_string(), Value::String("MyApplication".to_string()));
+defaults.insert("app.version".to_string(), Value::String("1.0.0".to_string()));
+defaults.insert("app.debug".to_string(), Value::Bool(false));
 
-// Create config with preset defaults, then load from file
-let mut config = ConfigBuilder::new()
-    .with_defaults(preset_values)
-    .from_file("app.conf")?  // File values override presets
+// Server defaults
+defaults.insert("server.host".to_string(), Value::String("localhost".to_string()));
+defaults.insert("server.port".to_string(), Value::Integer(8080));
+defaults.insert("server.timeout".to_string(), Value::Integer(30));
+defaults.insert("server.workers".to_string(), Value::Integer(4));
+
+// Database defaults
+defaults.insert("database.host".to_string(), Value::String("localhost".to_string()));
+defaults.insert("database.port".to_string(), Value::Integer(5432));
+defaults.insert("database.pool_size".to_string(), Value::Integer(10));
+defaults.insert("database.timeout".to_string(), Value::Integer(60));
+
+// Logging defaults
+defaults.insert("logging.level".to_string(), Value::String("info".to_string()));
+defaults.insert("logging.file".to_string(), Value::String("app.log".to_string()));
+defaults.insert("logging.max_size".to_string(), Value::String("10MB".to_string()));
+
+// Create config with defaults, then load from file
+let config = ConfigBuilder::new()
+    .with_defaults(defaults)         // Apply presets first
+    .from_file("app.conf")?          // File values override presets
     .build()?;
 
-// Preset values are available even if not in file
-let app_name = config.get("app.name")?.as_string()?;  // "MyApplication" (preset)
-let timeout = config.get("server.timeout")?.as_integer()?;  // 30 (preset) or file value
+// All values are guaranteed to exist (from file or defaults)
+let app_name = config.get("app.name")?.as_string()?;           // File value or "MyApplication"
+let port = config.get("server.port")?.as_integer()?;           // File value or 8080
+let pool_size = config.get("database.pool_size")?.as_integer()?; // File value or 10
+let log_level = config.get("logging.level")?.as_string()?;      // File value or "info"
+```
+
+#### **Method 2: Enterprise Config with Default Tables**
+
+```rust
+use config_lib::enterprise::EnterpriseConfig;
+
+// Create enterprise config with default support
+let mut config = EnterpriseConfig::new();
+
+// Set comprehensive defaults that serve as fallbacks
+config.set_default("app.name", Value::String("Enterprise App".to_string()));
+config.set_default("app.environment", Value::String("development".to_string()));
+config.set_default("server.port", Value::Integer(8080));
+config.set_default("server.host", Value::String("0.0.0.0".to_string()));
+config.set_default("database.connection_timeout", Value::Integer(30));
+config.set_default("cache.enabled", Value::Bool(true));
+config.set_default("cache.ttl", Value::Integer(3600));
+
+// Load configuration from file (with ultra-fast caching)
+config = EnterpriseConfig::from_file("production.conf")?;
+
+// Automatically falls back to defaults for missing keys (sub-50ns access)
+let environment = config.get_or_default("app.environment");     // File value or "development"
+let cache_ttl = config.get_or_default("cache.ttl");             // File value or 3600
+let workers = config.get_or_default("server.workers");          // File value or default if set
+
+// Enterprise features: performance monitoring
+let (hits, misses, ratio) = config.cache_stats();
+println!("Cache performance: {:.2}% hit ratio", ratio * 100.0);
+```
+
+#### **Method 3: Inline Defaults with get_or()**
+
+```rust
+use config_lib::Config;
+
+// Load configuration file
+let config = Config::from_file("app.conf")?;
+
+// Provide defaults inline when accessing values
+let app_config = AppConfig {
+    name: config.get_or("app.name", "DefaultApp".to_string()),
+    port: config.get_or("server.port", 8080),
+    debug: config.get_or("app.debug", false),
+    timeout: config.get_or("server.timeout", 30),
+    
+    // Database configuration with sensible defaults
+    db_host: config.get_or("database.host", "localhost".to_string()),
+    db_port: config.get_or("database.port", 5432),
+    db_pool_size: config.get_or("database.pool_size", 10),
+    
+    // Feature flags with conservative defaults
+    analytics_enabled: config.get_or("features.analytics", false),
+    cache_enabled: config.get_or("features.cache", true),
+    monitoring_enabled: config.get_or("features.monitoring", false),
+};
+```
+
+#### **Best Practices for Default Configuration**
+
+1. **Use Sensible Defaults**: Choose defaults that work for most use cases
+2. **Document Defaults**: Keep defaults in sync with documentation
+3. **Environment-Specific**: Use different defaults for dev/staging/production
+4. **Type Safety**: Ensure defaults match expected types
+5. **Validation**: Validate both defaults and overrides
+6. **Performance**: Use Enterprise config for high-performance scenarios
+
+```rust
+// Example: Production-ready defaults with validation
+use config_lib::{ConfigBuilder, Value, validation::Validator};
+
+// Production defaults (secure and performant)
+let defaults = HashMap::from([
+    ("server.host".to_string(), Value::String("127.0.0.1".to_string())), // Secure default
+    ("server.port".to_string(), Value::Integer(8443)),                     // HTTPS default
+    ("server.ssl_enabled".to_string(), Value::Bool(true)),                // Secure by default
+    ("database.ssl_mode".to_string(), Value::String("require".to_string())), // Secure DB
+    ("logging.level".to_string(), Value::String("warn".to_string())),      // Production logging
+    ("features.debug".to_string(), Value::Bool(false)),                   // Disable debug
+]);
+
+// Validation rules for all values (including defaults)
+let validator = Validator::new()
+    .add_rule("server.port", ValidationRule::IntegerRange(1, 65535))
+    .add_rule("server.host", ValidationRule::Required)
+    .add_rule("logging.level", ValidationRule::OneOf(vec!["error", "warn", "info", "debug"]));
+
+let config = ConfigBuilder::new()
+    .with_defaults(defaults)
+    .from_file("production.conf")?
+    .with_validation(validator)         // Validate defaults + file values
+    .build()?;
 ```
 
 ### **Environment Variable Integration**
@@ -341,23 +456,46 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 
 ## 📖 **Documentation & Resources**
 
-### **Core Documentation**
-- **[API Documentation](https://docs.rs/config-lib)** - Complete API reference with examples
-- **[Examples Directory](examples/)** - 20+ comprehensive examples covering all features
-- **[Performance Benchmarks](benches/)** - Detailed performance analysis and comparisons
+### **📋 Documentation Hub**
+- **[📘 Documentation Index](docs/README.md)** - Complete documentation hub and navigation
+- **[🔧 API Reference](docs/API.md)** - Comprehensive API documentation with examples
+- **[📄 Valid Formats](docs/FORMATS.md)** - Detailed format specifications and examples
+- **[💻 Code Guidelines](docs/GUIDELINES.md)** - Development standards and best practices
 
-### **Getting Started Guides**
-- **[Quick Start Guide](examples/basic.rs)** - Basic configuration loading and access
-- **[Multi-Format Demo](examples/multi_format.rs)** - Working with different configuration formats
-- **[Enterprise Features](examples/enterprise_demo.rs)** - Advanced caching and performance
-- **[Hot Reloading](examples/hot_reload_demo.rs)** - Dynamic configuration updates
-- **[Validation System](examples/validation_demo.rs)** - Schema validation and type checking
+### **🌐 External Resources**
+- **[📖 API Documentation](https://docs.rs/config-lib)** - Complete API reference with examples
+- **[📦 Crate Registry](https://crates.io/crates/config-lib)** - Official crate distribution
+- **[🏗️ Examples Directory](examples/)** - 20+ comprehensive examples covering all features
+- **[⚡ Performance Benchmarks](benches/)** - Detailed performance analysis and comparisons
 
-### **Common Use Cases**
+### **🚀 Getting Started Guides**
+- **[🎯 Quick Start Guide](examples/basic.rs)** - Basic configuration loading and access
+- **[🔄 Multi-Format Demo](examples/multi_format.rs)** - Working with different configuration formats
+- **[🏢 Enterprise Features](examples/enterprise_demo.rs)** - Advanced caching and performance
+- **[🔥 Hot Reloading](examples/hot_reload_demo.rs)** - Dynamic configuration updates
+- **[✅ Validation System](examples/validation_demo.rs)** - Schema validation and type checking
+
+### **💡 Common Use Cases**
 - **Web Applications**: [Environment overrides](examples/env_override_demo.rs), JSON/TOML configs
 - **DevOps Tools**: [HCL integration](examples/hcl_demo.rs), audit logging, hot reloading
 - **Enterprise Systems**: [XML support](examples/xml_demo.rs), validation, caching
 - **Microservices**: Multi-format support, environment-based configuration
+
+
+<div align="center">
+    <sup>
+        <a href="docs/README.md" title="Documentation Hub"><b>📘 DOCS</b></a>
+        <span>&nbsp;│&nbsp;</span>
+        <a href="docs/API.md" title="API Reference"><b>🔧 API</b></a>
+        <span>&nbsp;│&nbsp;</span>
+        <a href="docs/FORMATS.md" title="Valid Formats"><b>📄 FORMATS</b></a>
+        <span>&nbsp;│&nbsp;</span>
+        <a href="docs/GUIDELINES.md" title="Code Guidelines"><b>💻 GUIDELINES</b></a>
+        <span>&nbsp;│&nbsp;</span>
+        <a href="examples/" title="Examples"><b>🚀 EXAMPLES</b></a>
+    </sup>
+</div>
+
 
 ### **Troubleshooting**
 
@@ -394,13 +532,17 @@ cargo bench               # Performance benchmarks
 cargo clippy              # Lint checks (should show zero warnings)
 ```
 
----
+<hr>
 
-## **License**
-
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
-
-
+<!-- LICENSE
+############################################# -->
+<div id="license">
+    <h2>⚖️ License</h2>
+    <p>Licensed under the <b>Apache License</b>, version 2.0 (the <b>"License"</b>); you may not use this software, including, but not limited to the source code, media files, ideas, techniques, or any other associated property or concept belonging to, associated with, or otherwise packaged with this software except in compliance with the <b>License</b>.</p>
+    <p>You may obtain a copy of the <b>License</b> at: <a href="http://www.apache.org/licenses/LICENSE-2.0" title="Apache-2.0 License" target="_blank">http://www.apache.org/licenses/LICENSE-2.0</a>.</p>
+    <p>Unless required by applicable law or agreed to in writing, software distributed under the <b>License</b> is distributed on an "<b>AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND</b>, either express or implied.</p>
+    <p>See the <a href="./LICENSE" title="Software License file">LICENSE</a> file included with this project for the specific language governing permissions and limitations under the <b>License</b>.</p>
+</div>
 
 <!-- FOOT COPYRIGHT
 ################################################# -->
