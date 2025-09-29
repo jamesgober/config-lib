@@ -93,7 +93,7 @@ impl Config {
 
         let values = parsers::parse_string(source, Some(detected_format))?;
 
-        let config = Self {
+        let mut config = Self {
             values,
             file_path: None,
             format: detected_format.to_string(),
@@ -274,12 +274,11 @@ impl Config {
             }
             "noml" => {
                 #[cfg(feature = "noml")]
-                #[cfg(feature = "noml")]
                 {
                     if let Some(ref document) = self.noml_document {
-                        return Ok(noml::serialize_document(document));
+                        Ok(noml::serialize_document(document)?)
                     } else {
-                        return Err(Error::internal("NOML document not preserved"));
+                        Err(Error::internal("NOML document not preserved"))
                     }
                 }
                 #[cfg(not(feature = "noml"))]
@@ -310,7 +309,7 @@ impl Config {
         for (key, value) in table {
             if !value.is_table() {
                 let formatted_value = self.format_conf_value(value)?;
-                output.push_str(&format!("{} = {}\n", key, formatted_value));
+                output.push_str(&format!("{key} = {formatted_value}\n"));
             }
         }
 
@@ -320,10 +319,10 @@ impl Config {
                 let section_name = if section_prefix.is_empty() {
                     key.clone()
                 } else {
-                    format!("{}.{}", section_prefix, key)
+                    format!("{section_prefix}.{key}")
                 };
 
-                output.push_str(&format!("\n[{}]\n", section_name));
+                output.push_str(&format!("\n[{section_name}]\n"));
                 self.write_conf_table(output, nested_table, &section_name)?;
             }
         }
@@ -332,6 +331,7 @@ impl Config {
     }
 
     /// Format a value for CONF output
+    #[allow(clippy::only_used_in_recursion)]
     fn format_conf_value(&self, value: &Value) -> Result<String> {
         match value {
             Value::Null => Ok("null".to_string()),
