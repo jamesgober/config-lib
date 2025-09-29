@@ -83,40 +83,34 @@ pub use validation::{
 
 use std::path::Path;
 
-/// Parse configuration from a string, auto-detecting format
+/// Parse configuration from a string with optional format hint
 ///
-/// This is the main entry point for parsing configuration data. The format
-/// is automatically detected based on the content structure and syntax.
+/// This is the primary entry point for parsing configuration data from strings.
+/// Automatically detects format if not specified.
 ///
 /// # Arguments
 ///
-/// * `source` - Configuration text to parse
-/// * `format` - Optional format hint (auto-detected if None)
+/// * `source` - The configuration data as a string
+/// * `format` - Optional format hint ("conf", "toml", "json", "noml")
 ///
 /// # Returns
 ///
 /// Returns a [`Value`] containing the parsed configuration data.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The input format is unknown or unsupported
+/// - The input contains syntax errors
+/// - Required features are not enabled for the detected format
 ///
 /// # Examples
 ///
 /// ```rust
 /// use config_lib::parse;
 ///
-/// let value = parse(r#"
-/// app_name = "my-service"
-/// port = 8080
-/// debug = true
-/// "#, Some("conf"))?;
-///
-/// // Access values from the parsed Value
-/// if let Ok(table) = value.as_table() {
-///     if let Some(app_name) = table.get("app_name") {
-///         assert_eq!(app_name.as_string().unwrap(), "my-service");
-///     }
-///     if let Some(port) = table.get("port") {
-///         assert_eq!(port.as_integer().unwrap(), 8080);
-///     }
-/// }
+/// let config = parse("port = 8080\nname = \"MyApp\"", Some("conf"))?;
+/// let port = config.get("port").unwrap().as_integer()?;
 ///
 /// # Ok::<(), config_lib::Error>(())
 /// ```
@@ -136,6 +130,14 @@ pub fn parse(source: &str, format: Option<&str>) -> Result<Value> {
 /// # Returns
 ///
 /// Returns a [`Value`] containing the parsed configuration data.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The file cannot be read (I/O error)
+/// - The file format cannot be detected
+/// - The file contains syntax errors
+/// - Required features are not enabled for the detected format
 ///
 /// # Examples
 ///
