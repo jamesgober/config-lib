@@ -43,6 +43,8 @@
   - Enhanced enterprise caching with FastCache + main cache dual-tier system
   - Optimized lock acquisition patterns to prevent blocking
   - Refactored error handling to use proper Result types instead of panics
+  - **CI/CD Workflow Consolidation**: Streamlined from 6 workflows to 2 organized workflows
+  - **Dependency Strategy**: Migrated from local path dependencies to published crates for portability
 - **📈 Performance Improvements**:
   - XML parser now unwraps simple text elements automatically
   - HCL parser supports block structures for better DevOps compatibility
@@ -61,6 +63,15 @@
   - Fixed basic example array parsing - arrays now correctly positioned at root level
   - Corrected NOML parser DateTime handling with proper feature gate patterns
   - Fixed documentation build command syntax - proper RUSTDOCFLAGS usage
+  - **MAJOR CI/CD Overhaul**:
+    - Switched from local NOML path dependency to published crate v0.9 - eliminates CI failures
+    - Consolidated 6 GitHub Actions workflows into 2 streamlined workflows (main.yml + codeql.yml)
+    - Disabled redundant workflows: ci.yml, benchmarks.yml, docs.yml, security.yml (.disabled)
+    - Updated CodeQL security analysis from deprecated v2 to v3 actions
+    - Fixed NOML serialization API compatibility for v0.9 (serialize_document error handling)
+    - Re-enabled NOML/TOML features in default feature set after dependency fix
+    - Restored full parser routing for NOML and TOML formats with proper feature gates
+    - Added graceful DateTime handling for both chrono-enabled and disabled builds
 - **🧹 Code Quality & Linting**:
   - Eliminated all 30+ clippy warnings including format strings and needless returns
   - Fixed redundant pattern matching in hot_reload module (is_ok/is_err usage)
@@ -91,11 +102,12 @@
   - Serialization: 45.48µs (good round-trip performance)
 
 ### Quality Metrics
-- **Test Coverage**: 58 total tests (42 unit + 11 integration + 5 doc tests) - All passing ✅
+- **Test Coverage**: 60 total tests (44 unit + 11 integration + 5 doc tests) - All passing ✅
 - **Code Quality**: Zero clippy warnings after comprehensive cleanup
 - **Documentation**: Clean documentation build with proper syntax
-- **CI/CD Readiness**: All examples working, proper feature integration
+- **CI/CD Readiness**: All examples working, proper feature integration, streamlined workflows
 - **Architecture**: Validated hybrid parsing approach (string + DSL when needed)
+- **Dependency Management**: Migrated to published crates for CI/CD compatibility
 
 
 
