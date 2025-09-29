@@ -48,12 +48,10 @@ impl<'a> XmlParser<'a> {
                     let mut element_map = BTreeMap::new();
 
                     // Handle attributes
-                    for attr_result in e.attributes() {
-                        if let Ok(attr) = attr_result {
-                            let key = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
-                            let value = String::from_utf8_lossy(&attr.value).into_owned();
-                            element_map.insert(key, Value::string(value));
-                        }
+                    for attr in e.attributes().flatten() {
+                        let key = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
+                        let value = String::from_utf8_lossy(&attr.value).into_owned();
+                        element_map.insert(key, Value::string(value));
                     }
 
                     stack.push((name, element_map));
@@ -98,12 +96,10 @@ impl<'a> XmlParser<'a> {
                     let mut element_map = BTreeMap::new();
 
                     // Handle attributes
-                    for attr_result in e.attributes() {
-                        if let Ok(attr) = attr_result {
-                            let key = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
-                            let value = String::from_utf8_lossy(&attr.value).into_owned();
-                            element_map.insert(key, Value::string(value));
-                        }
+                    for attr in e.attributes().flatten() {
+                        let key = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
+                        let value = String::from_utf8_lossy(&attr.value).into_owned();
+                        element_map.insert(key, Value::string(value));
                     }
 
                     let value = Value::table(element_map);
