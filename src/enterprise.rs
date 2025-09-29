@@ -45,10 +45,7 @@ impl FastCache {
         // Keep cache size reasonable (100 most accessed items)
         if self.hot_values.len() >= 100 {
             // Simple batch eviction to reduce individual operation overhead
-            let keys_to_remove: Vec<_> = self.hot_values.keys()
-                .take(20)
-                .cloned()
-                .collect();
+            let keys_to_remove: Vec<_> = self.hot_values.keys().take(20).cloned().collect();
             for k in keys_to_remove {
                 self.hot_values.remove(&k);
             }
@@ -365,7 +362,10 @@ impl EnterpriseConfig {
             return Err(Error::general("Configuration is read-only"));
         }
 
-        let mut cache = self.cache.write().map_err(|_| Error::concurrency("Cache lock poisoned"))?;
+        let mut cache = self
+            .cache
+            .write()
+            .map_err(|_| Error::concurrency("Cache lock poisoned"))?;
         cache.clear();
         Ok(())
     }
@@ -376,8 +376,14 @@ impl EnterpriseConfig {
             return Err(Error::general("Configuration is read-only"));
         }
         // ENTERPRISE: Optimized cache merge - minimize clones
-        let other_cache = other.cache.read().map_err(|_| Error::concurrency("Other cache lock poisoned"))?;
-        let mut self_cache = self.cache.write().map_err(|_| Error::concurrency("Self cache lock poisoned"))?;
+        let other_cache = other
+            .cache
+            .read()
+            .map_err(|_| Error::concurrency("Other cache lock poisoned"))?;
+        let mut self_cache = self
+            .cache
+            .write()
+            .map_err(|_| Error::concurrency("Self cache lock poisoned"))?;
 
         // ZERO-COPY: Use Arc/Rc for values to avoid cloning large data structures
         for (key, value) in other_cache.iter() {
@@ -559,7 +565,10 @@ impl ConfigManager {
     /// Load named configuration
     pub fn load<P: AsRef<Path>>(&self, name: &str, path: P) -> Result<()> {
         let config = EnterpriseConfig::from_file(path)?;
-        let mut configs = self.configs.write().map_err(|_| Error::concurrency("Configs lock poisoned"))?;
+        let mut configs = self
+            .configs
+            .write()
+            .map_err(|_| Error::concurrency("Configs lock poisoned"))?;
         configs.insert(name.to_string(), config);
         Ok(())
     }
