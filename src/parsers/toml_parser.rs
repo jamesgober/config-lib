@@ -3,7 +3,7 @@
 //! TOML parser with format preservation capabilities.
 //! Uses the NOML library's TOML compatibility for round-trip editing.
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::value::Value;
 use std::collections::BTreeMap;
 
@@ -72,6 +72,8 @@ fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
         }
         #[cfg(feature = "chrono")]
         noml::Value::DateTime(dt) => Ok(Value::DateTime(dt)),
+        #[cfg(not(feature = "chrono"))]
+        noml::Value::DateTime(dt) => Ok(Value::String(dt.to_rfc3339())),
         // Handle NOML-specific types by converting to basic types
         noml::Value::Binary(_) => Ok(Value::String("binary_data".to_string())),
         noml::Value::Size(size) => Ok(Value::Integer(size as i64)),
