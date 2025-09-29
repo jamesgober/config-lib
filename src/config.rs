@@ -439,8 +439,8 @@ impl Config {
     }
 
     /// Get a value with a default fallback
-    pub fn get_or<V>(&self, path: &str, default: V) -> V 
-    where 
+    pub fn get_or<V>(&self, path: &str, default: V) -> V
+    where
         V: TryFrom<Value> + Clone,
         V::Error: std::fmt::Debug,
     {
@@ -574,9 +574,7 @@ impl<'a> ConfigValue<'a> {
 
     /// Get as boolean with custom default
     pub fn as_bool_or(&self, default: bool) -> bool {
-        self.value
-            .and_then(|v| v.as_bool().ok())
-            .unwrap_or(default)
+        self.value.and_then(|v| v.as_bool().ok()).unwrap_or(default)
     }
 
     /// Check if the value exists
@@ -622,25 +620,31 @@ impl ConfigBuilder {
 
     /// Build Config from string
     pub fn from_string(self, source: &str) -> Result<Config> {
+        #[cfg(feature = "validation")]
+        let mut config = Config::from_string(source, self.format.as_deref())?;
+        #[cfg(not(feature = "validation"))]
         let config = Config::from_string(source, self.format.as_deref())?;
-        
+
         #[cfg(feature = "validation")]
         if let Some(rules) = self.validation_rules {
             config.set_validation_rules(rules);
         }
-        
+
         Ok(config)
     }
 
     /// Build Config from file
     pub fn from_file<P: AsRef<Path>>(self, path: P) -> Result<Config> {
+        #[cfg(feature = "validation")]
+        let mut config = Config::from_file(path)?;
+        #[cfg(not(feature = "validation"))]
         let config = Config::from_file(path)?;
-        
+
         #[cfg(feature = "validation")]
         if let Some(rules) = self.validation_rules {
             config.set_validation_rules(rules);
         }
-        
+
         Ok(config)
     }
 }
