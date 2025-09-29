@@ -8,7 +8,7 @@ use std::io::Write;
 use tempfile::NamedTempFile;
 
 #[cfg(feature = "schema")]
-use config_lib::{SchemaBuilder};
+use config_lib::SchemaBuilder;
 
 /// Test basic CONF parsing functionality
 #[test]
@@ -247,7 +247,7 @@ fn test_file_operations() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create temporary file
     let mut temp_file = NamedTempFile::new()?;
-    write!(temp_file, "{}", content)?;
+    write!(temp_file, "{content}")?;
 
     // Load from file
     let config = Config::from_file(temp_file.path())?;
@@ -374,7 +374,7 @@ async fn test_async_operations() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create temporary file
     let mut temp_file = NamedTempFile::new()?;
-    write!(temp_file, "{}", content)?;
+    write!(temp_file, "{content}")?;
 
     // Load asynchronously
     let config = Config::from_file_async(temp_file.path()).await?;
