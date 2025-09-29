@@ -69,13 +69,13 @@ authors = [
 
 # Default features
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
-default = ["conf"]
+default = ["conf", "noml"]
 
 # Config Formats
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 conf = []                              # CONF format parsing (built-in)
-noml = []                              # NOML format parsing (temporarily disabled)
-toml = []                              # TOML format parsing (placeholder feature)
+noml = ["dep:noml"]                     # NOML format parsing
+toml = ["dep:noml"]                     # TOML format parsing via NOML
 json = ["dep:serde_json"]              # JSON format parsing
 
 # Additional Features
@@ -116,9 +116,9 @@ regex = { version = "1.0", optional = true }
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 quick-xml = { version = "0.31", optional = true }   # High-performance XML parser
 
-# NOML Language Library (temporarily disabled for compilation)
+# NOML Language Library
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
-# noml = { path = "../../NOML/noml-rust", optional = true }
+noml = { path = "../../../NOML/noml-rust", optional = true, features = ["chrono"] }
 
 
 
