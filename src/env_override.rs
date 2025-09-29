@@ -63,14 +63,16 @@ impl EnvOverrideSystem {
     }
 
     /// Create with default configuration
-    pub fn default() -> Self {
+    pub fn with_defaults() -> Self {
         Self::new(EnvOverrideConfig::default())
     }
 
     /// Create with custom prefix
     pub fn with_prefix(prefix: &str) -> Self {
-        let mut config = EnvOverrideConfig::default();
-        config.prefix = prefix.to_string();
+        let config = EnvOverrideConfig {
+            prefix: prefix.to_string(),
+            ..Default::default()
+        };
         Self::new(config)
     }
 
@@ -246,6 +248,7 @@ impl EnvOverrideSystem {
 
     /// Convert JSON value to our Value type
     #[cfg(feature = "json")]
+    #[allow(clippy::only_used_in_recursion)]
     fn convert_json_value(&self, json_val: serde_json::Value) -> Value {
         match json_val {
             serde_json::Value::Null => Value::null(),
@@ -306,7 +309,7 @@ pub fn apply_env_overrides(value: Value, config: EnvOverrideConfig) -> Result<Va
 
 /// Apply environment variable overrides with default configuration
 pub fn apply_env_overrides_default(value: Value) -> Result<Value> {
-    let system = EnvOverrideSystem::default();
+    let system = EnvOverrideSystem::with_defaults();
     system.apply_overrides(value)
 }
 
@@ -343,7 +346,7 @@ mod tests {
 
     #[test]
     fn test_value_parsing() {
-        let system = EnvOverrideSystem::default();
+        let system = EnvOverrideSystem::with_defaults();
 
         assert_eq!(system.parse_scalar_value("true"), Value::bool(true));
         assert_eq!(system.parse_scalar_value("false"), Value::bool(false));
@@ -354,7 +357,7 @@ mod tests {
 
     #[test]
     fn test_array_parsing() {
-        let system = EnvOverrideSystem::default();
+        let system = EnvOverrideSystem::with_defaults();
 
         let result = system.parse_env_value("a,b,c");
         if let Value::Array(arr) = result {
@@ -369,7 +372,7 @@ mod tests {
 
     #[test]
     fn test_cache_operations() {
-        let system = EnvOverrideSystem::default();
+        let system = EnvOverrideSystem::with_defaults();
 
         // Cache should start empty
         let (hits, total) = system.cache_stats().unwrap();
