@@ -81,8 +81,6 @@ impl ValidationError {
     }
 }
 
-
-
 /// Collection of validation rules
 #[derive(Default)]
 pub struct ValidationRuleSet {
