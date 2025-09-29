@@ -156,6 +156,18 @@ impl From<quick_xml::Error> for Error {
     }
 }
 
+/// Parse XML format configuration
+#[cfg(feature = "xml")]
+pub fn parse(source: &str) -> Result<Value> {
+    parse_xml(source)
+}
+
+/// Parse XML format configuration (fallback when XML is not available)
+#[cfg(not(feature = "xml"))]
+pub fn parse(_source: &str) -> Result<Value> {
+    Err(crate::error::Error::feature_not_enabled("xml"))
+}
+
 /// Parse XML configuration from string
 #[cfg(feature = "xml")]
 pub fn parse_xml(content: &str) -> Result<Value> {
