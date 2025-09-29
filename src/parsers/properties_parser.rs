@@ -195,7 +195,7 @@ impl PropertiesParser {
                 self.advance();
             } else {
                 return Err(Error::Parse {
-                    message: format!("Invalid hex digit in unicode escape: '{}'", ch),
+                    message: format!("Invalid hex digit in unicode escape: '{ch}'"),
                     line: self.line,
                     column: self.column,
                     file: None,
@@ -208,7 +208,7 @@ impl PropertiesParser {
             Ok(unicode_char.to_string())
         } else {
             Err(Error::Parse {
-                message: format!("Invalid unicode code point: {}", code_point),
+                message: format!("Invalid unicode code point: {code_point}"),
                 line: self.line,
                 column: self.column,
                 file: None,
@@ -308,7 +308,7 @@ mod tests {
         if let Value::Table(table) = result {
             assert_eq!(table.get("key1").unwrap().as_string().unwrap(), "value1");
             assert_eq!(table.get("key2").unwrap().as_integer().unwrap(), 123);
-            assert_eq!(table.get("bool_key").unwrap().as_bool().unwrap(), true);
+            assert!(table.get("bool_key").unwrap().as_bool().unwrap());
         }
     }
 
