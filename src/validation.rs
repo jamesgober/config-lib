@@ -40,11 +40,12 @@ pub struct ValidationError {
 }
 
 /// Severity levels for validation errors
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum ValidationSeverity {
     /// Critical error that must be fixed (severity 4)
     Critical = 4,
     /// Error that needs attention (severity 3)
+    #[default]
     Error = 3,
     /// Warning that should be addressed (severity 2)
     Warning = 2,
@@ -80,11 +81,7 @@ impl ValidationError {
     }
 }
 
-impl Default for ValidationSeverity {
-    fn default() -> Self {
-        ValidationSeverity::Error
-    }
-}
+
 
 /// Collection of validation rules
 #[derive(Default)]
