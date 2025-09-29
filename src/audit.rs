@@ -152,15 +152,15 @@ impl fmt::Display for AuditEvent {
         )?;
 
         if let Some(error) = &self.error_message {
-            write!(f, " error=\"{}\"", error)?;
+            write!(f, " error=\"{error}\"")?;
         }
 
         if let (Some(old), Some(new)) = (&self.old_value, &self.new_value) {
-            write!(f, " change=\"{:?}\" -> \"{:?}\"", old, new)?;
+            write!(f, " change=\"{old:?}\" -> \"{new:?}\"")?;
         }
 
         for (key, value) in &self.metadata {
-            write!(f, " {}=\"{}\"", key, value)?;
+            write!(f, " {key}=\"{value}\"")?;
         }
 
         Ok(())
@@ -193,7 +193,7 @@ impl ConsoleSink {
 impl AuditSink for ConsoleSink {
     fn write_event(&self, event: &AuditEvent) -> Result<(), String> {
         if event.severity >= self.level_filter {
-            println!("AUDIT: {}", event);
+            println!("AUDIT: {event}");
         }
         Ok(())
     }
@@ -229,10 +229,10 @@ impl AuditSink for FileSink {
                 .create(true)
                 .append(true)
                 .open(&self.file_path)
-                .map_err(|e| format!("Failed to open audit log file: {}", e))?;
+                .map_err(|e| format!("Failed to open audit log file: {e}"))?;
 
-            writeln!(file, "{}", event)
-                .map_err(|e| format!("Failed to write to audit log: {}", e))?;
+            writeln!(file, "{event}")
+                .map_err(|e| format!("Failed to write to audit log: {e}"))?;
         }
         Ok(())
     }
@@ -278,7 +278,7 @@ impl AuditLogger {
 
         for sink in &self.sinks {
             if let Err(e) = sink.write_event(&event) {
-                eprintln!("Audit sink error: {}", e);
+                eprintln!("Audit sink error: {e}");
             }
         }
     }
@@ -367,7 +367,7 @@ impl AuditLogger {
     pub fn flush(&self) {
         for sink in &self.sinks {
             if let Err(e) = sink.flush() {
-                eprintln!("Audit sink flush error: {}", e);
+                eprintln!("Audit sink flush error: {e}");
             }
         }
     }
@@ -411,7 +411,7 @@ fn generate_event_id() -> String {
         .as_secs();
     let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
 
-    format!("{:x}-{:x}", timestamp, counter)
+    format!("{timestamp:x}-{counter:x}")
 }
 
 #[cfg(test)]
