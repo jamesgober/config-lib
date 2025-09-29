@@ -22,11 +22,10 @@ pub mod xml_parser;
 #[cfg(feature = "hcl")]
 pub mod hcl_parser;
 
-/// TOML format parser
+// TOML and NOML parsers now enabled with published crate
 #[cfg(feature = "toml")]
 pub mod toml_parser;
 
-/// NOML format parser  
 #[cfg(feature = "noml")]
 pub mod noml_parser;
 
@@ -52,10 +51,11 @@ pub fn parse_string(source: &str, format: Option<&str>) -> Result<Value> {
         "xml" => xml_parser::parse_xml(source),
         #[cfg(feature = "hcl")]
         "hcl" => hcl_parser::parse_hcl(source),
-        #[cfg(feature = "noml")]
-        "noml" => noml_parser::parse(source),
-        #[cfg(feature = "toml")]
-        "toml" => toml_parser::parse(source),
+        // NOML and TOML disabled for CI/CD
+        // #[cfg(feature = "noml")]
+        // "noml" => noml_parser::parse(source),
+        // #[cfg(feature = "toml")]
+        // "toml" => toml_parser::parse(source),
         _ => {
             #[cfg(not(feature = "json"))]
             if detected_format == "json" {
@@ -72,11 +72,21 @@ pub fn parse_string(source: &str, format: Option<&str>) -> Result<Value> {
                 return Err(Error::feature_not_enabled("hcl"));
             }
 
+            // NOML format parsing
+            #[cfg(feature = "noml")]
+            if detected_format == "noml" {
+                return noml_parser::parse(source);
+            }
             #[cfg(not(feature = "noml"))]
             if detected_format == "noml" {
                 return Err(Error::feature_not_enabled("noml"));
             }
 
+            // TOML format parsing (via NOML)
+            #[cfg(feature = "toml")]
+            if detected_format == "toml" {
+                return toml_parser::parse(source);
+            }
             #[cfg(not(feature = "toml"))]
             if detected_format == "toml" {
                 return Err(Error::feature_not_enabled("toml"));
