@@ -21,6 +21,18 @@ pub struct HclParser<'a> {
     content: &'a str,
 }
 
+/// Parse HCL format configuration
+#[cfg(feature = "hcl")]
+pub fn parse(source: &str) -> Result<Value> {
+    parse_hcl(source)
+}
+
+/// Parse HCL format configuration (fallback when HCL is not available)
+#[cfg(not(feature = "hcl"))]
+pub fn parse(_source: &str) -> Result<Value> {
+    Err(crate::Error::feature_not_enabled("hcl"))
+}
+
 /// Parse HCL configuration from string
 #[cfg(feature = "hcl")]
 pub fn parse_hcl(content: &str) -> Result<Value> {
