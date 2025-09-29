@@ -264,7 +264,7 @@ impl Config {
                     // Use NOML's serializer for format preservation
                     #[cfg(feature = "noml")]
                     if let Some(ref document) = self.noml_document {
-                        return Ok(noml::serialize_document(document));
+                        return Ok(noml::serialize_document(document)?);
                     }
                     // Fallback to basic serialization
                     return self.serialize_as_toml();
