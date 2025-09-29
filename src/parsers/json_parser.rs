@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 /// Parse JSON format configuration  
 pub fn parse(source: &str) -> Result<Value> {
     let json_value: serde_json::Value = serde_json::from_str(source)
-        .map_err(|e| Error::parse(format!("JSON parse error: {}", e), e.line(), e.column()))?;
+        .map_err(|e| Error::parse(format!("JSON parse error: {e}"), e.line(), e.column()))?;
 
     convert_json_value(json_value)
 }
@@ -26,7 +26,7 @@ fn convert_json_value(json_value: serde_json::Value) -> Result<Value> {
                 Ok(Value::Float(f))
             } else {
                 Err(Error::parse(
-                    format!("Invalid number: {}", n),
+                    format!("Invalid number: {n}"),
                     1,
                     1, // JSON parser doesn't give us position info
                 ))
@@ -51,7 +51,7 @@ fn convert_json_value(json_value: serde_json::Value) -> Result<Value> {
 pub fn serialize(value: &Value) -> Result<String> {
     let json_value = convert_to_json_value(value)?;
     serde_json::to_string_pretty(&json_value)
-        .map_err(|e| Error::internal(format!("JSON serialization error: {}", e)))
+        .map_err(|e| Error::internal(format!("JSON serialization error: {e}")))
 }
 
 /// Convert config-lib Value to serde_json::Value
