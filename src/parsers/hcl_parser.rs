@@ -13,7 +13,7 @@
 //! - String, integer, float, and boolean values
 //! - Comments with # and //
 
-use crate::{Result, Value};
+use crate::{Error, Result, Value};
 
 /// HCL configuration parser for HashiCorp Configuration Language
 #[cfg(feature = "hcl")]
@@ -106,7 +106,12 @@ impl<'a> HclParser<'a> {
                 map.insert(block_name.to_string(), Value::table(block_map));
             } else if line.contains('=') {
                 // Simple key-value pair
-                let eq_pos = line.find('=').unwrap();
+                let eq_pos = line.find('=').ok_or_else(|| Error::Parse {
+                    message: "Expected '=' in assignment".to_string(),
+                    line: i + 1,
+                    column: 0,
+                    file: None,
+                })?;
                 let key = line[..eq_pos].trim().trim_matches('"').to_string();
                 let value_str = line[eq_pos + 1..].trim().trim_matches('"');
                 let value = self.parse_value(value_str);
