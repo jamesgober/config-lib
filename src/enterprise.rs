@@ -477,13 +477,15 @@ impl EnterpriseConfig {
                 table.insert(key.clone(), Value::table(BTreeMap::new()));
             }
 
-            let entry = table.get_mut(&key).unwrap();
-            if !entry.is_table() {
-                *entry = Value::table(BTreeMap::new());
-            }
+            // Get mutable reference safely
+            if let Some(entry) = table.get_mut(&key) {
+                if !entry.is_table() {
+                    *entry = Value::table(BTreeMap::new());
+                }
 
-            if let Value::Table(nested_table) = entry {
-                set_recursive(nested_table, remaining, value);
+                if let Value::Table(nested_table) = entry {
+                    set_recursive(nested_table, remaining, value);
+                }
             }
         }
 
