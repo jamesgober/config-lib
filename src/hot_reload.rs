@@ -178,7 +178,7 @@ impl HotReloadConfig {
         let handle = thread::spawn(move || {
             loop {
                 // Check for stop signal
-                if let Ok(_) = stop_receiver.try_recv() {
+                if stop_receiver.try_recv().is_ok() {
                     break;
                 }
 
@@ -256,7 +256,7 @@ pub struct HotReloadHandle {
 impl HotReloadHandle {
     /// Stop the background watching thread
     pub fn stop(mut self) -> Result<()> {
-        if let Err(_) = self.stop_sender.send(()) {
+        if self.stop_sender.send(()).is_err() {
             return Err(Error::concurrency("Failed to send stop signal".to_string()));
         }
 
