@@ -6,12 +6,6 @@
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 
-# Advisory severity levels to check
-vulnerability = "deny"
-unmaintained = "warn"
-yanked = "warn"
-notice = "warn"
-
 # Ignore advisories for specific crates (use sparingly)
 ignore = [
     # Example: "RUSTSEC-2020-0001",
@@ -19,26 +13,20 @@ ignore = [
 
 [licenses]
 # License policy
-unlicensed = "deny"
+private = { ignore = true }
 allow = [
     "MIT",
-    "Apache-2.0",
+    "Apache-2.0", 
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
 ]
-deny = [
-    "GPL-2.0",
-    "GPL-3.0",
-    "AGPL-1.0",
-    "AGPL-3.0",
+exceptions = [
+    # Allow specific crates to use otherwise-banned licenses
 ]
-copyleft = "warn"
-allow-osi-fsf-free = "neither"
-default = "deny"
-confidence-threshold = 0.8
 
 [bans]
 # Dependency bans
@@ -46,7 +34,7 @@ multiple-versions = "warn"
 wildcards = "allow"
 highlight = "all"
 
-# Skip certain crates when checking for duplicates
+# Skip certain crates when checking for duplicates  
 skip = [
     # Windows-specific crates that commonly have multiple versions
     { name = "windows_*", version = "*" },
@@ -56,13 +44,11 @@ skip = [
 # Deny specific crates
 deny = [
     # Add problematic crates here
-    # { name = "openssl", version = "*" },  # Example
 ]
 
 # Skip dependency trees for certain crates
 skip-tree = [
     # Add crates whose dependency trees should be ignored
-    # { name = "criterion", version = "*" },  # Example for dev deps
 ]
 
 [sources]
