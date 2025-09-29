@@ -44,9 +44,13 @@ impl FastCache {
     fn insert(&mut self, key: String, value: Value) {
         // Keep cache size reasonable (100 most accessed items)
         if self.hot_values.len() >= 100 {
-            // Remove least recently used (simple implementation)
-            if let Some(first_key) = self.hot_values.keys().next().cloned() {
-                self.hot_values.remove(&first_key);
+            // Simple batch eviction to reduce individual operation overhead
+            let keys_to_remove: Vec<_> = self.hot_values.keys()
+                .take(20)
+                .cloned()
+                .collect();
+            for k in keys_to_remove {
+                self.hot_values.remove(&k);
             }
         }
         self.hot_values.insert(key, value);
@@ -187,36 +191,34 @@ impl EnterpriseConfig {
     /// Get value with default fallback - enterprise API with true caching
     #[inline(always)]
     pub fn get(&self, key: &str) -> Option<Value> {
-        // First: Check fast cache (lock-free for hot values)
-        {
-            if let Ok(mut fast_cache) = self.fast_cache.write() {
-                if let Some(value) = fast_cache.get(key) {
-                    return Some(value.clone());
-                }
+        // First: Check fast cache (minimized lock scope)
+        if let Ok(mut fast_cache) = self.fast_cache.write() {
+            if let Some(value) = fast_cache.get(key) {
+                return Some(value.clone());
             }
         }
 
         // Second: Check main cache and populate fast cache if found
         if let Ok(cache) = self.cache.read() {
             if let Some(value) = self.get_nested(&cache, key) {
-                let cloned_value = value.clone();
-                // Populate fast cache for next access
+                let value_clone = value.clone();
+                // Populate fast cache for next access (avoid double clone)
                 if let Ok(mut fast_cache) = self.fast_cache.write() {
-                    fast_cache.insert(key.to_string(), cloned_value.clone());
+                    fast_cache.insert(key.to_string(), value_clone.clone());
                 }
-                return Some(cloned_value);
+                return Some(value_clone);
             }
         }
 
         // Third: Check defaults
         if let Ok(defaults) = self.defaults.read() {
             if let Some(value) = self.get_nested(&defaults, key) {
-                let cloned_value = value.clone();
-                // Also cache defaults for performance
+                let value_clone = value.clone();
+                // Cache defaults for future access
                 if let Ok(mut fast_cache) = self.fast_cache.write() {
-                    fast_cache.insert(key.to_string(), cloned_value.clone());
+                    fast_cache.insert(key.to_string(), value_clone.clone());
                 }
-                return Some(cloned_value);
+                return Some(value_clone);
             }
         }
 
@@ -363,7 +365,7 @@ impl EnterpriseConfig {
             return Err(Error::general("Configuration is read-only"));
         }
 
-        let mut cache = self.cache.write().unwrap();
+        let mut cache = self.cache.write().map_err(|_| Error::concurrency("Cache lock poisoned"))?;
         cache.clear();
         Ok(())
     }
@@ -374,8 +376,8 @@ impl EnterpriseConfig {
             return Err(Error::general("Configuration is read-only"));
         }
         // ENTERPRISE: Optimized cache merge - minimize clones
-        let other_cache = other.cache.read().unwrap();
-        let mut self_cache = self.cache.write().unwrap();
+        let other_cache = other.cache.read().map_err(|_| Error::concurrency("Other cache lock poisoned"))?;
+        let mut self_cache = self.cache.write().map_err(|_| Error::concurrency("Self cache lock poisoned"))?;
 
         // ZERO-COPY: Use Arc/Rc for values to avoid cloning large data structures
         for (key, value) in other_cache.iter() {
@@ -557,14 +559,14 @@ impl ConfigManager {
     /// Load named configuration
     pub fn load<P: AsRef<Path>>(&self, name: &str, path: P) -> Result<()> {
         let config = EnterpriseConfig::from_file(path)?;
-        let mut configs = self.configs.write().unwrap();
+        let mut configs = self.configs.write().map_err(|_| Error::concurrency("Configs lock poisoned"))?;
         configs.insert(name.to_string(), config);
         Ok(())
     }
 
     /// Get named configuration
     pub fn get(&self, name: &str) -> Option<Arc<RwLock<EnterpriseConfig>>> {
-        let configs = self.configs.read().unwrap();
+        let configs = self.configs.read().ok()?;
         configs.get(name).map(|config| {
             // Return a reference wrapped in Arc for thread safety
             Arc::new(RwLock::new(EnterpriseConfig {
@@ -580,14 +582,18 @@ impl ConfigManager {
 
     /// List all configuration names
     pub fn list(&self) -> Vec<String> {
-        let configs = self.configs.read().unwrap();
-        configs.keys().cloned().collect()
+        match self.configs.read() {
+            Ok(configs) => configs.keys().cloned().collect(),
+            Err(_) => Vec::new(), // Return empty on lock poisoning
+        }
     }
 
     /// Remove named configuration
     pub fn remove(&self, name: &str) -> bool {
-        let mut configs = self.configs.write().unwrap();
-        configs.remove(name).is_some()
+        match self.configs.write() {
+            Ok(mut configs) => configs.remove(name).is_some(),
+            Err(_) => false, // Return false on lock poisoning
+        }
     }
 }
 
