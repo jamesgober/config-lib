@@ -362,7 +362,7 @@ impl Value {
             if let Value::Table(table) = current {
                 // ZERO-COPY: Use entry API to avoid string allocation when possible
                 let entry = table
-                    .entry(part.to_string())
+                    .entry((*part).to_string())
                     .or_insert_with(|| Value::table(BTreeMap::new()));
                 current = entry;
             } else {
@@ -376,7 +376,7 @@ impl Value {
 
         // Set the final value
         if let Value::Table(table) = current {
-            table.insert(last_key.to_string(), value);
+            table.insert((*last_key).to_string(), value);
             Ok(())
         } else {
             Err(Error::type_error(
@@ -523,7 +523,7 @@ impl From<bool> for Value {
 
 impl From<i32> for Value {
     fn from(value: i32) -> Self {
-        Value::Integer(value as i64)
+        Value::Integer(i64::from(value))
     }
 }
 
@@ -535,7 +535,7 @@ impl From<i64> for Value {
 
 impl From<f32> for Value {
     fn from(value: f32) -> Self {
-        Value::Float(value as f64)
+        Value::Float(f64::from(value))
     }
 }
 
