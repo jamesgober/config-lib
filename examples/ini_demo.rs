@@ -37,40 +37,46 @@ fn main() -> config_lib::Result<()> {
         "Username: {}",
         config
             .get("database.username")
-            .unwrap()
-            .as_string()
-            .unwrap()
+            .and_then(|v| v.as_string().ok())
+            .unwrap_or("<not found>")
     );
     println!(
         "Password: {}",
         config
             .get("database.password")
-            .unwrap()
-            .as_string()
-            .unwrap()
+            .and_then(|v| v.as_string().ok())
+            .unwrap_or("<not found>")
     );
     println!(
         "Pool Size: {}",
         config
             .get("database.pool_size")
-            .unwrap()
-            .as_integer()
-            .unwrap()
+            .map(|v| v.as_integer().unwrap_or(-1))
+            .unwrap_or(-1)
     );
 
     // Test logging section
     println!("\n=== Logging Section ===");
     println!(
         "Level: {}",
-        config.get("logging.level").unwrap().as_string().unwrap()
+        config
+            .get("logging.level")
+            .and_then(|v| v.as_string().ok())
+            .unwrap_or("<not found>")
     );
     println!(
         "File: {}",
-        config.get("logging.file").unwrap().as_string().unwrap()
+        config
+            .get("logging.file")
+            .and_then(|v| v.as_string().ok())
+            .unwrap_or("<not found>")
     );
     println!(
         "Max Size: {}",
-        config.get("logging.max_size").unwrap().as_string().unwrap()
+        config
+            .get("logging.max_size")
+            .and_then(|v| v.as_string().ok())
+            .unwrap_or("<not found>")
     );
 
     // Test features with colon separator
@@ -79,25 +85,22 @@ fn main() -> config_lib::Result<()> {
         "Feature1: {}",
         config
             .get("features.feature1")
-            .unwrap()
-            .as_string()
-            .unwrap()
+            .and_then(|v| v.as_string().ok())
+            .unwrap_or("<not found>")
     );
     println!(
         "Feature2: {}",
         config
             .get("features.feature2")
-            .unwrap()
-            .as_string()
-            .unwrap()
+            .and_then(|v| v.as_string().ok())
+            .unwrap_or("<not found>")
     );
     println!(
         "Experimental: {}",
         config
             .get("features.experimental")
-            .unwrap()
-            .as_bool()
-            .unwrap()
+            .map(|v| v.as_bool().unwrap_or(false))
+            .unwrap_or(false)
     );
 
     println!("\n✅ INI format support is working correctly!");
