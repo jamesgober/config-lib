@@ -354,7 +354,7 @@ mod tests {
         assert_eq!(system.parse_scalar_value("true"), Value::bool(true));
         assert_eq!(system.parse_scalar_value("false"), Value::bool(false));
         assert_eq!(system.parse_scalar_value("123"), Value::integer(123));
-        assert_eq!(system.parse_scalar_value("3.141"), Value::float(3.141));
+        assert_eq!(system.parse_scalar_value("1.234"), Value::float(1.234));
         assert_eq!(system.parse_scalar_value("hello"), Value::string("hello"));
     }
 

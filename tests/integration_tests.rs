@@ -85,7 +85,7 @@ fn test_json_parsing() {
         "json-app"
     );
     assert_eq!(config.get("port").unwrap().as_integer().unwrap(), 3000);
-    assert_eq!(config.get("debug").unwrap().as_bool().unwrap(), false);
+    assert!(!config.get("debug").unwrap().as_bool().unwrap());
     assert_eq!(
         config.get("database.host").unwrap().as_string().unwrap(),
         "localhost"
@@ -378,7 +378,7 @@ async fn test_async_operations() -> Result<(), Box<dyn std::error::Error>> {
 
     // Load asynchronously
     let config = Config::from_file_async(temp_file.path()).await?;
-    assert_eq!(config.get("async_test").unwrap().as_bool()?, true);
+    assert!(config.get("async_test").unwrap().as_bool()?);
     assert_eq!(config.get("port").unwrap().as_integer()?, 8080);
 
     Ok(())

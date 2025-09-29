@@ -124,15 +124,12 @@ fn main() -> config_lib::Result<()> {
 
     // Check for error events
     while let Ok(event) = event_receiver.try_recv() {
-        match event {
-            config_lib::hot_reload::ConfigChangeEvent::ReloadFailed { path, error, .. } => {
-                println!(
-                    "   ✅ Properly caught error: {} - {}",
-                    path.display(),
-                    error
-                );
-            }
-            _ => {}
+        if let config_lib::hot_reload::ConfigChangeEvent::ReloadFailed { path, error, .. } = event {
+            println!(
+                "   ✅ Properly caught error: {} - {}",
+                path.display(),
+                error
+            );
         }
     }
 

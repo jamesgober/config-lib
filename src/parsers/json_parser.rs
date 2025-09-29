@@ -89,6 +89,38 @@ fn convert_to_json_value(value: &Value) -> Result<serde_json::Value> {
     }
 }
 
+/// Convert serde_json::Value to config-lib Value (alias for enterprise usage)
+pub fn from_json_value(json_value: serde_json::Value) -> Result<Value> {
+    convert_json_value(json_value)
+}
+
+/// Convert config-lib Value to serde_json::Value for enterprise usage  
+pub fn to_json_value(value: &Value) -> Result<serde_json::Value> {
+    match value {
+        Value::Null => Ok(serde_json::Value::Null),
+        Value::Bool(b) => Ok(serde_json::Value::Bool(*b)),
+        Value::Integer(i) => Ok(serde_json::Value::Number(serde_json::Number::from(*i))),
+        Value::Float(f) => Ok(serde_json::Value::Number(
+            serde_json::Number::from_f64(*f)
+                .ok_or_else(|| Error::serialize("Invalid float value".to_string()))?,
+        )),
+        Value::String(s) => Ok(serde_json::Value::String(s.clone())),
+        Value::Array(arr) => {
+            let converted: Result<Vec<serde_json::Value>> = arr.iter().map(to_json_value).collect();
+            Ok(serde_json::Value::Array(converted?))
+        }
+        Value::Table(table) => {
+            let mut map = serde_json::Map::new();
+            for (key, value) in table {
+                map.insert(key.clone(), to_json_value(value)?);
+            }
+            Ok(serde_json::Value::Object(map))
+        }
+        #[cfg(feature = "chrono")]
+        Value::DateTime(dt) => Ok(serde_json::Value::String(dt.to_rfc3339())),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,37 +180,5 @@ mod tests {
         let json = serialize(&config).unwrap();
         assert!(json.contains("\"name\": \"test\""));
         assert!(json.contains("\"port\": 8080"));
-    }
-}
-
-/// Convert serde_json::Value to config-lib Value (alias for enterprise usage)
-pub fn from_json_value(json_value: serde_json::Value) -> Result<Value> {
-    convert_json_value(json_value)
-}
-
-/// Convert config-lib Value to serde_json::Value for enterprise usage
-pub fn to_json_value(value: &Value) -> Result<serde_json::Value> {
-    match value {
-        Value::Null => Ok(serde_json::Value::Null),
-        Value::Bool(b) => Ok(serde_json::Value::Bool(*b)),
-        Value::Integer(i) => Ok(serde_json::Value::Number(serde_json::Number::from(*i))),
-        Value::Float(f) => Ok(serde_json::Value::Number(
-            serde_json::Number::from_f64(*f)
-                .ok_or_else(|| Error::serialize("Invalid float value".to_string()))?,
-        )),
-        Value::String(s) => Ok(serde_json::Value::String(s.clone())),
-        Value::Array(arr) => {
-            let converted: Result<Vec<serde_json::Value>> = arr.iter().map(to_json_value).collect();
-            Ok(serde_json::Value::Array(converted?))
-        }
-        Value::Table(table) => {
-            let mut map = serde_json::Map::new();
-            for (key, value) in table {
-                map.insert(key.clone(), to_json_value(value)?);
-            }
-            Ok(serde_json::Value::Object(map))
-        }
-        #[cfg(feature = "chrono")]
-        Value::DateTime(dt) => Ok(serde_json::Value::String(dt.to_rfc3339())),
     }
 }
