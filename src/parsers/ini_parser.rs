@@ -12,6 +12,11 @@ use crate::error::{Error, Result};
 use crate::value::Value;
 use std::collections::BTreeMap;
 
+/// Parse INI format configuration
+pub fn parse(source: &str) -> Result<Value> {
+    parse_ini(source)
+}
+
 /// Parse INI format string into a Value::Table
 pub fn parse_ini(content: &str) -> Result<Value> {
     let mut parser = IniParser::new(content);
