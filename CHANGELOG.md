@@ -10,6 +10,34 @@
 
 ## [Unreleased]
 
+## [0.6.1] - 2025-09-29
+
+### Performance
+- **Enterprise Cache Optimizations**:
+  - Optimized FastCache eviction strategy from O(n) per-item removal to efficient batch operations
+  - Reduced unnecessary clone operations in enterprise cache hot paths
+  - Improved concurrent access performance and reduced lock contention
+
+### Fixed
+- **Error Handling Robustness**:
+  - Fixed dangerous unwrap in properties parser unicode escape sequence handling
+  - Improved lock poisoning resilience in enterprise module with proper error propagation
+  - Enhanced error messages for all public API functions with comprehensive error documentation
+
+### Code Quality
+- **API Design Improvements**:
+  - Fixed inefficient string conversion patterns (to_string on &str references)
+  - Added missing error documentation for parse() and parse_file() functions
+  - Improved type conversion patterns using From trait instead of as casting
+  - Resolved all clippy warnings for better code quality
+
+### Internal
+- **Codebase Cleanup**:
+  - Removed dead value_broken.rs file that was not referenced anywhere
+  - Enhanced documentation coverage for all public APIs
+  - Verified zero TODO/FIXME comments in production codebase
+  - Achieved comprehensive test coverage with 55 passing tests (44 unit + 11 integration + 5 doc tests)
+
 
 
 
