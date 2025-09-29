@@ -10,28 +10,6 @@
 
 ## [Unreleased]
 
-### Fixed
-- **🚨 Critical Parser Availability Crisis**:
-  - Re-enabled TOML and NOML parsing in main parser logic (were disabled with "disabled for CI/CD" comment)
-  - Removed redundant fallback logic for TOML/NOML that was causing inconsistent behavior
-  - Fixed parser availability mismatch where formats were advertised but not accessible through main API
-
-### Added
-- **🔧 API Consistency Improvements**:
-  - Added standardized `parse()` function to Properties parser to match other parsers' API patterns
-  - Added standardized `parse()` function to INI parser (in addition to existing `parse_ini()`)
-  - Added standardized `parse()` function to XML parser (in addition to existing `parse_xml()`)
-  - Added standardized `parse()` function to HCL parser (in addition to existing `parse_hcl()`)
-  - All parsers now follow consistent `module::parse()` calling convention
-
-### Changed
-- **🛠️ Parser Integration Refactoring**:
-  - Updated main parser to use standardized `properties_parser::parse()` instead of manual instantiation
-  - Updated main parser to use standardized `ini_parser::parse()` instead of `parse_ini()`
-  - Updated main parser to use standardized `xml_parser::parse()` instead of `parse_xml()`
-  - Updated main parser to use standardized `hcl_parser::parse()` instead of `parse_hcl()`
-  - Unified error handling patterns across all format parsers
-  - All 8 supported formats (CONF, Properties, INI, JSON, XML, HCL, NOML, TOML) now have consistent API patterns
 
 
 
@@ -45,17 +23,48 @@
 <br>
 
 
+## [0.6.0] - 2025-09-29
+
+### Fixed
+- **Critical Parser Availability Crisis**:
+  - Re-enabled TOML and NOML parsing in main parser logic (were disabled with "disabled for CI/CD" comment)
+  - Removed redundant fallback logic for TOML/NOML that was causing inconsistent behavior
+  - Fixed parser availability mismatch where formats were advertised but not accessible through main API
+
+### Added
+- **API Consistency Improvements**:
+  - Added standardized `parse()` function to Properties parser to match other parsers' API patterns
+  - Added standardized `parse()` function to INI parser (in addition to existing `parse_ini()`)
+  - Added standardized `parse()` function to XML parser (in addition to existing `parse_xml()`)
+  - Added standardized `parse()` function to HCL parser (in addition to existing `parse_hcl()`)
+  - All parsers now follow consistent `module::parse()` calling convention
+
+### Changed
+- **Parser Integration Refactoring**:
+  - Updated main parser to use standardized `properties_parser::parse()` instead of manual instantiation
+  - Updated main parser to use standardized `ini_parser::parse()` instead of `parse_ini()`
+  - Updated main parser to use standardized `xml_parser::parse()` instead of `parse_xml()`
+  - Updated main parser to use standardized `hcl_parser::parse()` instead of `parse_hcl()`
+  - Unified error handling patterns across all format parsers
+  - All 8 supported formats (CONF, Properties, INI, JSON, XML, HCL, NOML, TOML) now have consistent API patterns
+
+
+
+
+<br>
+
+
 ## [0.5.0] - 2025-09-29
 
 ### Added
-- **🚀 API Enhancements**:
+- **API Enhancements**:
   - ConfigValue wrapper struct for ergonomic value access with methods like `as_string()`, `as_integer()`, `as_string_or(default)`
   - ConfigBuilder pattern for fluent configuration creation with `.format()` and `.from_string()`/`.from_file()` methods
   - Enhanced Config API with `.key()` method for ergonomic value access and `.has()` method for checking key existence
   - `.get_or(path, default)` convenience method for safe value access with fallback defaults
 
 ### Fixed
-- **🔧 Code Quality Improvements**:
+- **Code Quality Improvements**:
   - Updated 17 format string warnings to modern Rust format syntax (`format!("{var}")` instead of `format!("{}", var)`)
   - Fixed 3 unused variables in examples by prefixing with underscore
   - Resolved TODO comment in enterprise.rs with performance explanation for Arc<Value> optimization
@@ -63,7 +72,7 @@
   - Fixed ConfigBuilder compilation error when validation feature is enabled by properly handling mutable config when validation rules are present
 
 ### Updated
-- **📚 Documentation**:
+- **Documentation**:
   - Comprehensive README.md rewrite with feature overview, performance metrics, and enterprise focus
   - Added new_api_demo.rs example demonstrating ConfigValue, ConfigBuilder, and convenience methods
   - Enhanced public API exports to include ConfigValue and ConfigBuilder types
@@ -77,53 +86,53 @@
 ## [0.4.5] - 2025-09-29
 
 ### Added
-- **🚀 Enterprise Configuration Formats**:
+- **Enterprise Configuration Formats**:
   - XML Configuration Support - Zero-copy XML parsing with quick-xml for Java/.NET environments
   - HCL Configuration Support - HashiCorp Configuration Language parsing for DevOps workflows
   - Properties Format Support - Complete Java .properties file parsing with Unicode and escaping
   - INI Format Support - Full INI file parsing with sections, comments, and data type detection
-- **⚡ Performance & Caching Optimizations**:
+- **Performance & Caching Optimizations**:
   - Multi-tier caching system with hot value cache achieving 457ns average access time
   - Lock-free performance optimizations to minimize contention
   - Zero-copy string operations where possible
   - Sub-50ns cached access performance (24.9ns achieved - 50% better than target)
   - Cache hit ratio tracking and performance statistics
-- **🔧 Enterprise Production Features**:
+- **Enterprise Production Features**:
   - Configuration Hot Reloading - File watching with thread-safe Arc swapping
   - Audit Logging System - Structured event logging with multiple sinks and severity filtering
   - Environment Variable Overrides - Smart caching system with prefix matching and type conversion
   - Configuration Validation Rules - Trait-based validation system with feature gates
-- **🛡️ Reliability & Error Handling**:
+- **Reliability & Error Handling**:
   - Eliminated all unsafe unwrap() calls throughout codebase
   - Poison-resistant locking with graceful lock failure recovery
   - Comprehensive error handling patterns using Result types
   - Production-ready error messages with context preservation
-- **📚 Documentation & Code Quality**:
+- **Documentation & Code Quality**:
   - Comprehensive API documentation for all public interfaces
   - Performance examples and caching demonstrations
   - Dead code elimination and unused import cleanup
   - Feature-gated architecture for minimal compilation overhead
 
 ### Changed
-- **🏗️ Improved Architecture**:
+- **Improved Architecture**:
   - Enhanced enterprise caching with FastCache + main cache dual-tier system
   - Optimized lock acquisition patterns to prevent blocking
   - Refactored error handling to use proper Result types instead of panics
   - **CI/CD Workflow Consolidation**: Streamlined from 6 workflows to 2 organized workflows
   - **Dependency Strategy**: Migrated from local path dependencies to published crates for portability
-- **📈 Performance Improvements**:
+- **Performance Improvements**:
   - XML parser now unwraps simple text elements automatically
   - HCL parser supports block structures for better DevOps compatibility
   - Environment override system uses intelligent caching for repeated access
   - Configuration access patterns optimized for high-frequency operations
 
 ### Fixed
-- **🐛 Stability & Correctness**:
+- **Stability & Correctness**:
   - Fixed lock poisoning vulnerabilities in enterprise module
   - Resolved XML nested value access issues in demonstrations
   - Corrected HCL block parsing for complex configuration structures
   - Eliminated race conditions in hot reload file watching
-- **🔧 CI/CD & Build Issues** (September 2025):
+- **CI/CD & Build Issues** (September 2025):
   - Fixed NOML dependency integration - enabled proper path and chrono features
   - Resolved missing parser routes in format dispatcher for NOML and TOML
   - Fixed basic example array parsing - arrays now correctly positioned at root level
@@ -145,19 +154,19 @@
     - Fixed uninlined format arguments across examples for cleaner code generation
     - Enhanced ini_demo example with proper error handling to prevent CI panics
     - Achieved zero-warning, fully compliant Rust codebase for CI/CD
-- **🧹 Code Quality & Linting**:
+- **Code Quality & Linting**:
   - Eliminated all 30+ clippy warnings including format strings and needless returns
   - Fixed redundant pattern matching in hot_reload module (is_ok/is_err usage)
   - Added Default implementation for EnterpriseConfig to resolve clippy warnings
   - Fixed recursive function parameter warnings with appropriate allow attributes
   - Corrected escaped bracket syntax in INI parser documentation
   - Fixed Arc<RwLock> HTML tag markup in enterprise module documentation
-- **📋 Example & Test Fixes**:
+- **Example & Test Fixes**:
   - Fixed array syntax in basic example from space-separated to JSON-style arrays
   - Resolved NOML variable interpolation syntax issues in multi_format example
   - Fixed array positioning in CONF parser - arrays now accessible at root level
   - All 19 examples now build and run successfully for CI/CD readiness
-- **🔧 INI Format Key Access**: Fixed critical bug where INI section keys (e.g., `database.host`) were not accessible via `Config::get()` despite being present in the key list. The `Value::get()` method now includes a fallback to check flat keys when nested table navigation fails, maintaining backward compatibility while supporting INI format's dotted key structure.
+- **INI Format Key Access**: Fixed critical bug where INI section keys (e.g., `database.host`) were not accessible via `Config::get()` despite being present in the key list. The `Value::get()` method now includes a fallback to check flat keys when nested table navigation fails, maintaining backward compatibility while supporting INI format's dotted key structure.
 
 ### Performance Metrics
 - **Cache Performance**: 24.9ns cached access (50% better than 50ns target)
@@ -254,7 +263,7 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/metrics-lib/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/jamesgober/metrics-lib/compare/v0.6.0...HEAD
 [0.9.0]: https://github.com/jamesgober/metrics-lib/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/jamesgober/metrics-lib/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/jamesgober/metrics-lib/compare/v0.6.0...v0.7.0

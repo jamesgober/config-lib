@@ -33,7 +33,7 @@
 ### 📋 Install Manually
 ```toml
 [dependencies]
-config-lib  = "0.5.0"
+config-lib  = "0.6.0"
 ```
 > Add this to your `Cargo.toml`:
 
@@ -43,13 +43,13 @@ config-lib  = "0.5.0"
 [dependencies]
 
 # Single feature
-config-lib = { version = "0.5.0", features = ["async"] }
+config-lib = { version = "0.6.0", features = ["async"] }
 
 # Multiple features
-config-lib = { version = "0.5.0", features = ["async, noml"] }
+config-lib = { version = "0.6.0", features = ["async, noml"] }
 
 # Disable Default
-config-lib = { version = "0.5.0", features = ["async"] }
+config-lib = { version = "0.6.0", features = ["async"] }
 ```
 > **[Features](#feature-flags)**
 
