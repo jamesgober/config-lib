@@ -19,7 +19,7 @@ pub fn parse(source: &str) -> Result<Value> {
 #[cfg(not(feature = "noml"))]
 pub fn parse(_source: &str) -> Result<Value> {
     Err(Error::general(
-        "TOML parsing requires either the 'noml' feature or a dedicated TOML parser"
+        "TOML parsing requires either the 'noml' feature or a dedicated TOML parser",
     ))
 }
 
@@ -28,14 +28,14 @@ pub fn parse(_source: &str) -> Result<Value> {
 pub fn parse_with_preservation(source: &str) -> Result<(Value, noml::Document)> {
     // Parse to get the AST document for format preservation
     let document = noml::parse_string(source, None)?;
-    
+
     // Resolve to get the actual values
     let mut resolver = noml::Resolver::new();
     let resolved = resolver.resolve(&document)?;
-    
+
     // Convert to config-lib Value
     let value = convert_noml_value(resolved)?;
-    
+
     Ok((value, document))
 }
 
@@ -43,7 +43,7 @@ pub fn parse_with_preservation(source: &str) -> Result<(Value, noml::Document)> 
 #[cfg(not(feature = "noml"))]
 pub fn parse_with_preservation(_source: &str) -> Result<(Value, ())> {
     Err(Error::general(
-        "TOML format preservation requires the 'noml' feature"
+        "TOML format preservation requires the 'noml' feature",
     ))
 }
 
@@ -57,10 +57,7 @@ fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
         noml::Value::Float(f) => Ok(Value::Float(f)),
         noml::Value::String(s) => Ok(Value::String(s)),
         noml::Value::Array(arr) => {
-            let converted: Result<Vec<Value>> = arr
-                .into_iter()
-                .map(convert_noml_value)
-                .collect();
+            let converted: Result<Vec<Value>> = arr.into_iter().map(convert_noml_value).collect();
             Ok(Value::Array(converted?))
         }
         noml::Value::Table(table) => {
@@ -87,7 +84,8 @@ mod tests {
 
     #[test]
     fn test_basic_toml() {
-        let config = parse(r#"
+        let config = parse(
+            r#"
             name = "test"
             port = 8080
             debug = true
@@ -95,24 +93,32 @@ mod tests {
             [database]
             host = "localhost"
             max_connections = 100
-        "#).unwrap();
-        
+        "#,
+        )
+        .unwrap();
+
         assert_eq!(config.get("name").unwrap().as_string().unwrap(), "test");
         assert_eq!(config.get("port").unwrap().as_integer().unwrap(), 8080);
-        assert_eq!(config.get("database.host").unwrap().as_string().unwrap(), "localhost");
+        assert_eq!(
+            config.get("database.host").unwrap().as_string().unwrap(),
+            "localhost"
+        );
     }
 
     #[test]
     fn test_toml_arrays() {
-        let config = parse(r#"
+        let config = parse(
+            r#"
             servers = ["alpha", "beta", "gamma"]
             ports = [8001, 8002, 8003]
-        "#).unwrap();
-        
+        "#,
+        )
+        .unwrap();
+
         let servers = config.get("servers").unwrap().as_array().unwrap();
         assert_eq!(servers.len(), 3);
         assert_eq!(servers[0].as_string().unwrap(), "alpha");
-        
+
         let ports = config.get("ports").unwrap().as_array().unwrap();
         assert_eq!(ports[0].as_integer().unwrap(), 8001);
     }

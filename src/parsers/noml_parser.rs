@@ -2,16 +2,16 @@
 //!
 //! Integration with the NOML library for advanced configuration features.
 //! This parser leverages the full NOML library to provide:
-//! 
+//!
 //! - Environment variable resolution
 //! - File includes  
 //! - Variable interpolation
 //! - Native types (@size, @duration, etc.)
 //! - Format preservation for round-trip editing
 
-use crate::error::Result;
 #[cfg(not(feature = "noml"))]
 use crate::error::Error;
+use crate::error::Result;
 use crate::value::Value;
 use std::collections::BTreeMap;
 
@@ -20,11 +20,11 @@ use std::collections::BTreeMap;
 pub fn parse(source: &str) -> Result<Value> {
     // Parse the document
     let document = noml::parse_string(source, None)?;
-    
+
     // Resolve dynamic features (env vars, includes, etc.)
     let mut resolver = noml::Resolver::new();
     let resolved = resolver.resolve(&document)?;
-    
+
     convert_noml_value(resolved)
 }
 
@@ -32,7 +32,7 @@ pub fn parse(source: &str) -> Result<Value> {
 #[cfg(not(feature = "noml"))]
 pub fn parse(_source: &str) -> Result<Value> {
     Err(Error::general(
-        "NOML parsing requires the 'noml' feature to be enabled"
+        "NOML parsing requires the 'noml' feature to be enabled",
     ))
 }
 
@@ -46,10 +46,7 @@ fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
         noml::Value::Float(f) => Ok(Value::Float(f)),
         noml::Value::String(s) => Ok(Value::String(s)),
         noml::Value::Array(arr) => {
-            let converted: Result<Vec<Value>> = arr
-                .into_iter()
-                .map(convert_noml_value)
-                .collect();
+            let converted: Result<Vec<Value>> = arr.into_iter().map(convert_noml_value).collect();
             Ok(Value::Array(converted?))
         }
         noml::Value::Table(table) => {
@@ -62,13 +59,15 @@ fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
         #[cfg(feature = "chrono")]
         noml::Value::DateTime(dt) => Ok(Value::DateTime(dt)),
         #[cfg(not(feature = "chrono"))]
-        noml::Value::DateTime(_) => Ok(Value::String("datetime not supported without chrono feature".to_string())),
+        noml::Value::DateTime(_) => Ok(Value::String(
+            "datetime not supported without chrono feature".to_string(),
+        )),
         noml::Value::Binary(_data) => {
             // Convert binary data to base64 string for compatibility
             #[cfg(feature = "base64")]
             {
-                use base64::{Engine as _, engine::general_purpose};
-                Ok(Value::String(general_purpose::STANDARD.encode(data)))
+                use base64::{engine::general_purpose, Engine as _};
+                Ok(Value::String(general_purpose::STANDARD.encode(_data)))
             }
             #[cfg(not(feature = "base64"))]
             Ok(Value::String("<binary data>".to_string()))
@@ -88,14 +87,14 @@ fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
 pub fn parse_with_preservation(source: &str) -> Result<(Value, noml::Document)> {
     // Parse to get the AST document for format preservation
     let document = noml::parse_string(source, None)?;
-    
+
     // Resolve to get the actual values
     let mut resolver = noml::Resolver::new();
     let resolved = resolver.resolve(&document)?;
-    
+
     // Convert to config-lib Value
     let value = convert_noml_value(resolved)?;
-    
+
     Ok((value, document))
 }
 
@@ -105,28 +104,37 @@ mod tests {
 
     #[test]
     fn test_basic_noml() {
-        let config = parse(r#"
+        let config = parse(
+            r#"
             name = "test"
             port = 8080
             debug = true
-        "#).unwrap();
-        
+        "#,
+        )
+        .unwrap();
+
         assert_eq!(config.get("name").unwrap().as_string().unwrap(), "test");
         assert_eq!(config.get("port").unwrap().as_integer().unwrap(), 8080);
         assert!(config.get("debug").unwrap().as_bool().unwrap());
     }
 
-    #[test] 
+    #[test]
     fn test_noml_features() {
         std::env::set_var("TEST_VAR", "hello");
-        
-        let config = parse(r#"
+
+        let config = parse(
+            r#"
             greeting = env("TEST_VAR", "world")
             size = @size("10MB")
             timeout = @duration("30s")
-        "#).unwrap();
-        
-        assert_eq!(config.get("greeting").unwrap().as_string().unwrap(), "hello");
+        "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.get("greeting").unwrap().as_string().unwrap(),
+            "hello"
+        );
         // Size converted to bytes
         assert_eq!(config.get("size").unwrap().as_integer().unwrap(), 10485760);
         // Duration converted to seconds
