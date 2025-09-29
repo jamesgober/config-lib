@@ -52,6 +52,10 @@ pub fn parse_string(source: &str, format: Option<&str>) -> Result<Value> {
         "xml" => xml_parser::parse_xml(source),
         #[cfg(feature = "hcl")]
         "hcl" => hcl_parser::parse_hcl(source),
+        #[cfg(feature = "noml")]
+        "noml" => noml_parser::parse(source),
+        #[cfg(feature = "toml")]
+        "toml" => toml_parser::parse(source),
         _ => {
             #[cfg(not(feature = "json"))]
             if detected_format == "json" {
@@ -66,6 +70,16 @@ pub fn parse_string(source: &str, format: Option<&str>) -> Result<Value> {
             #[cfg(not(feature = "hcl"))]
             if detected_format == "hcl" {
                 return Err(Error::feature_not_enabled("hcl"));
+            }
+
+            #[cfg(not(feature = "noml"))]
+            if detected_format == "noml" {
+                return Err(Error::feature_not_enabled("noml"));
+            }
+
+            #[cfg(not(feature = "toml"))]
+            if detected_format == "toml" {
+                return Err(Error::feature_not_enabled("toml"));
             }
 
             // For now, treat everything else as conf format
