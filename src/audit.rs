@@ -383,13 +383,18 @@ static GLOBAL_AUDIT_LOGGER: Mutex<Option<Arc<AuditLogger>>> = Mutex::new(None);
 
 /// Initialize the global audit logger
 pub fn init_audit_logger(logger: AuditLogger) {
-    let mut global = GLOBAL_AUDIT_LOGGER.lock().unwrap();
-    *global = Some(Arc::new(logger));
+    if let Ok(mut global) = GLOBAL_AUDIT_LOGGER.lock() {
+        *global = Some(Arc::new(logger));
+    }
+    // If mutex is poisoned, we can't initialize the logger but we don't panic
 }
 
 /// Get the global audit logger
 pub fn get_audit_logger() -> Option<Arc<AuditLogger>> {
-    GLOBAL_AUDIT_LOGGER.lock().unwrap().clone()
+    GLOBAL_AUDIT_LOGGER
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
 }
 
 /// Log an event using the global audit logger
