@@ -8,7 +8,7 @@ use std::io::Write;
 use tempfile::NamedTempFile;
 
 #[cfg(feature = "schema")]
-use config_lib::{Schema, SchemaBuilder};
+use config_lib::{SchemaBuilder};
 
 /// Test basic CONF parsing functionality
 #[test]
