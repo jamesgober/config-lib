@@ -1,5 +1,7 @@
 # Development
 /dev
+/.dev
+/.claude
 
 # Rust/Cargo Build Artifacts
 /target/
