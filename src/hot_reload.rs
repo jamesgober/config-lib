@@ -15,8 +15,14 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::{Duration, SystemTime};
 
-/// Configuration change event types
+/// Configuration change event types.
+///
+/// **Stability:** `ConfigChangeEvent` is `#[non_exhaustive]` so the
+/// v1.x SemVer contract can add new variants (e.g. `Renamed`,
+/// `PermissionDenied`) in MINOR releases without breaking user code.
+/// Callers must use a wildcard arm when pattern-matching.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum ConfigChangeEvent {
     /// Configuration successfully reloaded
     Reloaded {

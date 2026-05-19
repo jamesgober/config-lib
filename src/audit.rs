@@ -14,8 +14,14 @@ use std::fmt;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Audit event types for configuration operations
+/// Audit event types for configuration operations.
+///
+/// **Stability:** `AuditEventType` is `#[non_exhaustive]` so the
+/// v1.x SemVer contract can add new event categories in MINOR releases
+/// without breaking user code. Callers must use a wildcard arm when
+/// pattern-matching.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum AuditEventType {
     /// Configuration key was accessed/read
     Access,
@@ -31,8 +37,14 @@ pub enum AuditEventType {
     Save,
 }
 
-/// Severity levels for audit events
+/// Severity levels for audit events.
+///
+/// **Stability:** `AuditSeverity` is `#[non_exhaustive]` so the v1.x
+/// SemVer contract can add new severity tiers in MINOR releases
+/// without breaking user code. Callers must use a wildcard arm when
+/// pattern-matching.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[non_exhaustive]
 pub enum AuditSeverity {
     /// Informational events (normal operations)
     Info = 1,

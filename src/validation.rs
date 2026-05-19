@@ -39,8 +39,14 @@ pub struct ValidationError {
     pub severity: ValidationSeverity,
 }
 
-/// Severity levels for validation errors
+/// Severity levels for validation errors.
+///
+/// **Stability:** `ValidationSeverity` is `#[non_exhaustive]` so the
+/// v1.x SemVer contract can introduce additional severity tiers
+/// (e.g. `Notice`, `Debug`) in MINOR releases without breaking user
+/// code. Callers must use a wildcard arm when pattern-matching.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[non_exhaustive]
 pub enum ValidationSeverity {
     /// Critical error that must be fixed (severity 4)
     Critical = 4,

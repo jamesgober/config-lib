@@ -6,7 +6,7 @@
 > **Reads:** `REPS.md` (supreme authority), `_strategy/UNIVERSAL_PROMPT.md` (peak performance + max efficiency + max concurrency + nuclear-proof security + cross-platform), `.dev/AUDIT-0.9.1.md` (current state assessment).
 >
 > **Target ship date:** 4-6 focused weeks from audit (2026-05-18).
-> **Status:** Phase 0.9.4 complete (2026-05-19); Phase 0.9.5 next. Phase 0.9.4's data-model merger is paired with Phase 0.9.5's caching work (see notes there).
+> **Status:** Phase 0.9.5 **Foundation** complete (2026-05-19); Phase 0.9.5 **Implementation** next. The Implementation half includes the lock-free cache backend, the absorbed-from-Phase-0.9.4 data-model merger, and the verified-by-criterion sub-50ns performance numbers — all blocked on a canonical-hardware benchmark sweep.
 
 ---
 
@@ -242,13 +242,75 @@ The original Phase 0.9.4 task list bundled the deprecation surface with the actu
 
 **Goal:** Replace `Arc<RwLock<BTreeMap>>` caching with a lock-free implementation **and** fold the cached storage into the unified `Config` so `EnterpriseConfig` becomes redundant in fact, not just in deprecation marker. **Verify sub-50ns claim by committed benchmark.**
 
-**Effort:** 1-1.5 weeks (absorbs the data-model-merger work originally in Phase 0.9.4 — see notes there).
+**Effort:** 1-1.5 weeks (absorbs the data-model-merger work originally in Phase 0.9.4 — see notes there). Split across two releases:
 
-### Absorbed from Phase 0.9.4
+- **0.9.5 — Foundation** (Complete; 2026-05-19, released as [`v0.9.5`](../.dev/release/v0.9.5.md))
+- **0.9.5.x — Implementation** (Pending canonical-hardware benchmarks)
 
-- `Config::get -> Option<&Value>` returning under concurrent reads requires the lock-free backend this phase delivers.
-- `Config::cache_stats()`, `ConfigOptions::defaults`, and the `Config::make_read_only()` ergonomic helper land here.
-- `ConfigManager` internals migrate from `EnterpriseConfig` storage to `Config` storage.
+### Foundation half (v0.9.5 — Complete)
+
+What ships as v0.9.5:
+
+- [x] **`CacheStats`** struct (`#[non_exhaustive]`, fields `hits`/`misses`/`hit_ratio`) — public, re-exported at crate root
+- [x] **`Config::cache_stats() -> CacheStats`** accessor; `Ordering::Relaxed` loads on the underlying `AtomicU64` counters
+- [x] **Internal `cache_hits` / `cache_misses` atomic fields** on `Config`, wired through every constructor — placeholder for the v0.9.5 Implementation wire-up
+- [x] **`#[non_exhaustive]` hardening** on `Error`, `ConfigChangeEvent`, `ValidationSeverity`, `AuditEventType`, `AuditSeverity`, `FieldType`, `CacheStats` — the 1.0 stability contract requirement
+- [x] **`examples/hot_reload_demo.rs`** updated for the new non-exhaustive `ConfigChangeEvent` with a stability-contract comment
+- [x] All exit-criteria gates green (fmt, clippy `-D warnings`, 96 tests, doc with `-D warnings`, audit)
+
+### Implementation half (v0.9.5.x — Pending)
+
+The deferred work, blocked on canonical-hardware benchmarks:
+
+- [ ] **Prototype caching backends** in `benches/cache_backend.rs`:
+  - [ ] `DashMap` — sharded concurrent map
+  - [ ] `ArcSwap<HashMap>` — fully lock-free reads, atomic pointer swap
+  - [ ] `evmap` — left-right paired (read-optimized)
+- [ ] **Benchmark each backend** across these scenarios on canonical hardware:
+  - [ ] 1 thread, single-key get, 10M iterations
+  - [ ] 4 threads, single-key contended, 10M iterations each
+  - [ ] 16 threads, single-key contended, 1M iterations each
+  - [ ] 64 threads, single-key contended, 100K iterations each
+  - [ ] 16 threads mixed read/write (90/10), 1M iterations each
+  - [ ] Memory footprint at 1000 keys, 10000 keys, 100000 keys
+- [ ] **Pick the winner** based on:
+  - Read latency at 1-16 threads (PRIMARY criterion)
+  - Memory overhead (SECONDARY criterion)
+  - Code complexity (TERTIARY criterion)
+- [ ] **Decide `Config::get` return type** — guard-based (`DashMap::Ref`-style) vs `Arc<Value>`-based (`ArcSwap`-style). The decision is downstream of the backend selection above.
+- [ ] **Replace cache layer** in unified `Config`:
+  - [ ] Main cache → chosen lock-free backend
+  - [ ] Fast cache → either eliminate (if main is fast enough) or redesign as thread-local
+  - [ ] Defaults → either fold into main cache or `ArcSwap` (read-mostly)
+- [ ] **Wire `cache_hits` / `cache_misses` counters** to the cache lookup path (the foundation atomics shipped in 0.9.5 are sitting at zero waiting for this)
+- [ ] **Statistics now populated.** `Config::cache_stats()` returns meaningful numbers.
+- [ ] **Use `Arc<str>` over `String`** for cache keys:
+  - Cheap clone on hit (refcount bump, no allocation)
+  - Reduces memory pressure
+- [ ] **Use `FxHashMap`** if HashMap backend chosen (rustc-hash crate, ~30% faster on short string keys)
+- [ ] **Inline hot accessors:**
+  - `Config::get` — `#[inline]`
+  - `Value::as_string` / `as_integer` / `as_bool` / etc. — `#[inline]`
+  - Avoid `#[inline(always)]` unless measurement proves it helps
+- [ ] **Write criterion benchmarks** covering every operation in the Performance Contract table:
+  - [ ] `benches/cache_warm.rs` — warm cache reads
+  - [ ] `benches/cache_cold.rs` — cold misses
+  - [ ] `benches/cache_concurrent.rs` — contention across thread counts
+  - [ ] `benches/parse_throughput.rs` — cold parse for each format
+  - [ ] `benches/value_accessors.rs` — typed accessor performance
+- [ ] **Commit benchmark baselines** to `benches/baselines.json`
+- [ ] **Verify Performance Contract** — every target met
+- [ ] **Write `docs/PERFORMANCE.md`** documenting:
+  - Methodology (hardware, isolation, warmup)
+  - Results table
+  - Tuning guidance for users
+
+### Absorbed from Phase 0.9.4 (lands in the Implementation half)
+
+- `Config::get` return semantics under concurrent reads — finalized once the backend is chosen
+- `ConfigOptions::defaults` (rich separate-defaults-table feature)
+- `Config::make_read_only()` ergonomic helper (paired with the existing `ConfigOptions::read_only` knob)
+- `ConfigManager` internals migrate from `EnterpriseConfig` storage to `Config` storage
 - The deprecated `enterprise.rs` module remains compilable through this phase; v1.0 is the earliest sensible removal point.
 
 ### Background
@@ -318,6 +380,15 @@ This cannot hit sub-50ns under 16+ thread contention. Max concurrency requiremen
 
 ### Exit criteria
 
+Foundation half (Complete):
+
+- [x] `CacheStats` + `Config::cache_stats()` API shipping; `#[non_exhaustive]`
+- [x] Atomic counter infrastructure in place; ready to be wired by the Implementation half
+- [x] 1.0-stability-contract enums hardened with `#[non_exhaustive]`
+- [x] All workspace gates green; no breaking signature changes
+
+Implementation half (Pending):
+
 - [ ] **Sub-50ns single-key cached get sustained across 1-16 threads** (verified by `criterion`)
 - [ ] **Sub-500ns cached write** (verified)
 - [ ] **<10ns typed accessor** (verified)
@@ -326,6 +397,7 @@ This cannot hit sub-50ns under 16+ thread contention. Max concurrency requiremen
 - [ ] `docs/PERFORMANCE.md` documents methodology + results
 - [ ] No regression in cold-parse performance (it shouldn't change in this phase, but verify)
 - [ ] Allocation profile clean — `dhat` shows zero allocations on cached read path
+- [ ] `Config::cache_stats()` returns meaningful non-zero counters
 
 ---
 

@@ -157,7 +157,7 @@ pub mod audit;
 pub mod env_override;
 
 // Re-export main types for convenience
-pub use config::{Config, ConfigBuilder, ConfigOptions, ConfigValue};
+pub use config::{CacheStats, Config, ConfigBuilder, ConfigOptions, ConfigValue};
 #[allow(deprecated)]
 // see `enterprise.rs` — the items themselves carry the deprecation notices
 pub use enterprise::{ConfigManager, EnterpriseConfig};

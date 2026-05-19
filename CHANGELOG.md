@@ -15,6 +15,54 @@
 <br>
 
 
+## [0.9.5] - 2026-05-19
+
+> **Scope note.** This is the **foundation half** of Phase 0.9.5. It lands the public API surface (`CacheStats`, `Config::cache_stats()`, the `#[non_exhaustive]` enum hardening required by the 1.0 stability contract) so the actual lock-free cache wire-up — and the borrow-vs-thread-safety architectural decision on `Config::get` — can drop in without a second public-API change. The cache implementation, multi-backend prototype benchmarks, and the verified sub-50ns numbers land in a follow-up v0.9.5.x release once the implementation work is run on canonical hardware. See `.dev/release/v0.9.5.md` for the full rationale.
+
+### Added
+- **`CacheStats`** — `#[non_exhaustive]` public struct returned by [`Config::cache_stats()`]. Snapshot of cache-hit / cache-miss counters with a derived `hit_ratio` in `[0.0, 1.0]`. Re-exported at the crate root. In v0.9.5 every snapshot reads `{ hits: 0, misses: 0, hit_ratio: 0.0 }` because no cache layer is yet populating the counters — the shape is shipping now so downstream instrumentation can be written against the final API and the eventual cache wire-up is a drop-in change.
+- **`Config::cache_stats(&self) -> CacheStats`** — accessor that loads the atomic counters with `Ordering::Relaxed`. Counters are statistics, not synchronization primitives.
+- **`Config::cache_hits` / `Config::cache_misses`** internal `AtomicU64` fields wired through every `Config` constructor (`new`, `from_string` × 2 cfg variants, `From<Value>`). They stay at `0` until the cache implementation lands; their presence is what lets that landing be a drop-in.
+
+### Changed
+- **`#[non_exhaustive]` hardening** of the 1.0 stability contract. The following public enums now carry the attribute so v1.x MINOR releases can add variants without breaking SemVer:
+  - `Error` (`src/error.rs`)
+  - `ConfigChangeEvent` (`src/hot_reload.rs`)
+  - `ValidationSeverity` (`src/validation.rs`)
+  - `AuditEventType` (`src/audit.rs`)
+  - `AuditSeverity` (`src/audit.rs`)
+  - `FieldType` (`src/schema.rs`)
+  - `CacheStats` (new this release; born `#[non_exhaustive]`)
+- `Value` and `ValueType` are intentionally **not** marked `#[non_exhaustive]`. They're the core type system; exhaustive matching is a feature, not a bug. Adding a new variant in the future would be a deliberate breaking change deferred to v2.0.
+- **`examples/hot_reload_demo.rs`** match on `ConfigChangeEvent` gained a wildcard arm with a stability-contract comment, since the enum is now non-exhaustive.
+
+### Migration
+
+For most users this is **a no-op release** — the public symbol additions are purely additive and the `#[non_exhaustive]` markers are forward-compatible.
+
+**The one case that requires a one-line change:** if your code does `match` on a `config_lib` enum and exhaustively names every variant without a wildcard arm, you'll get a compile error. Add `_ => { ... }` to handle future variants. This is the same migration every well-architected v1.0 Rust library asks of its users (`std::io::ErrorKind`, `serde_json::Value`, `tokio::io::ErrorKind`, etc.).
+
+### Deferred to a follow-up v0.9.5.x implementation release
+
+The Phase 0.9.5 roadmap also commits to the **lock-free cache implementation**, the **`Config` / `EnterpriseConfig` data-model merger** (absorbed from Phase 0.9.4), and the **verified-by-criterion sub-50ns single-key cached-get target across 1–16 threads**. None of those are in v0.9.5 because:
+
+1. **Cache-backend selection** (DashMap vs `ArcSwap<HashMap>` vs `evmap`) needs to be data-driven — a comparative criterion sweep on the maintainer's canonical hardware. Picking a backend by intuition before the benchmarks would lock in a suboptimal decision.
+2. **The `Config::get` return-type architecture** depends on the chosen backend. `&Value` from a lock-free store either requires guards (`DashMap::Ref`) or `Arc<Value>` returns (`ArcSwap`). Locking the return semantics ahead of the benchmark would either force a second migration or freeze a suboptimal contract.
+3. **The "<50ns under 16 threads" performance claim** has to be measured on canonical hardware. Committing baseline numbers generated on a developer laptop would be dishonest — performance claims in the README and rustdoc must be backed by committed benchmarks that anyone can re-run.
+
+The deferred work is now explicitly scoped on [`.dev/ROADMAP.md`](.dev/ROADMAP.md) as Phase 0.9.5 **Implementation**; v0.9.5 (this release) is Phase 0.9.5 **Foundation**.
+
+### Internal
+- All 96 tests pass (63 unit + 14 integration + 11 validation + 8 doc — one new doctest from the `CacheStats` example).
+- `cargo clippy --all-targets --all-features -- -D warnings` clean.
+- `cargo doc --no-deps --all-features` clean with `RUSTDOCFLAGS="-D warnings"`.
+- `cargo audit` clean (one allowed `rustls-pemfile` unmaintained warning, scoped to Phase 0.9.7 NOML opt-in work; unchanged from 0.9.2).
+
+
+
+<br>
+
+
 ## [0.9.4] - 2026-05-19
 
 ### Added
@@ -405,7 +453,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.4...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.5...HEAD
+[0.9.5]: https://github.com/jamesgober/config-lib/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/jamesgober/config-lib/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/jamesgober/config-lib/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/jamesgober/config-lib/compare/v0.9.0...v0.9.2

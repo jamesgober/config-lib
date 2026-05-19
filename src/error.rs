@@ -14,7 +14,15 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// This error system provides maximum clarity about what went wrong,
 /// where it happened, and how to fix it. Each variant includes enough context
 /// for both developers and end users to understand and resolve issues.
+///
+/// **Stability:** `Error` is `#[non_exhaustive]` so the v1.x SemVer
+/// contract can add new error variants in MINOR releases without
+/// breaking user code. Callers must use a wildcard arm (`_ => ...`)
+/// when pattern-matching on `Error` directly. Prefer the constructor
+/// helpers ([`Error::parse`], [`Error::io`], etc.) over struct-literal
+/// construction.
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// Parsing errors - when the input cannot be parsed due to syntax issues
     #[error("Parse error at line {line}, column {column}: {message}")]

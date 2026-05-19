@@ -22,8 +22,14 @@ pub struct FieldSchema {
     description: Option<String>,
 }
 
-/// Supported field types for validation
+/// Supported field types for validation.
+///
+/// **Stability:** `FieldType` is `#[non_exhaustive]` so the v1.x
+/// SemVer contract can add new schema field types in MINOR releases
+/// without breaking user code. Callers must use a wildcard arm when
+/// pattern-matching.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum FieldType {
     /// Null value
     Null,

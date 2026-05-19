@@ -8,6 +8,7 @@ use crate::parsers;
 use crate::value::Value;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(feature = "schema")]
 use crate::schema::Schema;
@@ -67,6 +68,17 @@ pub struct Config {
     /// See [`ConfigOptions`].
     options: ConfigOptions,
 
+    /// Cache hit counter. **Reserved foundation** for the lock-free
+    /// caching layer landing in a follow-up v0.9.5 implementation
+    /// release. Stays at `0` in v0.9.5 because no cache lookups
+    /// happen yet; the field is here so the eventual cache wire-up
+    /// is a drop-in change and does not require a second API
+    /// addition.
+    cache_hits: AtomicU64,
+
+    /// Cache miss counter. See [`Config::cache_stats`].
+    cache_misses: AtomicU64,
+
     /// Format-specific preservation data
     #[cfg(feature = "noml")]
     noml_document: Option<noml::Document>,
@@ -85,6 +97,8 @@ impl Config {
             format: "conf".to_string(),
             modified: false,
             options: ConfigOptions::default(),
+            cache_hits: AtomicU64::new(0),
+            cache_misses: AtomicU64::new(0),
             #[cfg(feature = "noml")]
             noml_document: None,
             #[cfg(feature = "validation")]
@@ -105,6 +119,8 @@ impl Config {
             format: detected_format.to_string(),
             modified: false,
             options: ConfigOptions::default(),
+            cache_hits: AtomicU64::new(0),
+            cache_misses: AtomicU64::new(0),
             noml_document: None,
             #[cfg(feature = "validation")]
             validation_rules: None,
@@ -117,6 +133,8 @@ impl Config {
             format: detected_format.to_string(),
             modified: false,
             options: ConfigOptions::default(),
+            cache_hits: AtomicU64::new(0),
+            cache_misses: AtomicU64::new(0),
             #[cfg(feature = "validation")]
             validation_rules: None,
         };
@@ -684,6 +702,78 @@ impl Config {
             Ok(())
         }
     }
+
+    /// Return a snapshot of the cache-hit / cache-miss counters.
+    ///
+    /// In v0.9.5 this returns `CacheStats { hits: 0, misses: 0,
+    /// hit_ratio: 0.0 }` on every `Config`: the lock-free cache
+    /// layer that populates the counters lands in a follow-up v0.9.5
+    /// implementation release. The API is shipping now so that
+    /// downstream code can be instrumented against it ahead of the
+    /// caching work, and so that the eventual cache wire-up does not
+    /// require a second public-API addition.
+    ///
+    /// Counters are loaded with `Ordering::Relaxed` — the values are
+    /// statistics, not synchronisation primitives, and the hit/miss
+    /// classification is best-effort under concurrent reads.
+    pub fn cache_stats(&self) -> CacheStats {
+        let hits = self.cache_hits.load(Ordering::Relaxed);
+        let misses = self.cache_misses.load(Ordering::Relaxed);
+        let total = hits.saturating_add(misses);
+        let hit_ratio = if total == 0 {
+            0.0
+        } else {
+            hits as f64 / total as f64
+        };
+        CacheStats {
+            hits,
+            misses,
+            hit_ratio,
+        }
+    }
+}
+
+// =========================================================================
+// CacheStats — read-only snapshot of cache performance counters
+// =========================================================================
+
+/// Snapshot of a [`Config`]'s cache-hit / cache-miss counters.
+///
+/// Returned by [`Config::cache_stats`]. The struct is `#[non_exhaustive]`
+/// so the v1.x SemVer contract can add new counter fields (e.g.
+/// `evictions`, `insertions`, per-shard breakdowns) in MINOR releases
+/// without breaking user code.
+///
+/// # Stability note for v0.9.5
+///
+/// In v0.9.5 every `CacheStats` returned by [`Config::cache_stats`]
+/// has `hits = 0`, `misses = 0`, `hit_ratio = 0.0`. The lock-free
+/// cache layer that populates these counters lands in a follow-up
+/// v0.9.5 implementation release. The struct is shipping now so the
+/// API surface is locked in ahead of the implementation.
+///
+/// # Examples
+///
+/// ```rust
+/// use config_lib::Config;
+///
+/// let cfg = Config::new();
+/// let stats = cfg.cache_stats();
+/// assert_eq!(stats.hits, 0);
+/// assert_eq!(stats.misses, 0);
+/// assert_eq!(stats.hit_ratio, 0.0);
+/// ```
+#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+pub struct CacheStats {
+    /// Number of cache lookups that resolved to a cached value.
+    pub hits: u64,
+    /// Number of cache lookups that did not find a cached value and
+    /// fell through to the canonical storage.
+    pub misses: u64,
+    /// `hits / (hits + misses)` as an f64 in `[0.0, 1.0]`. Returns
+    /// `0.0` when no lookups have happened yet.
+    pub hit_ratio: f64,
 }
 
 /// Ergonomic wrapper for accessing configuration values
@@ -827,6 +917,8 @@ impl From<Value> for Config {
             format: "conf".to_string(),
             modified: false,
             options: ConfigOptions::default(),
+            cache_hits: AtomicU64::new(0),
+            cache_misses: AtomicU64::new(0),
             #[cfg(feature = "noml")]
             noml_document: None,
             #[cfg(feature = "validation")]

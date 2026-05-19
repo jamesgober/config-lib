@@ -106,6 +106,12 @@ fn main() -> config_lib::Result<()> {
                 config_lib::hot_reload::ConfigChangeEvent::FileDeleted { path, .. } => {
                     println!("   🗑️  Event: File deleted - {}", path.display());
                 }
+                // `ConfigChangeEvent` is `#[non_exhaustive]` as of v0.9.5 so the
+                // v1.x SemVer contract can add new event variants (e.g. file
+                // rename, permission-denied) in MINOR releases. Apps that want
+                // to handle every event explicitly should treat any new variant
+                // as an informational "unhandled" until they upgrade.
+                _ => {}
             }
         }
     }
