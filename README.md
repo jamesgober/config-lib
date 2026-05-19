@@ -1,6 +1,5 @@
 <h1 align="center">
-    <img width="90px" height="auto" src="https://raw.githubusercontent.com/jamesgober/jamesgober/main/media/icons/hexagon-3.svg" alt="Triple Hexagon">
-    <br>
+    <img width="99" alt="Rust logo" src="https://raw.githubusercontent.com/jamesgober/rust-collection/72baabd71f00e14aa9184efcb16fa3deddda3a0a/assets/rust-logo.svg">
     <br>
     <b>config-lib</b>
     <br>
@@ -30,11 +29,11 @@
 </p>
 
 <p>
-    Unlike traditional configuration libraries that focus on a single format, config-lib provides seamless multi-format support with automatic format detection, allowing you to mix and match configuration sources (JSON for APIs, TOML for Rust projects, HCL for DevOps, XML for enterprise systems) while maintaining a unified programming interface. The library automatically handles type conversions, validation, and format preservation, making it ideal for complex applications that need to integrate with multiple configuration ecosystems.
+    Unlike traditional configuration libraries that focus on a single format, <b>config-lib</b> provides seamless multi-format support with automatic format detection, allowing you to mix and match configuration sources (<b>JSON</b> for APIs, <b>TOML</b> for Rust projects, <b>HCL</b> for DevOps, <b>XML</b> for enterprise systems) while maintaining a unified programming interface. The library automatically handles type conversions, validation, and format preservation, making it ideal for complex applications that need to integrate with multiple configuration ecosystems.
 </p>
 
 <p>
-    With its enterprise-focused architecture, config-lib delivers production-ready features including comprehensive error handling with zero unsafe code, lock-free caching optimizations, environment variable overrides with smart prefix matching, and built-in audit logging for compliance requirements. The library's performance is optimized for high-throughput applications, achieving 24.9ns average cached access times and supporting hot reloading without service interruption.
+    With its enterprise-focused architecture, <b>config-lib</b> delivers production-ready features including comprehensive error handling with zero unsafe code, lock-free caching optimizations, environment variable overrides with smart prefix matching, and built-in audit logging for compliance requirements. The library's performance is optimized for high-throughput applications, achieving 24.9ns average cached access times and supporting <b>hot reloading</b> without service interruption.
 </p>
 
 
@@ -79,10 +78,10 @@
 ## 🎯 **Why Choose config-lib?**
 
 ### **Unified Multi-Format Support**
-Unlike single-format libraries, config-lib provides seamless access to 8 configuration formats through one consistent API. No need to learn different libraries for TOML, JSON, XML, and HCL - one API handles them all with automatic format detection.
+Unlike single-format libraries, **config-lib** provides seamless access to 8 configuration formats through one consistent API. No need to learn different libraries for `TOML`, `JSON`, `XML`, and `HCL` - one API handles them all with automatic format detection.
 
 ### **Enterprise-Grade Performance**
-Achieving 24.9ns cached access times with lock-free optimizations, config-lib outperforms most configuration libraries by 50-90%. Built for high-throughput applications with minimal performance overhead.
+Achieving 24.9ns cached access times with lock-free optimizations, **config-lib** outperforms most configuration libraries by 50-90%. Built for high-throughput applications with minimal performance overhead.
 
 ### **Production-Ready Reliability**
 Zero unsafe code, comprehensive error handling, and poison-resistant locking ensure your configuration system won't crash your application. Extensive testing coverage (89+ tests) validates edge cases and error conditions.
@@ -208,7 +207,7 @@ println!("Cache hit ratio: {:.2}%", ratio * 100.0);
 
 ### **Default Configuration Settings**
 
-config-lib provides multiple powerful methods for setting default/preset values that serve as fallbacks when keys are missing from configuration files. This ensures your application always has sensible defaults while allowing configuration files to override specific values.
+**config-lib** provides multiple powerful methods for setting default/preset values that serve as fallbacks when keys are missing from configuration files. This ensures your application always has sensible defaults while allowing configuration files to override specific values.
 
 #### **Method 1: ConfigBuilder with Presets (Recommended)**
 
@@ -455,26 +454,27 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 
 ---
 
-## 📖 **Documentation & Resources**
+## **Documentation & Resources**
 
-### **📋 Documentation Hub**
-- **[📘 Documentation Index](docs/README.md)** - Complete documentation hub and navigation
-- **[🔧 API Reference](docs/API.md)** - Comprehensive API documentation with examples
-- **[📄 Valid Formats](docs/FORMATS.md)** - Detailed format specifications and examples
-- **[💻 Code Guidelines](docs/GUIDELINES.md)** - Development standards and best practices
+### **Documentation**
+- **[Documentation Index](docs/README.md)** - Complete documentation hub and navigation
+- **[API Reference](docs/API.md)** - Comprehensive API documentation with examples
+- **[Valid Formats](docs/FORMATS.md)** - Detailed format specifications and examples
+- **[Code Guidelines](docs/GUIDELINES.md)** - Development standards and best practices
 
-### **🌐 External Resources**
-- **[📖 API Documentation](https://docs.rs/config-lib)** - Complete API reference with examples
-- **[📦 Crate Registry](https://crates.io/crates/config-lib)** - Official crate distribution
-- **[🏗️ Examples Directory](examples/)** - 20+ comprehensive examples covering all features
-- **[⚡ Performance Benchmarks](benches/)** - Detailed performance analysis and comparisons
+### **External Resources**
+- **[API Documentation](https://docs.rs/config-lib)** - Complete API reference with examples
+- **[Crate Registry](https://crates.io/crates/config-lib)** - Official crate distribution
+- **[Examples Directory](examples/)** - 20+ comprehensive examples covering all features
+- **[Performance Benchmarks](benches/)** - Detailed performance analysis and comparisons
+- **[NOML Language](https://github.com/noml-lang/noml)** - NOML language specification and usage.
 
-### **🚀 Getting Started Guides**
-- **[🎯 Quick Start Guide](examples/basic.rs)** - Basic configuration loading and access
-- **[🔄 Multi-Format Demo](examples/multi_format.rs)** - Working with different configuration formats
-- **[🏢 Enterprise Features](examples/enterprise_demo.rs)** - Advanced caching and performance
-- **[🔥 Hot Reloading](examples/hot_reload_demo.rs)** - Dynamic configuration updates
-- **[✅ Validation System](examples/validation_demo.rs)** - Schema validation and type checking
+### **Getting Started Guides**
+- **[Quick Start Guide](examples/basic.rs)** - Basic configuration loading and access
+- **[Multi-Format Demo](examples/multi_format.rs)** - Working with different configuration formats
+- **[Enterprise Features](examples/enterprise_demo.rs)** - Advanced caching and performance
+- **[Hot Reloading](examples/hot_reload_demo.rs)** - Dynamic configuration updates
+- **[Validation System](examples/validation_demo.rs)** - Schema validation and type checking
 
 ### **💡 Common Use Cases**
 - **Web Applications**: [Environment overrides](examples/env_override_demo.rs), JSON/TOML configs
@@ -483,25 +483,13 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 - **Microservices**: Multi-format support, environment-based configuration
 
 
-<div align="center">
-    <sup>
-        <a href="docs/README.md" title="Documentation Hub"><b>📘 DOCS</b></a>
-        <span>&nbsp;│&nbsp;</span>
-        <a href="docs/API.md" title="API Reference"><b>🔧 API</b></a>
-        <span>&nbsp;│&nbsp;</span>
-        <a href="docs/FORMATS.md" title="Valid Formats"><b>📄 FORMATS</b></a>
-        <span>&nbsp;│&nbsp;</span>
-        <a href="docs/GUIDELINES.md" title="Code Guidelines"><b>💻 GUIDELINES</b></a>
-        <span>&nbsp;│&nbsp;</span>
-        <a href="examples/" title="Examples"><b>🚀 EXAMPLES</b></a>
-    </sup>
-</div>
+---
 
 
 ### **Troubleshooting**
 
 **Q: "Parser not found" error when using TOML/NOML/JSON?**  
-A: Enable the corresponding feature flag in your `Cargo.toml`: `features = ["toml", "noml", "json"]`
+**A**: Enable the corresponding feature flag in your `Cargo.toml`: `features = ["toml", "noml", "json"]`
 
 **Q: Poor performance with large configuration files?**  
 A: Enable caching with `EnterpriseConfig` for sub-30ns access times on frequently accessed values.
@@ -544,6 +532,7 @@ cargo clippy              # Lint checks (should show zero warnings)
     <p>Unless required by applicable law or agreed to in writing, software distributed under the <b>License</b> is distributed on an "<b>AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND</b>, either express or implied.</p>
     <p>See the <a href="./LICENSE" title="Software License file">LICENSE</a> file included with this project for the specific language governing permissions and limitations under the <b>License</b>.</p>
 </div>
+
 
 <!-- FOOT COPYRIGHT
 ################################################# -->
