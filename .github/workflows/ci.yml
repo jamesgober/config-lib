@@ -43,13 +43,29 @@ jobs:
       if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
       run: cargo fmt --all -- --check
 
+    # MSRV row only verifies the *library* compiles on Rust 1.75. The
+    # stability contract (docs/STABILITY-1.0.md §3.1) commits to the
+    # default-feature library compiling on the declared MSRV — not to
+    # the dev-dependency tree (criterion / rayon-core / etc.) having
+    # the same MSRV. `cargo check` deliberately skips dev-deps.
+    - name: Check MSRV (library only)
+      if: matrix.rust == '1.75'
+      run: cargo check --features "json,chrono,validation,xml,hcl,env-override,async"
+
+    # The remaining heavy steps run on stable + beta only. They build
+    # the test harness, examples, and benches — all of which depend on
+    # criterion / tokio-test / tempfile that may legitimately have
+    # higher MSRVs than the library itself.
     - name: Run clippy
+      if: matrix.rust != '1.75'
       run: cargo clippy --all-targets --features "json,chrono,validation,xml,hcl,env-override,async" -- -A clippy::uninlined-format-args
 
     - name: Run tests
+      if: matrix.rust != '1.75'
       run: cargo test --verbose --features "json,chrono,validation,xml,hcl,env-override,async"
 
     - name: Build examples
+      if: matrix.rust != '1.75'
       run: cargo build --examples --features "json,chrono,validation,xml,hcl,env-override,async"
 
     - name: Test documentation

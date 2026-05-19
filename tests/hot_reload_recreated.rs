@@ -80,7 +80,10 @@ fn deleted_then_recreated_emits_both_events() {
     loop {
         {
             let cfg = config_ref.read().unwrap();
-            let current = cfg.get("key").and_then(|v| v.as_string().ok()).map(str::to_owned);
+            let current = cfg
+                .get("key")
+                .and_then(|v| v.as_string().ok())
+                .map(str::to_owned);
             if current.as_deref() == Some("value2") {
                 break;
             }
