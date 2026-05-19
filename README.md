@@ -13,7 +13,7 @@
     <a href="https://crates.io/crates/config-lib" alt="Download"><img alt="Crates.io Downloads" src="https://img.shields.io/crates/d/config-lib?color=%230099ff"></a>
     <a href="https://docs.rs/config-lib"><img src="https://docs.rs/config-lib/badge.svg" alt="Documentation"></a>
     <a href="https://github.com/jamesgober/config-lib/actions"><img alt="GitHub CI" src="https://github.com/jamesgober/config-lib/actions/workflows/ci.yml/badge.svg"></a>
-    <a href="#license"><img src="https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg" alt="License"></a>
+    <a href="https://github.com/rust-lang/rfcs/blob/master/text/2495-min-rust-version.md" title="MSRV"><img alt="MSRV" src="https://img.shields.io/badge/MSRV-1.82%2B-blue"></a>
 </p>
 
 <p align="center">
@@ -36,9 +36,8 @@
     With its enterprise-focused architecture, <b>config-lib</b> delivers production-grade features including comprehensive error handling with zero unsafe code, multi-tier caching with lock-free read paths, environment variable overrides with smart prefix matching, and built-in audit logging for compliance requirements. The library is designed for high-throughput applications, targeting sub-50ns cached access times on hot paths and supporting <b>hot reloading</b> without service interruption.
 </p>
 
+<hr>
 
-
----
 
 ## Features
 
@@ -61,6 +60,8 @@
 
 > **Note on benchmark numbers:** detailed criterion-backed benchmark numbers will land with **v1.0.0**. Until then, performance claims should be treated as targets, not guarantees.
 
+<br>
+
 ### **Production Features** 
 - **Configuration Hot Reloading** - File watching with thread-safe Arc swapping
 - **Audit Logging System** - Structured event logging with multiple sinks and severity filtering
@@ -76,6 +77,8 @@
 - **Comprehensive Testing** - Extensive unit, integration, and doc test coverage
 
 ---
+
+<br>
 
 ## **Why Choose config-lib?**
 
@@ -429,6 +432,8 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 
 ---
 
+<br>
+
 ## **Status: Late Beta — On the Path to v1.0.0**
 
 **Current Version:** `0.9.x` — late beta, API stabilizing, structurally mature.
@@ -459,6 +464,8 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 
 ---
 
+<br>
+
 ## **Documentation & Resources**
 
 ### **Documentation**
@@ -487,9 +494,9 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 - **Enterprise Systems**: [XML support](examples/xml_demo.rs), validation, caching
 - **Microservices**: Multi-format support, environment-based configuration
 
+<br>
 
 ---
-
 
 ### **Troubleshooting**
 
@@ -515,12 +522,15 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 
 ---
 
+<br>
+
 ### **Version Compatibility**
 - **Rust**: 1.82+ (currently); MSRV will be lowered to **1.75** in `v1.0.0` per portfolio standard
 - **Edition**: 2021 (currently); will move to **2024** in `v1.0.0`
 - **MSRV Policy**: Once `v1.0.0` ships, MSRV is guaranteed within the last 12 stable Rust releases
 - **API Stability**: Pre-1.0 — expect refinements. `v1.0.0` will freeze the public API.
 - **Feature Flags**: All optional features maintain independent compatibility
+
 
 ### **Development Setup**
 ```bash
@@ -531,27 +541,30 @@ cargo bench               # Performance benchmarks
 cargo clippy              # Lint checks (should show zero warnings)
 ```
 
-## **Contributing**
 
+## **Contributing**
 We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for details.
 
 <hr>
+<br>
 
 <!-- LICENSE
 ############################################# -->
 <div id="license">
     <h2>License</h2>
-    <p><b>config-lib</b> is dual-licensed under either of:</p>
+    <p><b>config-lib</b> is <b>dual-licensed</b> under either of:</p>
     <ul>
         <li><b>Apache License, Version 2.0</b> — see <a href="./LICENSE-APACHE" title="Apache-2.0 License">LICENSE-APACHE</a> or <a href="http://www.apache.org/licenses/LICENSE-2.0" title="Apache-2.0 License" target="_blank">apache.org/licenses/LICENSE-2.0</a></li>
         <li><b>MIT License</b> — see <a href="./LICENSE-MIT" title="MIT License">LICENSE-MIT</a> or <a href="https://opensource.org/licenses/MIT" title="MIT License" target="_blank">opensource.org/licenses/MIT</a></li>
     </ul>
     <p>at your option.</p>
+    <br>
     <h3>Contribution</h3>
-    <p>Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in <b>config-lib</b> by you, as defined in the Apache-2.0 license, shall be dual-licensed as above, without any additional terms or conditions.</p>
+    <p>Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in <b>config-lib</b> by you, as defined in the <b>Apache-2.0 license</b>, shall be <b>dual-licensed</b> as above, without any additional terms or conditions.</p>
     <p>Unless required by applicable law or agreed to in writing, software distributed under the Licenses is distributed on an <b>"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND</b>, either express or implied.</p>
 </div>
 
+<br>
 
 <!-- FOOT COPYRIGHT
 ################################################# -->
