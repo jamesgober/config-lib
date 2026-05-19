@@ -17,6 +17,9 @@
 
 ## [0.9.2] - 2026-05-19
 
+### Security
+- **[RUSTSEC-2026-0007]** — bumped transitive `bytes` from `1.10.1` to `1.11.1` to clear an integer-overflow vulnerability in `BytesMut::reserve`. Pulled into the dependency graph via `noml 0.9.0 → reqwest 0.11.27 → hyper/tokio → bytes`; resolved by `cargo update -p bytes`, no source code change required. CI's `cargo audit` step now returns zero vulnerabilities. (The `rustls-pemfile 1.0.4` unmaintained warning, also via `noml → reqwest 0.11.27`, remains allowed because it is a maintenance status rather than a vulnerability — it will clear naturally when `noml` upstream moves to a newer `reqwest`, and is in scope for Phase 0.9.7's NOML/TOML opt-in work.)
+
 ### Changed
 - **Dual licensing.** `Cargo.toml` now declares `license = "Apache-2.0 OR MIT"` (both `LICENSE-APACHE` and `LICENSE-MIT` were already in the tree; the manifest had been stuck on `Apache-2.0` only).
 - **Package metadata.** Dropped the incorrect `template-engine` crates.io category. Tightened keywords from `["config", "parser", "toml", "configuration", "settings"]` to `["config", "parser", "toml", "multi-format", "hot-reload"]` — drops the `config`/`configuration` duplicate and the low-value `settings`, adds the two distinguishing-feature keywords most likely to surface this crate in search.
