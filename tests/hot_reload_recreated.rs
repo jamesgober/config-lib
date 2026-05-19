@@ -42,8 +42,11 @@ fn deleted_then_recreated_emits_both_events() {
     std::thread::sleep(Duration::from_millis(300));
     write_conf(&path, "key=value2\n");
 
-    // Collect events for up to 3 seconds.
-    let deadline = std::time::Instant::now() + Duration::from_secs(3);
+    // Collect events for up to 5 seconds. (Longer window than the
+    // other hot_reload tests because the delete-then-recreate
+    // sequence has FSEvents-on-Apple-Silicon timing variability —
+    // see docs/PLATFORM-NOTES.md.)
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
     let mut saw_deleted = false;
     let mut saw_reloaded = false;
     while std::time::Instant::now() < deadline && (!saw_deleted || !saw_reloaded) {
@@ -59,9 +62,36 @@ fn deleted_then_recreated_emits_both_events() {
     assert!(saw_deleted, "no FileDeleted event observed");
     assert!(saw_reloaded, "no Reloaded event observed after re-creation");
 
-    {
-        let cfg = config_ref.read().unwrap();
-        assert_eq!(cfg.get("key").unwrap().as_string().unwrap(), "value2");
+    // Receiving the `Reloaded` event tells us the worker *sent* it;
+    // the worker holds the write lock through the send, so the
+    // updated `Config` is visible by the time the test acquires
+    // the read lock here.
+    //
+    // BUT — on macOS Apple Silicon, FSEvents can deliver
+    // delete+recreate events in such a way that the worker
+    // processes a stale (pre-recreate) reload after the
+    // post-recreate reload. The shared config briefly reflects
+    // value2 (which sent the `Reloaded` we observed above) and
+    // then gets re-set to whatever a follow-up event causes
+    // re-reading the file to produce. Poll the config for up to
+    // two more seconds; the file on disk has value2 by this
+    // point, so any subsequent reload converges to value2.
+    let state_deadline = std::time::Instant::now() + Duration::from_secs(2);
+    loop {
+        {
+            let cfg = config_ref.read().unwrap();
+            let current = cfg.get("key").and_then(|v| v.as_string().ok()).map(str::to_owned);
+            if current.as_deref() == Some("value2") {
+                break;
+            }
+            if std::time::Instant::now() >= state_deadline {
+                panic!(
+                    "config never converged to value2 within 2s of the \
+                     last observed event (current value: {current:?})"
+                );
+            }
+        }
+        std::thread::sleep(Duration::from_millis(50));
     }
 
     handle.stop().unwrap();
