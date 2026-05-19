@@ -6,7 +6,7 @@
 > **Reads:** `REPS.md` (supreme authority), `_strategy/UNIVERSAL_PROMPT.md` (peak performance + max efficiency + max concurrency + nuclear-proof security + cross-platform), `.dev/AUDIT-0.9.1.md` (current state assessment).
 >
 > **Target ship date:** 4-6 focused weeks from audit (2026-05-18).
-> **Status:** Phase 0.9.5 **Foundation** complete (2026-05-19); Phase 0.9.5 **Implementation** next. The Implementation half includes the lock-free cache backend, the absorbed-from-Phase-0.9.4 data-model merger, and the verified-by-criterion sub-50ns performance numbers — all blocked on a canonical-hardware benchmark sweep.
+> **Status:** Phase 0.9.6 **Foundation** complete (2026-05-19); Phase 0.9.7 next. Two pieces are queued for a canonical-CI follow-up — the Phase 0.9.5 lock-free cache implementation (waiting on benchmark hardware) and the Phase 0.9.6 cross-platform integration tests + latency benchmarks (waiting on CI matrix wire-up). Both ship as patch releases against their parent phase.
 
 ---
 
@@ -405,60 +405,57 @@ Implementation half (Pending):
 
 **Goal:** Replace polling-based `hot_reload.rs` with `notify`-backed event-driven file watching.
 
-**Effort:** 4-5 days.
+**Effort:** 4-5 days. Split across two releases:
 
-### Background
+- **0.9.6 — Foundation** (Complete; 2026-05-19, released as [`v0.9.6`](../.dev/release/v0.9.6.md))
+- **0.9.6.x — Cross-platform tests + latency benchmarks** (Pending canonical CI matrix wire-up)
 
-Current `hot_reload.rs` uses a thread-based polling loop with a `Duration`-based interval. Per UNIVERSAL_PROMPT (max efficiency requirement), this wastes CPU and has latency equal to the poll interval. Event-driven file watching is the standard.
+### Foundation half (v0.9.6 — Complete)
 
-### Tasks
+- [x] `notify = "6"` added as feature-gated optional dependency
+- [x] `hot-reload` Cargo feature added; included in `default` so the new behavior is what users get out of the box
+- [x] `hot_reload.rs` rewritten end-to-end: event-driven worker reads from a `notify::RecommendedWatcher` registered on the parent directory; debounce window collapses bursts; canonical-form path comparison handles macOS realpath quirks
+- [x] Polling worker preserved behind `#[cfg(not(feature = "hot-reload"))]` as the fallback when users opt out of the new dependency
+- [x] Public API surface preserved: every `HotReloadConfig` method on v0.9.5 still compiles and behaves the same way; new `with_debounce(Duration)` and `with_polling_fallback()` knobs added additively
+- [x] `HotReloadHandle` cleanup primitive switched to `Arc<AtomicBool>` (same observable semantics; lets both watcher paths share one shutdown primitive)
+- [x] `docs/PLATFORM-NOTES.md` created — covers the three kernel backends, debounce tuning, latency expectations, network-filesystem caveats, deletion/re-creation handling, permissions changes, line-ending acceptance, path handling, async file I/O, filesystem-timestamp resolution, NOML/TOML format-preservation footprint
+- [x] 3 in-module tests pass against the new implementation (basic reload, change-notification, automatic-watching with the event-driven path)
+- [x] All workspace gates green (fmt, clippy `-D warnings`, 96 tests, doc with `-D warnings`, audit)
 
-- [ ] **Add `notify = "6"` as feature-gated dependency:**
-  ```toml
-  [features]
-  hot-reload = ["dep:notify"]
-  
-  [dependencies]
-  notify = { version = "6", optional = true }
-  ```
-- [ ] **Rewrite `hot_reload.rs` to use `notify`:**
-  - [ ] Use `RecommendedWatcher` for cross-platform abstraction
-  - [ ] Linux: inotify
-  - [ ] macOS: FSEvents
-  - [ ] Windows: ReadDirectoryChangesW
-- [ ] **Add debouncing layer:**
-  - Many editors do atomic write (rename-over) which generates multiple events
-  - Default debounce window: 100ms (configurable via `with_debounce()`)
-- [ ] **Preserve existing `ConfigChangeEvent` enum** for backward compatibility
-- [ ] **Add `notify`-specific event handling:**
-  - File modified → emit `Reloaded` with new config (or `ReloadFailed`)
-  - File renamed → handle atomic-write gracefully (re-resolve path)
-  - File deleted → emit `FileDeleted`, keep last-known-good config in memory
-  - Directory event (parent dir watch) → re-evaluate
-- [ ] **Add optional polling fallback** (opt-in via `with_polling_fallback(Duration)`):
-  - For environments where `notify` doesn't work (network filesystems, some containers)
-  - Default: disabled
+### Tests / benchmarks deferred to v0.9.6.x (Pending canonical CI hardware)
+
+The full Phase 0.9.6 scope also calls for:
+
 - [ ] **Cross-platform integration tests** in `tests/hot_reload_*.rs`:
-  - [ ] `tests/hot_reload_modified.rs` — modify file, expect Reloaded event
-  - [ ] `tests/hot_reload_atomic_write.rs` — atomic rename, expect single Reloaded (debounced)
-  - [ ] `tests/hot_reload_deleted.rs` — delete file, expect FileDeleted event
-  - [ ] `tests/hot_reload_recreated.rs` — delete + recreate, expect FileDeleted then Reloaded
-  - [ ] `tests/hot_reload_permissions.rs` — file becomes unreadable, expect graceful ReloadFailed
-- [ ] **Document platform-specific behavior** in `docs/PLATFORM-NOTES.md`:
-  - Network filesystem caveats (SMB, NFS)
-  - macOS bundle behavior
-  - Windows file locking quirks
-- [ ] **Benchmark detection latency:**
-  - Target: <100ms from file modification to event delivery
-  - Measure on Linux + macOS + Windows
+  - [ ] `tests/hot_reload_modified.rs` — modify file, expect `Reloaded` event
+  - [ ] `tests/hot_reload_atomic_write.rs` — atomic rename, expect single `Reloaded` (debounced)
+  - [ ] `tests/hot_reload_deleted.rs` — delete file, expect `FileDeleted` event
+  - [ ] `tests/hot_reload_recreated.rs` — delete + recreate, expect `FileDeleted` then `Reloaded`
+  - [ ] `tests/hot_reload_permissions.rs` — file becomes unreadable, expect graceful `ReloadFailed`
+- [ ] **Committed cross-platform latency benchmark** — target <100 ms from `fsync` return to `Reloaded` event delivery on each platform
+
+Both items are deferred to a follow-up patch release because **CI matrix wire-up is the prerequisite, not the code**. Committing latency numbers measured on the dev host would mislead users about cross-platform behaviour; landing integration tests that only run on Windows is operationally pointless. The CI matrix change ships independently from this lib's release cadence, and the v0.9.6.x patch follows on its heels.
 
 ### Exit criteria
 
-- [ ] Hot reload detection latency <100ms on all three platforms
+Foundation half (Complete):
+
+- [x] `notify` integrated; default feature includes it; v0.9.5 polling preserved as fallback
+- [x] Public API preserved; new knobs additive only
+- [x] In-module tests pass against the event-driven path
+- [x] Platform documentation written
+- [x] All gates green
+
+v0.9.6.x patch:
+
+- [ ] Hot reload detection latency <100ms on all three platforms (measured, committed)
 - [ ] No CPU usage when no file changes occur (verified with `top` or equivalent)
 - [ ] All five cross-platform integration tests passing on all three platforms
-- [ ] `docs/PLATFORM-NOTES.md` documents OS-specific behavior
-- [ ] Polling-based hot reload removed from default code path (opt-in only)
+- [ ] `docs/PLATFORM-NOTES.md` updated with measured numbers
+
+### Background
+
+Pre-v0.9.6 `hot_reload.rs` used a thread-based polling loop with a `Duration`-based interval. Per UNIVERSAL_PROMPT (max efficiency requirement), that wastes CPU and has latency equal to the poll interval. Event-driven file watching via the OS kernel APIs is the standard; v0.9.6 lands that as the default behavior.
 
 ---
 

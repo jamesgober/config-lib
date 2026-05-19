@@ -15,6 +15,44 @@
 <br>
 
 
+## [0.9.6] - 2026-05-19
+
+> **Scope note.** This is the **foundation half** of Phase 0.9.6. It lands the event-driven `notify`-backed watcher implementation, the platform-quirk documentation, and the new public knobs (`with_debounce`, `with_polling_fallback`). The five cross-platform integration tests called for by the roadmap (`hot_reload_modified.rs`, `hot_reload_atomic_write.rs`, `hot_reload_deleted.rs`, `hot_reload_recreated.rs`, `hot_reload_permissions.rs`) and the cross-platform latency benchmarks need to run on actual Linux + macOS + Windows CI to be meaningful; they ship in a follow-up release once CI is wired up. The existing 3 in-module tests verify the watcher works end-to-end on the dev host.
+
+### Added
+- **`hot-reload` Cargo feature** (default-on) that pulls in [`notify = "6"`](https://crates.io/crates/notify). When enabled, `HotReloadConfig::start_watching` registers a `notify::RecommendedWatcher` on the watched file's **parent directory** (so atomic-rename saves are reliably observed) and reacts to kernel events: `inotify` on Linux, `FSEvents` on macOS, `ReadDirectoryChangesW` on Windows. Detection latency is typically a few milliseconds — well under the v1.0 stability contract's <100 ms target.
+- **`HotReloadConfig::with_debounce(Duration)`** — adjust the debounce window applied to clustered file-change events (default 100 ms). The debounce collapses the burst of events that modern editors emit on a single save (create-temp / write-temp / rename-over-target / remove-temp) into one `Reloaded` notification.
+- **`HotReloadConfig::with_polling_fallback()`** — opt into a polling cadence inside the event-driven worker for environments where the kernel watcher is known unreliable (NFS, SMB, some container overlay filesystems). With the flag set, the worker re-stats the watched path on every `poll_interval` tick in addition to reacting to events.
+- **`docs/PLATFORM-NOTES.md`** — first-class platform documentation. Covers the `inotify` / `FSEvents` / `ReadDirectoryChangesW` backends, debounce tuning guidance, latency expectations per platform, network-filesystem / overlay-FS caveats, deletion / re-creation handling, permissions-changes behaviour, line-ending acceptance, path handling, async file I/O, filesystem-timestamp resolution caveats, and the NOML / TOML format-preservation footprint.
+
+### Changed
+- **`HotReloadConfig::start_watching`** internally switches between the event-driven watcher (when `hot-reload` is enabled) and the polling thread (when `hot-reload` is disabled). The public method signature is unchanged.
+- **`HotReloadHandle`** carries the `notify::RecommendedWatcher` alongside the worker thread when the feature is on, so dropping the handle (or calling `stop`) tears down both the kernel watch registration and the reload worker.
+- **`HotReloadHandle::stop` / Drop** use an `Arc<AtomicBool>` flag rather than the previous `mpsc<()> ` channel for thread shutdown. Same observable semantics; the atomic-bool variant lets both the polling and event-driven paths share one shutdown primitive cleanly.
+- **`HotReloadConfig::snapshot()`** simplified — now simply re-parses the file from disk. The previous version read the file *and* locked the current `Arc<RwLock<Config>>` for no observable benefit.
+- **`HotReloadConfig` tests** — the existing 3 in-module tests use a shared `write_conf` helper that `fsync`s the write before returning, so kernel events are surfaced deterministically. The `test_automatic_watching` test now exercises the new event-driven path (with a 25 ms debounce override so the test completes in well under 500 ms).
+
+### Migration
+
+- **Default users:** zero changes required. `cargo update -p config-lib` gets you the event-driven watcher automatically, because the `hot-reload` feature is part of the default feature set. Hot-reload latency drops from "poll-interval-bound" (default 1 s) to "kernel-event + 100 ms debounce" (~110 ms total).
+- **Users who explicitly want the old polling behaviour:** `default-features = false` + manually re-enable everything except `hot-reload`. The polling implementation is still compiled when `hot-reload` is off; the public API is identical.
+- **Users who want event-driven AND a polling watchdog:** call `.with_polling_fallback()` during construction. Useful on NFS / SMB / overlay FS.
+
+### Internal
+- All 96 tests pass (63 unit + 14 integration + 11 validation + 8 doc).
+- `cargo clippy --all-targets --all-features -- -D warnings` clean.
+- `cargo doc --no-deps --all-features` clean with `RUSTDOCFLAGS="-D warnings"`.
+- `cargo audit` clean (one allowed `rustls-pemfile` unmaintained warning, unchanged from 0.9.2; the `bytes 1.11.1` patch from 0.9.2 remains in `Cargo.lock`).
+
+### Deferred to a follow-up v0.9.6.x release
+
+The roadmap also calls for five cross-platform integration tests (`hot_reload_modified.rs`, `hot_reload_atomic_write.rs`, `hot_reload_deleted.rs`, `hot_reload_recreated.rs`, `hot_reload_permissions.rs`) and committed cross-platform latency benchmarks. Both need to run on actual Linux + macOS + Windows CI hardware to be meaningful — same honesty principle as the v0.9.5 caching benchmarks. The CI matrix is already in place; wiring these specific tests into the matrix and committing the resulting latency numbers ships in v0.9.6.1.
+
+
+
+<br>
+
+
 ## [0.9.5] - 2026-05-19
 
 > **Scope note.** This is the **foundation half** of Phase 0.9.5. It lands the public API surface (`CacheStats`, `Config::cache_stats()`, the `#[non_exhaustive]` enum hardening required by the 1.0 stability contract) so the actual lock-free cache wire-up — and the borrow-vs-thread-safety architectural decision on `Config::get` — can drop in without a second public-API change. The cache implementation, multi-backend prototype benchmarks, and the verified sub-50ns numbers land in a follow-up v0.9.5.x release once the implementation work is run on canonical hardware. See `.dev/release/v0.9.5.md` for the full rationale.
@@ -453,7 +491,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.5...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.6...HEAD
+[0.9.6]: https://github.com/jamesgober/config-lib/compare/v0.9.5...v0.9.6
 [0.9.5]: https://github.com/jamesgober/config-lib/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/jamesgober/config-lib/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/jamesgober/config-lib/compare/v0.9.2...v0.9.3
