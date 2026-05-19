@@ -1,0 +1,98 @@
+# cargo-fuzz harnesses for config-lib parsers.
+#
+# Each fuzz target exercises one parser entry point on arbitrary
+# byte-string input. The fuzzer is looking for panics, infinite
+# loops, OOMs, and other availability bugs — any of these on
+# untrusted input is a security finding in a configuration library
+# that may parse user-supplied data.
+#
+# Running:
+#
+#   rustup install nightly
+#   cargo install cargo-fuzz
+#   cargo +nightly fuzz run <target_name> -- -max_total_time=3600
+#
+# See `docs/SECURITY.md` for the full methodology, the per-target
+# corpus locations, and how to triage findings.
+
+[package]
+name = "config-lib-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+rust-version = "1.75"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+config-lib = { path = "..", default-features = false, features = [
+    "conf",
+    "noml",
+    "toml",
+    "json",
+    "xml",
+    "hcl",
+    "validation",
+] }
+
+# Standalone workspace — keeps cargo from auto-pulling this manifest
+# into the parent crate's workspace and dragging libFuzzer (nightly-
+# only) into stable builds of `config-lib` itself.
+[workspace]
+
+# Each fuzz target gets its own binary. `cargo fuzz` discovers them
+# from `fuzz_targets/*.rs` files automatically; the [[bin]] blocks
+# below pin the names explicitly for clarity and CI predictability.
+
+[[bin]]
+name = "conf_parser"
+path = "fuzz_targets/conf_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ini_parser"
+path = "fuzz_targets/ini_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "properties_parser"
+path = "fuzz_targets/properties_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "json_parser"
+path = "fuzz_targets/json_parser.rs"
+test = false
+doc = false
+bench = false
+required-features = ["config-lib/json"]
+
+[[bin]]
+name = "xml_parser"
+path = "fuzz_targets/xml_parser.rs"
+test = false
+doc = false
+bench = false
+required-features = ["config-lib/xml"]
+
+[[bin]]
+name = "hcl_parser"
+path = "fuzz_targets/hcl_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "format_detection"
+path = "fuzz_targets/format_detection.rs"
+test = false
+doc = false
+bench = false

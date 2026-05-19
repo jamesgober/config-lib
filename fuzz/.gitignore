@@ -1,0 +1,15 @@
+# libFuzzer / cargo-fuzz artifacts.
+#
+# `target/` is the build output for the fuzz workspace; `corpus/`
+# accumulates interesting inputs the fuzzer has discovered;
+# `artifacts/` holds crashes / hangs / OOMs reproducers.
+#
+# The corpus seed files we *want* in git live under `corpus_seeds/`
+# (NOT git-ignored). When a fuzz run finds something interesting,
+# the maintainer copies the relevant `corpus/<target>/<hash>`
+# entry into `corpus_seeds/<target>/` and `tests/parser_corpus.rs`
+# loads it back as a regression test.
+
+target/
+corpus/
+artifacts/

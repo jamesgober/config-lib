@@ -6,7 +6,7 @@
 > **Reads:** `REPS.md` (supreme authority), `_strategy/UNIVERSAL_PROMPT.md` (peak performance + max efficiency + max concurrency + nuclear-proof security + cross-platform), `.dev/AUDIT-0.9.1.md` (current state assessment).
 >
 > **Target ship date:** 4-6 focused weeks from audit (2026-05-18).
-> **Status:** Phase 0.9.7 complete (2026-05-19); Phase 0.9.8 next. Two pieces are queued for a canonical-CI follow-up — the Phase 0.9.5 lock-free cache implementation (waiting on benchmark hardware) and the Phase 0.9.6 cross-platform integration tests + latency benchmarks (waiting on CI matrix wire-up). Both ship as patch releases against their parent phase. **Release-path decision (2026-05-19):** `v0.9.9` is the final pre-1.0 polish release; `v1.0.0` ships *directly* from it with no `1.0.0-rc.1` cut. Soak time happens during the v0.9.9 release itself.
+> **Status:** Phase 0.9.8 **Foundation** complete (2026-05-19); Phase 0.9.9 next. Three pieces are queued for canonical-hardware / canonical-CI follow-ups — the Phase 0.9.5 lock-free cache implementation, the Phase 0.9.6 cross-platform integration tests + latency benchmarks, and the Phase 0.9.8 1-CPU-hour fuzz clean passes. All three ship as patch releases against their parent phase as the maintainer's runs land. **Release-path decision (2026-05-19):** `v0.9.9` is the final pre-1.0 polish release; `v1.0.0` ships *directly* from it with no `1.0.0-rc.1` cut. Soak time happens during the v0.9.9 release itself.
 
 ---
 
@@ -498,7 +498,10 @@ Pre-v0.9.6 `hot_reload.rs` used a thread-based polling loop with a `Duration`-ba
 
 **Goal:** Add `cargo-fuzz` harnesses for every parser. Each must run for at least 1 CPU-hour clean.
 
-**Effort:** 3-4 days.
+**Effort:** 3-4 days. Split across two releases:
+
+- **0.9.8 — Foundation** (Complete; 2026-05-19, released as [`v0.9.8`](../.dev/release/v0.9.8.md))
+- **0.9.8.x — 1-CPU-hour clean runs + corpus + regression tests + CI fuzz pass** (Pending nightly-Rust + Linux + maintainer time)
 
 ### Background
 
@@ -510,41 +513,51 @@ Per UNIVERSAL_PROMPT security requirement (nuclear-proof, impenetrable):
 
 These must be eliminated before 1.0.
 
-### Tasks
+### Foundation half (v0.9.8 — Complete)
 
-- [ ] **Set up `fuzz/` workspace:**
-  - `cargo fuzz init` (or manual setup)
-  - `fuzz/Cargo.toml`
-  - `fuzz/.gitignore` for fuzz artifacts
-- [ ] **Create fuzz targets:**
-  - [ ] `fuzz/fuzz_targets/conf_parser.rs`
-  - [ ] `fuzz/fuzz_targets/ini_parser.rs`
-  - [ ] `fuzz/fuzz_targets/properties_parser.rs`
-  - [ ] `fuzz/fuzz_targets/json_parser.rs` (verify our wrapper doesn't add vulnerabilities; `serde_json` itself is well-fuzzed)
-  - [ ] `fuzz/fuzz_targets/xml_parser.rs`
-  - [ ] `fuzz/fuzz_targets/hcl_parser.rs`
-  - [ ] `fuzz/fuzz_targets/format_detection.rs` (parses with `format=None`, exercises auto-detection)
-- [ ] **Run each target for at least 1 CPU-hour** on the maintainer machine:
+- [x] **`fuzz/` workspace** set up with standalone `[workspace]` declaration so libFuzzer's nightly-only requirement does not contaminate stable builds of `config-lib`
+- [x] **`fuzz/Cargo.toml`** with seven `[[bin]]` blocks pinning each target name + path
+- [x] **`fuzz/.gitignore`** ignoring `target/`, `corpus/`, `artifacts/` (the harness build/run artifacts) while leaving room for a future `fuzz/corpus_seeds/` directory committed to git
+- [x] **Seven fuzz targets** in `fuzz/fuzz_targets/`:
+  - [x] `conf_parser.rs` — `parsers::conf::parse`
+  - [x] `ini_parser.rs` — `parsers::ini_parser::parse`
+  - [x] `properties_parser.rs` — `parsers::properties_parser::parse`
+  - [x] `json_parser.rs` — `parsers::json_parser::parse` (gated on `config-lib/json`)
+  - [x] `xml_parser.rs` — `parsers::xml_parser::parse` (gated on `config-lib/xml`)
+  - [x] `hcl_parser.rs` — `parsers::hcl_parser::parse` (highest-yield target — youngest parser with rich nested-block semantics)
+  - [x] `format_detection.rs` — `config_lib::parse(content, None)` (auto-dispatch)
+- [x] **`docs/SECURITY.md`** — canonical security document. Threat model, lint-enforced defenses, fuzz methodology + per-target descriptions + triage workflow, dependency hygiene, the zero-unsafe-in-shipping-code property, security-disclosure email
+- [x] **`[package].exclude`** updated to keep `fuzz/` out of the published crate
+- [x] All workspace gates green (fmt, clippy `-D warnings`, 96 tests, doc with `-D warnings`, audit, deny, `cargo +1.75 check`)
+
+### Tests / clean runs deferred to v0.9.8.x (Pending canonical hardware)
+
+The remaining Phase 0.9.8 deliverables need nightly Rust + libFuzzer + extended CPU time + maintainer attention to triage:
+
+- [ ] **Run each target for at least 1 CPU-hour** on the maintainer machine
   - Target: 0 panics, 0 OOMs, 0 infinite loops
 - [ ] **Fix every finding:**
   - Panic → replace with `Result<_, Error>`
   - Infinite loop → add iteration cap with clear error
   - OOM → add input size limits with clear error
-- [ ] **Collect interesting corpus** from fuzzing runs:
-  - `fuzz/corpus/<target>/` — committed to git
-  - These become regression test inputs
+- [ ] **Collect interesting corpus** under `fuzz/corpus_seeds/<target>/` — committed to git
 - [ ] **Add corpus inputs as regression tests** in `tests/parser_corpus.rs`
-- [ ] **Document fuzz methodology** in `docs/SECURITY.md`:
-  - How to reproduce a fuzz run
-  - Current corpus state
-  - Known limitations
+- [ ] **CI fuzz pass** (~10 CPU-minutes per target) on every PR
 
 ### Exit criteria
+
+Foundation half (Complete):
+
+- [x] Seven harness files in place, parser-by-parser + format-detection auto-dispatch
+- [x] `fuzz/` standalone workspace doesn't contaminate stable builds of `config-lib`
+- [x] `docs/SECURITY.md` documents methodology, threat model, and reproduction
+- [x] All non-fuzz workspace gates green
+
+v0.9.8.x patch (Pending):
 
 - [ ] 6+ fuzz targets running clean for 1 CPU-hour each
 - [ ] Corpus inputs committed
 - [ ] Regression tests added for every corpus input
-- [ ] `docs/SECURITY.md` documents methodology + state
 - [ ] CI optionally runs short fuzz pass on every PR (10-minute time budget)
 
 ---

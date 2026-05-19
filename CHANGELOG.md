@@ -15,6 +15,51 @@
 <br>
 
 
+## [0.9.8] - 2026-05-19
+
+> **Scope note.** This is the **foundation half** of Phase 0.9.8. It lands the `cargo-fuzz` workspace, the seven per-parser harnesses, the methodology documentation in `docs/SECURITY.md`, and the security-disclosure email. The actual **1-CPU-hour clean fuzz runs** for each target need nightly Rust + maintainer time + ideally a Linux box (libFuzzer is Clang-based and Linux-first), and they ship as a v0.9.8.x patch once the runs are recorded. Same honest-foundation pattern as Phase 0.9.5 / Phase 0.9.6.
+
+### Added
+- **`fuzz/` workspace** — a standalone cargo workspace for fuzz-testing config-lib's parser surface with [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz) and libFuzzer. `[workspace]` is declared in `fuzz/Cargo.toml` so the harness manifest does **not** get auto-pulled into the parent package; libFuzzer's nightly-only requirement therefore never contaminates stable builds of `config-lib` itself.
+- **Seven fuzz targets** in `fuzz/fuzz_targets/`:
+  - `conf_parser` — `parsers::conf::parse`
+  - `ini_parser` — `parsers::ini_parser::parse`
+  - `properties_parser` — `parsers::properties_parser::parse`
+  - `json_parser` — `parsers::json_parser::parse` (requires the `config-lib/json` feature)
+  - `xml_parser` — `parsers::xml_parser::parse` (requires the `config-lib/xml` feature)
+  - `hcl_parser` — `parsers::hcl_parser::parse` (highest-yield target — youngest parser with rich nested-block semantics)
+  - `format_detection` — `config_lib::parse(content, None)`, exercising the format-detection heuristics and the dispatch into the chosen parser
+- **`docs/SECURITY.md`** — first-class security documentation. Covers: the threat model (what we defend against, what we explicitly don't); the lint-enforced defenses; the fuzz-testing methodology (per-target descriptions, run commands, triage workflow); dependency-hygiene posture; the zero-unsafe-in-shipping-code property; and the security-disclosure email (`security@hivedb.com`).
+
+### Changed
+- **`Cargo.toml` `[package].exclude`** — added `fuzz/` so the harness workspace is not packaged into the published crate. Corrected the stale `dev/` entry to `.dev/` (the actual gitignored directory name) and added an inline comment noting it's already gitignored.
+
+### Internal
+- The seven fuzz target files are each tiny (~10-line) libfuzzer-sys harnesses that take `&[u8]` from the fuzzer, transcode to `&str` (skipping non-UTF-8 inputs since the public parser API takes `&str`), and call the corresponding parser. No correctness assertion; the fuzzer wins by producing input that panics, infinitely loops, or causes the process to be OOM-killed.
+- The main `config-lib` crate continues to build cleanly on stable. `cargo build --all-features` is unchanged by the addition of `fuzz/` because `fuzz/Cargo.toml` carries its own `[workspace]`.
+- All 96 tests pass (63 unit + 14 integration + 11 validation + 8 doc).
+- `cargo clippy --all-targets --all-features -- -D warnings` clean.
+- `cargo doc --no-deps --all-features` clean with `RUSTDOCFLAGS="-D warnings"`.
+- `cargo audit` clean.
+- `cargo deny check` clean.
+- `cargo +1.75 check` passes on the default feature set.
+
+### Deferred to a v0.9.8.x patch
+
+The roadmap's full Phase 0.9.8 scope also calls for:
+
+1. **A documented 1-CPU-hour clean run on each of the seven targets** — must complete without panic, hang, or OOM on the maintainer's reference hardware.
+2. **Corpus seed files** committed under `fuzz/corpus_seeds/<target>/` for the inputs found interesting during the clean runs.
+3. **A regression test file** `tests/parser_corpus.rs` that re-exercises those seed inputs on every `cargo test` so a future regression can't silently re-introduce a fuzzer-found bug.
+4. **A short (~10-CPU-minute per target) CI fuzz pass** on PRs.
+
+All four are deferred to v0.9.8.x because they require nightly Rust + libFuzzer + extended CPU time + a Linux host. The harness infrastructure is in place for them to drop in cleanly. The v0.9.8.x patch is gated by the maintainer running the clean passes; it's not a code-change blocker.
+
+
+
+<br>
+
+
 ## [0.9.7] - 2026-05-19
 
 ### Added
@@ -543,7 +588,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.7...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.8...HEAD
+[0.9.8]: https://github.com/jamesgober/config-lib/compare/v0.9.7...v0.9.8
 [0.9.7]: https://github.com/jamesgober/config-lib/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/jamesgober/config-lib/compare/v0.9.5...v0.9.6
 [0.9.5]: https://github.com/jamesgober/config-lib/compare/v0.9.4...v0.9.5

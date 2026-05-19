@@ -2,7 +2,7 @@
 #▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 name = "config-lib"
-version = "0.9.7"
+version = "0.9.8"
 
 # Project Metadata
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
@@ -46,10 +46,11 @@ keywords = [
 # Exclude files from the package
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 exclude = [
-    ".github/",  # GitHub metadata 
+    ".github/",  # GitHub metadata
+    ".dev/",     # Local-only maintainer notes (already gitignored)
     "benches/",  # Benchmarking code
     "docs/",     # Documentation
-    "dev/",      # Development utilities
+    "fuzz/",     # cargo-fuzz harnesses (separate workspace)
 ]
 
 
