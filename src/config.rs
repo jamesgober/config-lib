@@ -6,9 +6,11 @@
 use crate::error::{Error, Result};
 use crate::parsers;
 use crate::value::Value;
+use dashmap::DashMap;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "schema")]
 use crate::schema::Schema;
@@ -51,6 +53,7 @@ use crate::validation::{ValidationError, ValidationRuleSet};
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Debug)]
 pub struct Config {
     /// The resolved configuration values
     values: Value,
@@ -68,16 +71,33 @@ pub struct Config {
     /// See [`ConfigOptions`].
     options: ConfigOptions,
 
-    /// Cache hit counter. **Reserved foundation** for the lock-free
-    /// caching layer landing in a follow-up v0.9.5 implementation
-    /// release. Stays at `0` in v0.9.5 because no cache lookups
-    /// happen yet; the field is here so the eventual cache wire-up
-    /// is a drop-in change and does not require a second API
-    /// addition.
+    /// Cache hit counter (loaded via `Ordering::Relaxed` from
+    /// [`Config::cache_stats`]). Wired in v0.9.9 — populated by
+    /// [`Config::get_arc`] when the cache layer is enabled.
     cache_hits: AtomicU64,
 
     /// Cache miss counter. See [`Config::cache_stats`].
     cache_misses: AtomicU64,
+
+    /// Resolved-path cache. `DashMap` is sharded so reads hold a
+    /// short shard-local lock rather than a global lock; under
+    /// typical config workloads (read-mostly, infrequent writes)
+    /// this provides effectively-lock-free reads. Storing
+    /// `Arc<Value>` keeps clones cheap on hit (refcount bump only).
+    ///
+    /// Population is lazy — only paths actually requested through
+    /// [`Config::get_arc`] enter the cache. `set` / `remove` /
+    /// `merge` clear the cache entirely (writes are rare in the
+    /// design envelope; a per-prefix invalidation strategy is
+    /// post-1.0 backlog).
+    cache: DashMap<Box<str>, Arc<Value>>,
+
+    /// Per-path defaults table consulted by [`Config::get_or_default`]
+    /// when the requested path is missing from `values`. Wrapped in
+    /// `Arc<RwLock<_>>` so defaults can be updated independently of
+    /// the main value tree, including under `read_only` mode (defaults
+    /// are operator-provided fallbacks, not user-supplied data).
+    defaults: Arc<RwLock<BTreeMap<String, Value>>>,
 
     /// Format-specific preservation data
     #[cfg(feature = "noml")]
@@ -99,6 +119,8 @@ impl Config {
             options: ConfigOptions::default(),
             cache_hits: AtomicU64::new(0),
             cache_misses: AtomicU64::new(0),
+            cache: DashMap::new(),
+            defaults: Arc::new(RwLock::new(BTreeMap::new())),
             #[cfg(feature = "noml")]
             noml_document: None,
             #[cfg(feature = "validation")]
@@ -121,6 +143,8 @@ impl Config {
             options: ConfigOptions::default(),
             cache_hits: AtomicU64::new(0),
             cache_misses: AtomicU64::new(0),
+            cache: DashMap::new(),
+            defaults: Arc::new(RwLock::new(BTreeMap::new())),
             noml_document: None,
             #[cfg(feature = "validation")]
             validation_rules: None,
@@ -135,6 +159,8 @@ impl Config {
             options: ConfigOptions::default(),
             cache_hits: AtomicU64::new(0),
             cache_misses: AtomicU64::new(0),
+            cache: DashMap::new(),
+            defaults: Arc::new(RwLock::new(BTreeMap::new())),
             #[cfg(feature = "validation")]
             validation_rules: None,
         };
@@ -194,6 +220,10 @@ impl Config {
 
     /// Set a value by path
     ///
+    /// Invalidates the entire resolved-path cache (writes are rare in
+    /// the design envelope; a per-prefix invalidation strategy is
+    /// post-1.0 backlog).
+    ///
     /// # Errors
     ///
     /// Returns an error if:
@@ -203,10 +233,13 @@ impl Config {
         self.ensure_writable()?;
         self.values.set_nested(path, value.into())?;
         self.modified = true;
+        self.cache.clear();
         Ok(())
     }
 
     /// Remove a value by path
+    ///
+    /// Invalidates the entire resolved-path cache on success.
     ///
     /// # Errors
     ///
@@ -218,6 +251,7 @@ impl Config {
         let result = self.values.remove(path)?;
         if result.is_some() {
             self.modified = true;
+            self.cache.clear();
         }
         Ok(result)
     }
@@ -432,6 +466,8 @@ impl Config {
 
     /// Merge another configuration into this one
     ///
+    /// Invalidates the entire resolved-path cache.
+    ///
     /// # Errors
     ///
     /// Returns an error if the configuration was constructed with
@@ -440,6 +476,7 @@ impl Config {
         self.ensure_writable()?;
         self.merge_value(&other.values)?;
         self.modified = true;
+        self.cache.clear();
         Ok(())
     }
 
@@ -705,14 +742,6 @@ impl Config {
 
     /// Return a snapshot of the cache-hit / cache-miss counters.
     ///
-    /// In v0.9.5 this returns `CacheStats { hits: 0, misses: 0,
-    /// hit_ratio: 0.0 }` on every `Config`: the lock-free cache
-    /// layer that populates the counters lands in a follow-up v0.9.5
-    /// implementation release. The API is shipping now so that
-    /// downstream code can be instrumented against it ahead of the
-    /// caching work, and so that the eventual cache wire-up does not
-    /// require a second public-API addition.
-    ///
     /// Counters are loaded with `Ordering::Relaxed` — the values are
     /// statistics, not synchronisation primitives, and the hit/miss
     /// classification is best-effort under concurrent reads.
@@ -730,6 +759,115 @@ impl Config {
             misses,
             hit_ratio,
         }
+    }
+
+    /// Resolve a dotted path to a cached `Arc<Value>`.
+    ///
+    /// `get_arc` is the cache-backed thread-safe accessor introduced
+    /// in v0.9.9. The first lookup of a given path walks the value
+    /// tree, allocates an `Arc<Value>` containing a clone of the
+    /// resolved node, and inserts it into the resolved-path cache.
+    /// Subsequent lookups of the same path hit the cache and return
+    /// a cheap refcount-bump clone of the `Arc<Value>`.
+    ///
+    /// This is the recommended accessor for:
+    ///
+    /// - **Multi-threaded reads.** `Arc<Value>` is `Send + Sync` and
+    ///   independent of `&self`'s lifetime, so the value can be
+    ///   handed off to other threads.
+    /// - **Hot loops.** Cache hits avoid the tree walk; the
+    ///   refcount bump is a single relaxed atomic.
+    ///
+    /// The existing `Config::get(&self, path) -> Option<&Value>` is
+    /// still the right choice for single-threaded reads that just
+    /// peek and drop the borrow — no clone, no Arc bump.
+    ///
+    /// The cache is invalidated wholesale on any `set` / `remove` /
+    /// `merge`. The runtime knob [`ConfigOptions::cache_enabled`]
+    /// (default `true`) toggles the cache layer; with it disabled,
+    /// every `get_arc` call walks the tree and allocates a fresh
+    /// `Arc<Value>`.
+    pub fn get_arc(&self, path: &str) -> Option<Arc<Value>> {
+        if self.options.cache_enabled {
+            if let Some(entry) = self.cache.get(path) {
+                self.cache_hits.fetch_add(1, Ordering::Relaxed);
+                return Some(Arc::clone(entry.value()));
+            }
+            self.cache_misses.fetch_add(1, Ordering::Relaxed);
+            let resolved = self.values.get(path)?.clone();
+            let arc = Arc::new(resolved);
+            self.cache.insert(path.into(), Arc::clone(&arc));
+            Some(arc)
+        } else {
+            self.cache_misses.fetch_add(1, Ordering::Relaxed);
+            Some(Arc::new(self.values.get(path)?.clone()))
+        }
+    }
+
+    /// Clear the resolved-path cache.
+    ///
+    /// Idempotent; safe to call from any thread. Useful when an
+    /// out-of-band actor (e.g. a hot-reload watcher) has changed
+    /// the underlying value tree and the cache snapshot is now stale.
+    pub fn clear_cache(&self) {
+        self.cache.clear();
+    }
+
+    /// Set a default value for the given path.
+    ///
+    /// Defaults are an operator-supplied fallback table consulted by
+    /// [`Config::get_or_default`] when the requested path is missing
+    /// from the main value tree. Defaults are independent of the
+    /// `read_only` flag — a read-only configuration can still have
+    /// its defaults table populated (defaults are deployment-time
+    /// declarations, not user-supplied data).
+    ///
+    /// Calls to `set_default` do **not** invalidate the cache; the
+    /// cache is keyed on observed value-tree resolutions, not on
+    /// defaults-table membership.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the defaults-table lock has been poisoned.
+    pub fn set_default<V: Into<Value>>(&self, path: &str, value: V) -> Result<()> {
+        let mut defaults = self
+            .defaults
+            .write()
+            .map_err(|_| Error::concurrency("defaults table lock poisoned"))?;
+        defaults.insert(path.to_string(), value.into());
+        Ok(())
+    }
+
+    /// Resolve a path against the main value tree, falling back to the
+    /// defaults table when not found.
+    ///
+    /// Returns `None` only when neither the value tree nor the defaults
+    /// table contains an entry for `path`. The return type is owned
+    /// (`Option<Value>`) because the defaults table sits behind an
+    /// `Arc<RwLock<_>>` and producing a borrowed reference would
+    /// require holding the lock guard across the caller's use.
+    pub fn get_or_default(&self, path: &str) -> Option<Value> {
+        if let Some(v) = self.values.get(path) {
+            return Some(v.clone());
+        }
+        let defaults = self.defaults.read().ok()?;
+        defaults.get(path).cloned()
+    }
+
+    /// Toggle this configuration into read-only mode at runtime.
+    ///
+    /// Equivalent to constructing with
+    /// `ConfigOptions::new().read_only(true)` but available as a
+    /// post-construction switch. Subsequent calls to `set` / `remove`
+    /// / `merge` return `Err(Error::general("Configuration is
+    /// read-only"))`.
+    ///
+    /// The toggle is **one-way** by design — there is no
+    /// `make_writable()` companion. A configuration that has been
+    /// declared immutable should not become mutable again; if you
+    /// need that flexibility, keep two `Config` handles instead.
+    pub fn make_read_only(&mut self) {
+        self.options.read_only = true;
     }
 }
 
@@ -919,6 +1057,8 @@ impl From<Value> for Config {
             options: ConfigOptions::default(),
             cache_hits: AtomicU64::new(0),
             cache_misses: AtomicU64::new(0),
+            cache: DashMap::new(),
+            defaults: Arc::new(RwLock::new(BTreeMap::new())),
             #[cfg(feature = "noml")]
             noml_document: None,
             #[cfg(feature = "validation")]

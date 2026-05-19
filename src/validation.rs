@@ -93,6 +93,23 @@ pub struct ValidationRuleSet {
     rules: Vec<Box<dyn ValidationRule>>,
 }
 
+impl fmt::Debug for ValidationRuleSet {
+    /// Debug-formats the set by listing each rule's `name()`.
+    /// Trait objects (`Box<dyn ValidationRule>`) cannot be derived
+    /// Debug; this manual impl exposes the rule lineup for
+    /// diagnostics without requiring a `Debug` bound on the
+    /// `ValidationRule` trait (which would be a breaking change
+    /// for downstream implementors).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ValidationRuleSet")
+            .field(
+                "rules",
+                &self.rules.iter().map(|r| r.name()).collect::<Vec<_>>(),
+            )
+            .finish()
+    }
+}
+
 impl ValidationRuleSet {
     /// Creates a new empty validation rule set
     pub fn new() -> Self {

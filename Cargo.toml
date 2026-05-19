@@ -2,7 +2,7 @@
 #▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 name = "config-lib"
-version = "0.9.8"
+version = "0.9.9"
 
 # Project Metadata
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
@@ -114,6 +114,14 @@ env-override = []                      # Smart environment variable overrides
 thiserror = "1.0"                      # Error handling
 serde = { version = "1.0", features = ["derive"] }  # Serialization
 
+# Resolved-path cache for `Config::get_arc`. DashMap is a sharded
+# concurrent HashMap with lock-free reads under typical contention,
+# stable on Rust 1.75. It's unconditional rather than feature-gated
+# because the cache layer is part of the v0.9.9+ Config semantics —
+# the `ConfigOptions::cache_enabled` knob toggles it at runtime, not
+# at compile time.
+dashmap = "6"
+
 # Optional Dependencies
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 tokio = { version = "1.0", features = ["fs", "io-util", "macros", "rt"], optional = true }
@@ -160,6 +168,26 @@ tempfile = "3.8"
 [[bench]]
 #▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░
 name = "enterprise_benchmarks"
+harness = false
+
+# v0.9.9 benchmark surface — targets the Performance Contract numbers
+# in `docs/PERFORMANCE.md`. Numbers come from the maintainer's
+# reference hardware and are committed to `benches/baselines.json`.
+
+[[bench]]
+name = "cache_warm"
+harness = false
+
+[[bench]]
+name = "cache_concurrent"
+harness = false
+
+[[bench]]
+name = "value_accessors"
+harness = false
+
+[[bench]]
+name = "parse_throughput"
 harness = false
 
 

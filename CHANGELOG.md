@@ -15,6 +15,91 @@
 <br>
 
 
+## [0.9.9] - 2026-05-19 — Final pre-1.0 release
+
+> **Scope.** v0.9.9 closes out the 0.9.x line. It absorbs the implementation halves of Phase 0.9.5 (lock-free caching + data-model merger), Phase 0.9.6 (cross-platform hot-reload integration tests), Phase 0.9.8 (parser-corpus regression infrastructure), plus the original Phase 0.9.9 polish work (`docs/ARCHITECTURE.md`, `docs/PERFORMANCE.md`). The next release is `v1.0.0` directly — see *Looking ahead* below for the new `registry-io` scope landing there.
+
+### Added
+
+- **`Config::get_arc(path) -> Option<Arc<Value>>`** — cache-backed thread-safe accessor. First lookup walks the value tree, allocates an `Arc<Value>` containing a clone of the resolved node, and inserts it into the resolved-path cache. Subsequent lookups of the same path hit the cache and return a cheap refcount-bump clone. Use this for multi-threaded reads and hot loops; the existing `Config::get` (borrowed `&Value`) remains the right choice for single-threaded peeks. Wires the `cache_hits` / `cache_misses` atomics shipped as foundation in v0.9.5.
+- **`Config::clear_cache()`** — explicit cache invalidation. Idempotent, thread-safe. Useful when an out-of-band actor (e.g., the hot-reload watcher) has changed the underlying value tree.
+- **`ConfigOptions::cache_enabled`** is now wired at runtime. `false` makes every `get_arc` walk the tree and allocate a fresh `Arc<Value>` (useful for write-heavy workloads where cache invalidation overhead dominates).
+- **`Config::set_default(path, value)`** — populate the per-path defaults table (`ConfigOptions::defaults` shipped as foundation in v0.9.4; now backed by an actual `Arc<RwLock<BTreeMap>>` store). Independent of the `read_only` flag — defaults are deployment-time declarations, not user-supplied data.
+- **`Config::get_or_default(path) -> Option<Value>`** — resolve a path against the main value tree, falling back to the defaults table when not found.
+- **`Config::make_read_only()`** — ergonomic post-construction read-only switch. One-way by design — there is no `make_writable()` companion.
+- **`Config: Debug`** — `Config` now derives `Debug`. Required to make `ConfigManager` (which holds `HashMap<String, Arc<RwLock<Config>>>`) `Debug`-derivable in turn.
+- **`ValidationRuleSet: Debug` (manual impl)** — formats by listing each rule's `name()`. Required transitively by the `Config: Debug` derive when the `validation` feature is on; chose a manual impl over a `Debug` bound on the `ValidationRule` trait (which would have been a breaking change for downstream implementors).
+- **Cache backend: `DashMap<Box<str>, Arc<Value>>`.** Sharded concurrent map; near-linear scaling to ~16 threads under typical read-mostly access. Picked over `parking_lot::RwLock<HashMap>` (doesn't scale past ~4 threads on reads), `ArcSwap<Arc<HashMap>>` (writes clone the whole map), and `evmap` (eventually-consistent semantics are a footgun). Decision logged in `docs/ARCHITECTURE.md` §3.
+- **`tests/hot_reload_modified.rs`**, **`tests/hot_reload_atomic_write.rs`**, **`tests/hot_reload_deleted.rs`**, **`tests/hot_reload_recreated.rs`**, **`tests/hot_reload_permissions.rs`** — the five cross-platform integration tests called for by the Phase 0.9.6 implementation roadmap. The first four run on all platforms with `hot-reload` enabled; the fifth is `#[cfg(unix)]` because the equivalent Windows permission manipulation is awkward (filed as a follow-up in `docs/PLATFORM-NOTES.md`).
+- **`tests/parser_corpus.rs`** — regression-test harness for fuzz-discovered parser inputs. Empty corpus at v0.9.9; the file documents the workflow for adding a seed when the maintainer's clean fuzz runs surface one.
+- **`benches/cache_warm.rs`**, **`benches/cache_concurrent.rs`**, **`benches/value_accessors.rs`**, **`benches/parse_throughput.rs`** — criterion harnesses targeting the v1.0 Performance Contract numbers. Measured numbers come from the maintainer's reference hardware and are committed to `benches/baselines.json` alongside the v1.0.0 cut.
+- **`docs/ARCHITECTURE.md`** — internal-design reference. Module layout, data flow, caching architecture, hot-reload architecture, thread safety + lock ordering, the `EnterpriseConfig` deprecation migration map, parser contract, "where to look for what" index.
+- **`docs/PERFORMANCE.md`** — performance contract reference. Targets table, methodology, per-bench-file explanation, tuning guidance, baselines schema, what the contract does *not* promise.
+
+### Changed
+
+- **`ConfigManager::get` return type changed from `Arc<RwLock<EnterpriseConfig>>` to `Arc<RwLock<Config>>`.** This is the shape change the v0.9.4 deprecation warned about. Callers that used the return value need to read it as a `Config` (which now has every method `EnterpriseConfig` had — see *Migration* below).
+- **`ConfigManager::get` no longer clones the inner storage on every call** — multiple callers of `get(name)` now share the same `Arc<RwLock<Config>>`. Writes through one handle are visible to other handles holding the same Arc.
+- **`ConfigManager` is no longer `#[deprecated]`.** The shape-change warning is no longer relevant (the change happened), and `ConfigManager` is part of the stable v1.0 contract as the multi-instance primitive.
+- **`Config::set` / `Config::remove` / `Config::merge`** now clear the resolved-path cache wholesale on success. Writes were already rare in the design envelope; a per-prefix invalidation strategy is post-1.0 backlog.
+
+### Deprecated
+
+(unchanged from v0.9.8 — the same `EnterpriseConfig` and `enterprise::direct::*` items remain `#[deprecated(since = "0.9.4")]` and will be removed in v2.0.)
+
+### Migration
+
+The one breaking change for v0.9.9 users is the `ConfigManager::get` return type:
+
+```rust
+// v0.9.8 and earlier
+let handle: Arc<RwLock<EnterpriseConfig>> = manager.get("main").unwrap();
+
+// v0.9.9
+let handle: Arc<RwLock<Config>> = manager.get("main").unwrap();
+```
+
+This was advertised by the `#[deprecated(since = "0.9.4")]` attribute on `ConfigManager` itself. Every method call on the returned handle continues to work — `Config` has the full surface that `EnterpriseConfig` had. The deprecation has been cleared from `ConfigManager` because the planned shape change has now happened.
+
+For `EnterpriseConfig` users:
+
+```rust
+//  Was                                  →  Use
+let cfg = EnterpriseConfig::new();       →  let cfg = Config::new();
+cfg.get(k)            // Option<Value>   →  cfg.get_arc(k)
+cfg.get_or(k, d)                          →  cfg.get_or_default(k).unwrap_or(d)
+cfg.set(k, v)                             →  cfg.set(k, v)
+cfg.exists(k)                             →  cfg.contains_key(k)
+cfg.set_default(k, v)                     →  cfg.set_default(k, v)
+cfg.get_or_default(k)                     →  cfg.get_or_default(k)
+cfg.cache_stats()                         →  cfg.cache_stats()
+cfg.make_read_only()                      →  cfg.make_read_only()
+cfg.clear()                               →  cfg.clear_cache()
+```
+
+`EnterpriseConfig` continues to compile and work — the `#[deprecated]` attribute is advisory only through the v1.x line.
+
+### Internal
+
+- All 100 tests pass (63 unit + 14 integration + 11 validation + 8 doc + 4 hot_reload integration on Windows; 5/5 hot_reload tests pass on Unix). The 5th hot_reload test (`hot_reload_permissions`) is `#[cfg(unix)]`-gated.
+- `cargo clippy --all-targets --all-features -- -D warnings` clean.
+- `cargo doc --no-deps --all-features` clean with `RUSTDOCFLAGS="-D warnings"`.
+- `cargo audit` clean.
+- `cargo deny check` clean across `advisories`, `bans`, `licenses`, `sources`.
+- `cargo +1.75 check` passes on the default feature set.
+- New dependency: `dashmap = "6"`. Sharded concurrent HashMap; MSRV-1.75-compatible; pulled in by the cache layer.
+
+### Looking ahead: v1.0.0 scope
+
+`v1.0.0` will introduce integration with a forthcoming `registry-io` dependency (separate James-maintained crate) and the refactoring that integration requires. This is in addition to the stabilization gates the v1.0 stability contract already commits to (`cargo public-api diff` clean vs v0.9.9, all benchmark targets met, full CI matrix green, etc.).
+
+`v0.9.9` is the *final* build of the 0.9.x line and includes a soak period during which any critical issues are addressed via v0.9.9.x patches. `v1.0.0` then ships directly — no `1.0.0-rc.1` cut. See `docs/STABILITY-1.0.md` §9.
+
+
+
+<br>
+
+
 ## [0.9.8] - 2026-05-19
 
 > **Scope note.** This is the **foundation half** of Phase 0.9.8. It lands the `cargo-fuzz` workspace, the seven per-parser harnesses, the methodology documentation in `docs/SECURITY.md`, and the security-disclosure email. The actual **1-CPU-hour clean fuzz runs** for each target need nightly Rust + maintainer time + ideally a Linux box (libFuzzer is Clang-based and Linux-first), and they ship as a v0.9.8.x patch once the runs are recorded. Same honest-foundation pattern as Phase 0.9.5 / Phase 0.9.6.
@@ -588,7 +673,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.8...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.9...HEAD
+[0.9.9]: https://github.com/jamesgober/config-lib/compare/v0.9.8...v0.9.9
 [0.9.8]: https://github.com/jamesgober/config-lib/compare/v0.9.7...v0.9.8
 [0.9.7]: https://github.com/jamesgober/config-lib/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/jamesgober/config-lib/compare/v0.9.5...v0.9.6

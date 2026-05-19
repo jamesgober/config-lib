@@ -40,7 +40,7 @@
                       // user-facing deprecation comes through the `#[deprecated]`
                       // attributes on each public item below.
 
-use crate::{Error, Result, Value};
+use crate::{Config, Error, Result, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::{Arc, RwLock};
@@ -171,30 +171,26 @@ pub struct EnterpriseConfig {
 
 /// Configuration manager for multiple named instances.
 ///
-/// `ConfigManager` itself survives the v0.9.4 → v0.9.5 transition — it
-/// is a useful primitive for runtimes that maintain several independent
-/// configurations within one process. Its **internal storage type**
-/// changes in v0.9.5: today it holds [`EnterpriseConfig`] instances;
-/// v0.9.5 swaps that to [`crate::Config`] once the latter has
-/// equivalent caching semantics. The public method surface
-/// (`load` / `get` / `list` / `remove`) does not change.
+/// `ConfigManager` is the multi-instance primitive: each `Config`
+/// it holds is identified by a name, accessible by name through
+/// [`ConfigManager::get`], and shared across threads via
+/// `Arc<RwLock<Config>>`. The typical use case is a runtime that
+/// maintains several independent configurations within one process
+/// — for example, one per database, one per service, plus a
+/// global — and wants to load and look them up by name.
 ///
-/// The struct carries a `#[deprecated]` notice through v0.9.4 to
-/// signal that the **return type of `get`** changes shape in v0.9.5
-/// (it will hand back a `Config` handle, not an `EnterpriseConfig`).
-/// Callers that only use `load` / `list` / `remove` can ignore the
-/// warning; callers that consume the `Arc<RwLock<EnterpriseConfig>>`
-/// returned by `get` should plan to migrate when v0.9.5 lands.
-#[deprecated(
-    since = "0.9.4",
-    note = "`ConfigManager::get` returns `Arc<RwLock<EnterpriseConfig>>` today; \
-            in v0.9.5 it returns `Arc<RwLock<Config>>` once `Config` absorbs \
-            the cached/thread-safe surface. `ConfigManager` itself is retained."
-)]
+/// **History.** Through v0.9.4 – v0.9.8 this type was marked
+/// `#[deprecated]` because its `get` method was scheduled to change
+/// return type when `Config` absorbed the cached/thread-safe surface
+/// of `EnterpriseConfig`. That migration landed in v0.9.9, the
+/// deprecation has therefore been cleared, and `ConfigManager` is
+/// part of the stable v1.0 contract.
 #[derive(Debug, Default)]
 pub struct ConfigManager {
-    /// Named configuration instances
-    configs: Arc<RwLock<HashMap<String, EnterpriseConfig>>>,
+    /// Named configuration instances. Each value is an
+    /// `Arc<RwLock<Config>>` so multiple callers of
+    /// [`ConfigManager::get`] share the same underlying `Config`.
+    configs: Arc<RwLock<HashMap<String, Arc<RwLock<Config>>>>>,
 }
 
 impl Default for EnterpriseConfig {
@@ -604,51 +600,63 @@ impl EnterpriseConfig {
 }
 
 impl ConfigManager {
-    /// Create new config manager
+    /// Create a new empty config manager.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Load named configuration
+    /// Load a named configuration from a file.
+    ///
+    /// Inserts (or replaces) the entry under `name`. Subsequent calls
+    /// to [`ConfigManager::get`] with the same name return an
+    /// `Arc<RwLock<Config>>` referencing the loaded configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read or parsed, or if
+    /// the internal map lock is poisoned.
     pub fn load<P: AsRef<Path>>(&self, name: &str, path: P) -> Result<()> {
-        let config = EnterpriseConfig::from_file(path)?;
+        let config = Config::from_file(path)?;
         let mut configs = self
             .configs
             .write()
             .map_err(|_| Error::concurrency("Configs lock poisoned"))?;
-        configs.insert(name.to_string(), config);
+        configs.insert(name.to_string(), Arc::new(RwLock::new(config)));
         Ok(())
     }
 
-    /// Get named configuration
-    pub fn get(&self, name: &str) -> Option<Arc<RwLock<EnterpriseConfig>>> {
+    /// Get a handle to a named configuration.
+    ///
+    /// Returns `Some(Arc<RwLock<Config>>)` if a configuration was
+    /// previously loaded under `name`, `None` otherwise. Multiple
+    /// callers of `get(name)` share the same underlying `Config` —
+    /// writes through one handle are visible to all the others.
+    pub fn get(&self, name: &str) -> Option<Arc<RwLock<Config>>> {
         let configs = self.configs.read().ok()?;
-        configs.get(name).map(|config| {
-            // Return a reference wrapped in Arc for thread safety
-            Arc::new(RwLock::new(EnterpriseConfig {
-                fast_cache: config.fast_cache.clone(),
-                cache: config.cache.clone(),
-                defaults: config.defaults.clone(),
-                file_path: config.file_path.clone(),
-                format: config.format.clone(),
-                read_only: config.read_only,
-            }))
-        })
+        configs.get(name).map(Arc::clone)
     }
 
-    /// List all configuration names
+    /// List the names of all currently-loaded configurations.
+    ///
+    /// Returns an empty `Vec` if the internal map lock is poisoned.
     pub fn list(&self) -> Vec<String> {
         match self.configs.read() {
             Ok(configs) => configs.keys().cloned().collect(),
-            Err(_) => Vec::new(), // Return empty on lock poisoning
+            Err(_) => Vec::new(),
         }
     }
 
-    /// Remove named configuration
+    /// Remove a named configuration.
+    ///
+    /// Returns `true` if an entry was removed, `false` if no entry
+    /// existed under `name` or if the internal map lock is poisoned.
+    /// Other callers still holding an `Arc<RwLock<Config>>` from a
+    /// previous `get` continue to see the configuration; only the
+    /// name-to-config mapping is removed.
     pub fn remove(&self, name: &str) -> bool {
         match self.configs.write() {
             Ok(mut configs) => configs.remove(name).is_some(),
-            Err(_) => false, // Return false on lock poisoning
+            Err(_) => false,
         }
     }
 }

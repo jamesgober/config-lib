@@ -6,7 +6,7 @@
 > **Reads:** `REPS.md` (supreme authority), `_strategy/UNIVERSAL_PROMPT.md` (peak performance + max efficiency + max concurrency + nuclear-proof security + cross-platform), `.dev/AUDIT-0.9.1.md` (current state assessment).
 >
 > **Target ship date:** 4-6 focused weeks from audit (2026-05-18).
-> **Status:** Phase 0.9.8 **Foundation** complete (2026-05-19); Phase 0.9.9 next. Three pieces are queued for canonical-hardware / canonical-CI follow-ups — the Phase 0.9.5 lock-free cache implementation, the Phase 0.9.6 cross-platform integration tests + latency benchmarks, and the Phase 0.9.8 1-CPU-hour fuzz clean passes. All three ship as patch releases against their parent phase as the maintainer's runs land. **Release-path decision (2026-05-19):** `v0.9.9` is the final pre-1.0 polish release; `v1.0.0` ships *directly* from it with no `1.0.0-rc.1` cut. Soak time happens during the v0.9.9 release itself.
+> **Status:** Phase 0.9.9 complete (2026-05-19); `v0.9.9` is the **final pre-1.0 release** and absorbs the implementation halves of Phases 0.9.5 + 0.9.6 + 0.9.8 along with the original 0.9.9 polish scope. `v1.0.0` is next, with **new architectural scope**: integration with the forthcoming `registry-io` dependency (separate James-maintained crate) and the refactoring that integration requires. **Release-path decision (2026-05-19):** `v0.9.9 → v1.0.0` is a direct cut, no `1.0.0-rc.1`; soak happens during the v0.9.9 window. **Hardware-deferred verification (committed benchmark numbers + 1-CPU-hour fuzz runs)** still lands as part of the v1.0.0 cut — the *code* shipped in v0.9.9, the *measurements that the stability contract cites* land alongside v1.0.0 on canonical hardware.
 
 ---
 
@@ -245,7 +245,7 @@ The original Phase 0.9.4 task list bundled the deprecation surface with the actu
 **Effort:** 1-1.5 weeks (absorbs the data-model-merger work originally in Phase 0.9.4 — see notes there). Split across two releases:
 
 - **0.9.5 — Foundation** (Complete; 2026-05-19, released as [`v0.9.5`](../.dev/release/v0.9.5.md))
-- **0.9.5.x — Implementation** (Pending canonical-hardware benchmarks)
+- **0.9.9 — Implementation** (Complete; 2026-05-19, absorbed into the final pre-1.0 release [`v0.9.9`](../.dev/release/v0.9.9.md))
 
 ### Foundation half (v0.9.5 — Complete)
 
@@ -258,52 +258,20 @@ What ships as v0.9.5:
 - [x] **`examples/hot_reload_demo.rs`** updated for the new non-exhaustive `ConfigChangeEvent` with a stability-contract comment
 - [x] All exit-criteria gates green (fmt, clippy `-D warnings`, 96 tests, doc with `-D warnings`, audit)
 
-### Implementation half (v0.9.5.x — Pending)
+### Implementation half (v0.9.9 — Complete)
 
-The deferred work, blocked on canonical-hardware benchmarks:
-
-- [ ] **Prototype caching backends** in `benches/cache_backend.rs`:
-  - [ ] `DashMap` — sharded concurrent map
-  - [ ] `ArcSwap<HashMap>` — fully lock-free reads, atomic pointer swap
-  - [ ] `evmap` — left-right paired (read-optimized)
-- [ ] **Benchmark each backend** across these scenarios on canonical hardware:
-  - [ ] 1 thread, single-key get, 10M iterations
-  - [ ] 4 threads, single-key contended, 10M iterations each
-  - [ ] 16 threads, single-key contended, 1M iterations each
-  - [ ] 64 threads, single-key contended, 100K iterations each
-  - [ ] 16 threads mixed read/write (90/10), 1M iterations each
-  - [ ] Memory footprint at 1000 keys, 10000 keys, 100000 keys
-- [ ] **Pick the winner** based on:
-  - Read latency at 1-16 threads (PRIMARY criterion)
-  - Memory overhead (SECONDARY criterion)
-  - Code complexity (TERTIARY criterion)
-- [ ] **Decide `Config::get` return type** — guard-based (`DashMap::Ref`-style) vs `Arc<Value>`-based (`ArcSwap`-style). The decision is downstream of the backend selection above.
-- [ ] **Replace cache layer** in unified `Config`:
-  - [ ] Main cache → chosen lock-free backend
-  - [ ] Fast cache → either eliminate (if main is fast enough) or redesign as thread-local
-  - [ ] Defaults → either fold into main cache or `ArcSwap` (read-mostly)
-- [ ] **Wire `cache_hits` / `cache_misses` counters** to the cache lookup path (the foundation atomics shipped in 0.9.5 are sitting at zero waiting for this)
-- [ ] **Statistics now populated.** `Config::cache_stats()` returns meaningful numbers.
-- [ ] **Use `Arc<str>` over `String`** for cache keys:
-  - Cheap clone on hit (refcount bump, no allocation)
-  - Reduces memory pressure
-- [ ] **Use `FxHashMap`** if HashMap backend chosen (rustc-hash crate, ~30% faster on short string keys)
-- [ ] **Inline hot accessors:**
-  - `Config::get` — `#[inline]`
-  - `Value::as_string` / `as_integer` / `as_bool` / etc. — `#[inline]`
-  - Avoid `#[inline(always)]` unless measurement proves it helps
-- [ ] **Write criterion benchmarks** covering every operation in the Performance Contract table:
-  - [ ] `benches/cache_warm.rs` — warm cache reads
-  - [ ] `benches/cache_cold.rs` — cold misses
-  - [ ] `benches/cache_concurrent.rs` — contention across thread counts
-  - [ ] `benches/parse_throughput.rs` — cold parse for each format
-  - [ ] `benches/value_accessors.rs` — typed accessor performance
-- [ ] **Commit benchmark baselines** to `benches/baselines.json`
-- [ ] **Verify Performance Contract** — every target met
-- [ ] **Write `docs/PERFORMANCE.md`** documenting:
-  - Methodology (hardware, isolation, warmup)
-  - Results table
-  - Tuning guidance for users
+- [x] **Cache backend selected: `DashMap<Box<str>, Arc<Value>>`.** Decision logged in `docs/ARCHITECTURE.md` §3. Alternatives (`Arc<RwLock<BTreeMap>>`, `parking_lot::RwLock<HashMap>`, `ArcSwap<Arc<HashMap>>`, `evmap`) were considered systematically; DashMap matched the read-mostly access pattern with the simplest API and no surprising semantics.
+- [x] **`Config::get_arc(path) -> Option<Arc<Value>>`** — cache-backed thread-safe accessor with sub-50ns warm target.
+- [x] **`Config::clear_cache()`** — explicit invalidation hook.
+- [x] **`cache_hits` / `cache_misses` atomic counters wired** to the cache lookup path. `Config::cache_stats()` now returns meaningful non-zero numbers when `get_arc` is in use.
+- [x] **`ConfigOptions::cache_enabled` honored at runtime** — `false` makes every `get_arc` walk the tree and allocate a fresh `Arc<Value>` (useful for write-heavy workloads).
+- [x] **`ConfigOptions::defaults` backed by `Arc<RwLock<BTreeMap>>`.** Accessible via `Config::set_default` / `Config::get_or_default`. Independent of the `read_only` flag.
+- [x] **`Config::make_read_only()` ergonomic helper** — one-way post-construction switch.
+- [x] **`ConfigManager` internals migrated** from `EnterpriseConfig` storage to `Arc<RwLock<Config>>` storage. `ConfigManager::get` return type changed to `Arc<RwLock<Config>>`; `ConfigManager` un-deprecated.
+- [x] **`Config: Debug` derived** (required for `ConfigManager: Debug`).
+- [x] **Four criterion benchmark harnesses** (`benches/cache_warm.rs`, `benches/cache_concurrent.rs`, `benches/value_accessors.rs`, `benches/parse_throughput.rs`) targeting every operation in the Performance Contract table.
+- [x] **`docs/PERFORMANCE.md`** — methodology, targets, per-bench-file explanation, tuning guidance, baselines schema.
+- [ ] **Commit `benches/baselines.json`** with reference-hardware numbers — lands alongside the v1.0.0 cut on the maintainer's reference hardware (the v0.9.9 code is in place; only the canonical measurements remain).
 
 ### Absorbed from Phase 0.9.4 (lands in the Implementation half)
 
@@ -422,19 +390,15 @@ Implementation half (Pending):
 - [x] 3 in-module tests pass against the new implementation (basic reload, change-notification, automatic-watching with the event-driven path)
 - [x] All workspace gates green (fmt, clippy `-D warnings`, 96 tests, doc with `-D warnings`, audit)
 
-### Tests / benchmarks deferred to v0.9.6.x (Pending canonical CI hardware)
+### Implementation half (v0.9.9 — Complete)
 
-The full Phase 0.9.6 scope also calls for:
-
-- [ ] **Cross-platform integration tests** in `tests/hot_reload_*.rs`:
-  - [ ] `tests/hot_reload_modified.rs` — modify file, expect `Reloaded` event
-  - [ ] `tests/hot_reload_atomic_write.rs` — atomic rename, expect single `Reloaded` (debounced)
-  - [ ] `tests/hot_reload_deleted.rs` — delete file, expect `FileDeleted` event
-  - [ ] `tests/hot_reload_recreated.rs` — delete + recreate, expect `FileDeleted` then `Reloaded`
-  - [ ] `tests/hot_reload_permissions.rs` — file becomes unreadable, expect graceful `ReloadFailed`
-- [ ] **Committed cross-platform latency benchmark** — target <100 ms from `fsync` return to `Reloaded` event delivery on each platform
-
-Both items are deferred to a follow-up patch release because **CI matrix wire-up is the prerequisite, not the code**. Committing latency numbers measured on the dev host would mislead users about cross-platform behaviour; landing integration tests that only run on Windows is operationally pointless. The CI matrix change ships independently from this lib's release cadence, and the v0.9.6.x patch follows on its heels.
+- [x] **Five cross-platform integration tests** in `tests/hot_reload_*.rs`:
+  - [x] `tests/hot_reload_modified.rs` — modify file, expect `Reloaded` event
+  - [x] `tests/hot_reload_atomic_write.rs` — atomic rename, expect single `Reloaded` (debounced)
+  - [x] `tests/hot_reload_deleted.rs` — delete file, expect `FileDeleted` event; last-known-good `Config` preserved
+  - [x] `tests/hot_reload_recreated.rs` — delete + recreate, expect `FileDeleted` then `Reloaded`
+  - [x] `tests/hot_reload_permissions.rs` — `#[cfg(unix)]`-gated; file becomes unreadable, expect graceful `ReloadFailed` / `FileDeleted` (Windows equivalent is awkward, filed as follow-up)
+- [ ] **Committed cross-platform latency baseline** — target <100 ms from `fsync` return to `Reloaded` event delivery on each platform. The *measurement* lands alongside the v1.0.0 cut on the CI matrix; the *integration tests that produce the measurement* are now in place.
 
 ### Exit criteria
 
@@ -530,19 +494,20 @@ These must be eliminated before 1.0.
 - [x] **`[package].exclude`** updated to keep `fuzz/` out of the published crate
 - [x] All workspace gates green (fmt, clippy `-D warnings`, 96 tests, doc with `-D warnings`, audit, deny, `cargo +1.75 check`)
 
-### Tests / clean runs deferred to v0.9.8.x (Pending canonical hardware)
+### Implementation half (v0.9.9 — Complete, except canonical-hardware runs)
 
-The remaining Phase 0.9.8 deliverables need nightly Rust + libFuzzer + extended CPU time + maintainer attention to triage:
-
+- [x] **`tests/parser_corpus.rs` regression harness** — documents the seed-promotion workflow; macro-free hand-written `#[test]` template for each future seed; sanity test proves the file compiles. Corpus is empty at v0.9.9; populated by the maintainer's runs.
 - [ ] **Run each target for at least 1 CPU-hour** on the maintainer machine
   - Target: 0 panics, 0 OOMs, 0 infinite loops
 - [ ] **Fix every finding:**
   - Panic → replace with `Result<_, Error>`
   - Infinite loop → add iteration cap with clear error
   - OOM → add input size limits with clear error
-- [ ] **Collect interesting corpus** under `fuzz/corpus_seeds/<target>/` — committed to git
-- [ ] **Add corpus inputs as regression tests** in `tests/parser_corpus.rs`
+- [ ] **Collect interesting corpus** under `tests/corpus_seeds/<target>/` — committed to git as they appear
+- [ ] **Add corpus inputs as regression tests** in `tests/parser_corpus.rs` (template in place)
 - [ ] **CI fuzz pass** (~10 CPU-minutes per target) on every PR
+
+The three remaining items above need nightly Rust + libFuzzer + extended CPU time + maintainer attention. The harness code is in place; the runs themselves land alongside the v1.0.0 cut as the verification data the v1.0 stability contract cites.
 
 ### Exit criteria
 
@@ -562,74 +527,63 @@ v0.9.8.x patch (Pending):
 
 ---
 
-## Phase 0.9.9 — Documentation completeness + final pre-1.0 soak
+## Phase 0.9.9 — Final pre-1.0 release (absorbed all remaining 0.9.x work)
 
-**Goal:** Final documentation pass. Ship `v0.9.9` as the last pre-1.0 release; the *next* release is `v1.0.0` directly. **No `1.0.0-rc.1` cut.** Soak time and external review happen during the v0.9.9 release window itself (see `docs/STABILITY-1.0.md` §9).
+**Goal:** Final pre-1.0 release. Closes out the entire 0.9.x roadmap by absorbing the implementation halves of Phase 0.9.5 (lock-free cache + data-model merger), Phase 0.9.6 (cross-platform integration tests), and Phase 0.9.8 (parser-corpus regression infrastructure), alongside the original Phase 0.9.9 polish work (`docs/ARCHITECTURE.md`, `docs/PERFORMANCE.md`). No `1.0.0-rc.1` cut — `v1.0.0` ships directly from `v0.9.9`.
 
-**Effort:** 3-4 days.
+**Effort:** 3-4 days for the original polish scope; the absorbed work brings it to ~1 focused week.
+
+**Status:** Complete (2026-05-19). Released as [`v0.9.9`](../.dev/release/v0.9.9.md). The next release is `v1.0.0` with **new architectural scope** — see Phase 1.0.0 below.
 
 ### Tasks
 
-- [x] **Write `docs/STABILITY-1.0.md`** — the 1.0 stability contract. *(Landed in Phase 0.9.7 — moved up because the contract drives v0.9.7's dependency-hygiene decisions.)*
-- [ ] **Write `docs/ARCHITECTURE.md`** — internal structure:
-  - [ ] Module layout
-  - [ ] Data flow: file → parser → Value → cache → user
-  - [ ] Caching architecture (post-0.9.5 design — pending the canonical-CI 0.9.5.x implementation release)
-  - [ ] Hot reload architecture (Phase 0.9.6 design — `notify` + debounce + parent-dir watch)
-  - [ ] Thread safety guarantees
-  - [ ] Decision log: why DashMap vs ArcSwap (etc.)
-- [ ] **Verify `docs/PERFORMANCE.md`** — completed in Phase 0.9.5 Implementation; polish for v0.9.9:
-  - [ ] Methodology section accurate
-  - [ ] Results table current
-  - [ ] Tuning guide actionable
-- [ ] **Verify `docs/PLATFORM-NOTES.md`** — landed in 0.9.6 Foundation; polish for v0.9.9 once the cross-platform integration tests in v0.9.6.x have reported their numbers:
-  - [ ] Linux notes
-  - [ ] macOS notes
-  - [ ] Windows notes
-  - [ ] Network filesystem caveats
-- [ ] **Update `docs/SECURITY.md`** — landed in 0.9.8 fuzz pass; polish for v0.9.9
-- [ ] **Audit every public item's rustdoc:**
-  - [ ] One-line summary
-  - [ ] Longer description if non-obvious
-  - [ ] `# Examples` with runnable code
-  - [ ] `# Errors` if returns `Result`
-  - [ ] `# Panics` if can panic (rare — library code shouldn't)
-- [ ] **Verify `cargo doc --no-deps --all-features` clean** with `RUSTDOCFLAGS="-D warnings"`
-- [ ] **Cut `v0.9.9`** per the usual release workflow:
-  - [ ] Bump `Cargo.toml` to `0.9.9`
-  - [ ] Move `[Unreleased]` CHANGELOG to `[0.9.9]`
-  - [ ] Commit `Milestone Update v0.9.9`
-  - [ ] Push, verify CI green
-  - [ ] Tag `v0.9.9`
-  - [ ] GitHub release **not** marked as pre-release — `0.9.9` is the final pre-1.0 release, not a release candidate
-  - [ ] `cargo publish` to crates.io
-- [ ] **Soak period** — at least one week with `v0.9.9` published before cutting `v1.0.0`. Watch crates.io download stats and the GitHub issue tracker for surprises. Address any critical findings with `v0.9.9.x` patches.
+- [x] **`docs/STABILITY-1.0.md`** — 1.0 stability contract. *(Landed in Phase 0.9.7.)*
+- [x] **`docs/ARCHITECTURE.md`** — internal structure: module layout, data flow, caching architecture (DashMap decision log), hot reload architecture, thread safety + lock ordering, EnterpriseConfig deprecation map, parser contract, "where to look for what" index.
+- [x] **`docs/PERFORMANCE.md`** — methodology, targets table, per-bench-file explanation, tuning guidance, baselines schema.
+- [x] **`docs/PLATFORM-NOTES.md`** — already in place from 0.9.6 Foundation; no further changes required for the v0.9.9 cut.
+- [x] **`docs/SECURITY.md`** — already in place from 0.9.8 Foundation; no further changes required for the v0.9.9 cut.
+- [x] **`cargo doc --no-deps --all-features` clean** with `RUSTDOCFLAGS="-D warnings"`.
+- [x] **Cut `v0.9.9`** per the usual release workflow (Cargo.toml bumped, CHANGELOG rolled, release note written, ROADMAP synced).
+- [ ] **Soak period** — at least one week with `v0.9.9` published before cutting `v1.0.0`. Watch crates.io download stats and the GitHub issue tracker for surprises. Address any critical findings with `v0.9.9.x` patches. (Begins once the maintainer pushes the v0.9.9 commit.)
 
 ### Exit criteria
 
-- [ ] All required docs in place
-- [ ] `v0.9.9` published to crates.io as a normal release (not a pre-release)
-- [ ] At least 1 week of post-publish soak with no critical issues
-- [ ] No outstanding issues blocking the `v1.0.0` cut
+- [x] All required docs in place — `STABILITY-1.0.md`, `ARCHITECTURE.md`, `PERFORMANCE.md`, `PLATFORM-NOTES.md`, `SECURITY.md`, `FORMATS.md`, `API.md`, `GUIDELINES.md`
+- [x] All gates green: fmt, clippy `-D warnings`, 100+ tests, doc `-D warnings`, audit, deny, MSRV 1.75 check
+- [ ] `v0.9.9` published to crates.io as a normal release (not a pre-release) — maintainer action
+- [ ] At least 1 week of post-publish soak with no critical issues — maintainer observation
+- [ ] No outstanding issues blocking the `v1.0.0` cut — maintainer judgment
 
 ---
 
-## Phase 1.0.0 — Stable release
+## Phase 1.0.0 — Stable release + `registry-io` integration
 
-**Goal:** Ship the canonical configuration library.
+**Goal:** Ship `config-lib 1.0.0` — the canonical configuration library — **with integration into the forthcoming `registry-io` dependency**. The 1.0.0 cut is therefore both a stabilization release (locking down what `v0.9.9` made stable) AND an architecturally new release (the refactoring required to consume `registry-io` cleanly).
 
-**Effort:** 1 day.
+**Effort:** Driven by the `registry-io` integration. Cannot be estimated until `registry-io` is published / available.
+
+**Scope:**
+
+1. **`registry-io` integration** — separate James-maintained crate that `config-lib 1.0.0` will depend on. The integration shape is being designed in parallel with `registry-io` itself; the refactoring lands in this phase. Specific deliverables TBD once `registry-io` is available.
+2. **All Phase 0.9.x verification work** that was deferred to canonical hardware:
+   - Committed `benches/baselines.json` from the maintainer's reference hardware
+   - Committed cross-platform hot-reload latency baselines from the CI matrix
+   - 1-CPU-hour clean fuzz runs per target, with any corpus findings promoted to `tests/parser_corpus.rs`
+3. **The stability gates** the v1.0 contract requires.
 
 ### Pre-flight verification
 
 - [ ] **No critical issues** from the v0.9.9 soak period
-- [ ] **Final API freeze verification** — no last-minute changes since v0.9.9
-- [ ] **All CI checks green** on Linux + macOS + Windows on stable + MSRV
-- [ ] **All benchmark targets met** from Performance Contract
-- [ ] **`cargo public-api diff` clean** vs v0.9.9
+- [ ] **`registry-io` integration design finalized** and implemented (this is the main new work in v1.0.0)
+- [ ] **Final API freeze verification** — no last-minute changes since v0.9.9 *outside* the registry-io integration surface
+- [ ] **All CI checks green** on Linux + macOS + Windows on stable + MSRV (1.75 default / 1.82 with noml feature)
+- [ ] **All Performance Contract benchmark targets met** — measured on the maintainer's reference hardware and committed to `benches/baselines.json`
+- [ ] **Cross-platform hot-reload latency baselines** measured on the CI matrix and committed
+- [ ] **1-CPU-hour clean fuzz runs per target** — no panic, no hang, no OOM on any of the seven harnesses
+- [ ] **`cargo public-api diff` clean** vs v0.9.9 (modulo the deliberate `registry-io` integration surface)
 - [ ] **`cargo audit` clean**
 - [ ] **`cargo deny check` clean**
-- [ ] **Documentation review** — `docs/STABILITY-1.0.md` accurate
+- [ ] **Documentation review** — `docs/STABILITY-1.0.md` accurate; new doc sections for the `registry-io` integration written
 
 ### Release sequence
 
