@@ -12,8 +12,8 @@
     <a href="https://crates.io/crates/config-lib"><img src="https://img.shields.io/crates/v/config-lib.svg" alt="Crates.io"></a>
     <a href="https://crates.io/crates/config-lib" alt="Download"><img alt="Crates.io Downloads" src="https://img.shields.io/crates/d/config-lib?color=%230099ff"></a>
     <a href="https://docs.rs/config-lib"><img src="https://docs.rs/config-lib/badge.svg" alt="Documentation"></a>
-    <a href="https://github.com/jamesgober/config-lib/actions"><img src="https://github.com/jamesgober/config-lib/workflows/CI%2FCD/badge.svg" alt="CI Status"></a>
-    <a href="https://github.com/jamesgober/config-lib/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
+    <a href="https://github.com/jamesgober/config-lib/actions"><img alt="GitHub CI" src="https://github.com/jamesgober/config-lib/actions/workflows/ci.yml/badge.svg"></a>
+    <a href="#license"><img src="https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg" alt="License"></a>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 </p>
 
 <p>
-    With its enterprise-focused architecture, <b>config-lib</b> delivers production-ready features including comprehensive error handling with zero unsafe code, lock-free caching optimizations, environment variable overrides with smart prefix matching, and built-in audit logging for compliance requirements. The library's performance is optimized for high-throughput applications, achieving 24.9ns average cached access times and supporting <b>hot reloading</b> without service interruption.
+    With its enterprise-focused architecture, <b>config-lib</b> delivers production-grade features including comprehensive error handling with zero unsafe code, multi-tier caching with lock-free read paths, environment variable overrides with smart prefix matching, and built-in audit logging for compliance requirements. The library is designed for high-throughput applications, targeting sub-50ns cached access times on hot paths and supporting <b>hot reloading</b> without service interruption.
 </p>
 
 
@@ -42,7 +42,7 @@
 
 ## Features
 
-### 📄 **Multi-Format Support**
+### **Multi-Format Support**
 - **CONF** - Built-in parser for standard .conf files (default)
 - **INI** - Full INI file parsing with sections, comments, and data type detection  
 - **JSON** - JSON format with edit capabilities and serialization
@@ -52,14 +52,16 @@
 - **NOML** - Advanced configuration with dynamic features (feature: `noml`)
 - **TOML** - TOML format with format preservation (feature: `toml`)
 
-### ⚡ **Enterprise Performance**
-- **Sub-50ns Cache Access** - Multi-tier caching achieving 24.9ns average (50% better than 50ns target)
-- **Zero-Copy Parsing** - Minimized allocations and string operations
-- **Lock-Free Optimizations** - Poison-resistant locking with graceful failure recovery
-- **Hot Value Cache** - 457ns average access time for frequently used values
+### **Enterprise Performance**
+- **Sub-50ns Cache Access Target** - Multi-tier caching designed for sub-50ns reads on hot paths
+- **Zero-Copy Parsing** - Minimized allocations and string operations where possible
+- **Lock-Free Read Paths** - Poison-resistant locking with graceful failure recovery
+- **Hot Value Cache** - Ultra-fast access for frequently used values
 - **Cache Hit Ratio Tracking** - Built-in performance statistics and monitoring
 
-### 🔧 **Production Features** 
+> **Note on benchmark numbers:** detailed criterion-backed benchmark numbers will land with **v1.0.0**. Until then, performance claims should be treated as targets, not guarantees.
+
+### **Production Features** 
 - **Configuration Hot Reloading** - File watching with thread-safe Arc swapping
 - **Audit Logging System** - Structured event logging with multiple sinks and severity filtering
 - **Environment Variable Overrides** - Smart caching with prefix matching and type conversion
@@ -67,7 +69,7 @@
 - **Format Preservation** - Maintains comments, whitespace, and original formatting
 - **Async Native** - Full async/await support throughout the API
 
-### 🛡️ **Reliability & Safety**
+### **Reliability & Safety**
 - **Zero Unsafe Code** - All `unwrap()` calls eliminated, comprehensive error handling
 - **Type Safety** - Rich type system with automatic conversions and validation
 - **Enterprise Error Handling** - Production-ready error messages with context preservation
@@ -75,16 +77,16 @@
 
 ---
 
-## 🎯 **Why Choose config-lib?**
+## **Why Choose config-lib?**
 
 ### **Unified Multi-Format Support**
 Unlike single-format libraries, **config-lib** provides seamless access to 8 configuration formats through one consistent API. No need to learn different libraries for `TOML`, `JSON`, `XML`, and `HCL` - one API handles them all with automatic format detection.
 
 ### **Enterprise-Grade Performance**
-Achieving 24.9ns cached access times with lock-free optimizations, **config-lib** outperforms most configuration libraries by 50-90%. Built for high-throughput applications with minimal performance overhead.
+Multi-tier caching with lock-free read paths is designed to deliver sub-50ns cached access on hot paths. Built for high-throughput applications with minimal performance overhead.
 
 ### **Production-Ready Reliability**
-Zero unsafe code, comprehensive error handling, and poison-resistant locking ensure your configuration system won't crash your application. Extensive testing coverage (89+ tests) validates edge cases and error conditions.
+Zero unsafe code, comprehensive error handling, and poison-resistant locking ensure your configuration system won't crash your application. Extensive testing coverage validates edge cases and error conditions.
 
 ### **Developer Experience First**
 Rich type system with automatic conversions, format preservation for round-trip editing, and detailed error messages with source location context. No more cryptic parsing errors or manual type casting.
@@ -103,10 +105,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-config-lib = "0.9.0"
+config-lib = "0.9"
 
 # For enhanced functionality, enable optional features:
-config-lib = { version = "0.9.0", features = [
+config-lib = { version = "0.9", features = [
     "json",           # JSON format support with serialization
     "xml",            # XML format support with quick-xml backend  
     "hcl",            # HashiCorp Configuration Language support
@@ -427,30 +429,33 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 
 ---
 
-## **Production Ready: v0.9.0**
+## **Status: Late Beta — On the Path to v1.0.0**
 
-**Maturity Level**: ✅ **Production Ready** - API finalized, enterprise-tested, zero-defect codebase
+**Current Version:** `0.9.x` — late beta, API stabilizing, structurally mature.
+**Target:** `1.0.0` stable, scheduled per the roadmap in `.dev/ROADMAP.md`.
 
-**Core Capabilities**:
-- ✅ **Universal Format Support** - All 8 configuration formats with consistent API (CONF, INI, JSON, XML, HCL, Properties, NOML, TOML)
-- ✅ **Enterprise Performance** - Sub-30ns cached access with lock-free optimizations
-- ✅ **Production Safety** - Zero unsafe code, comprehensive error handling, poison-resistant locking
-- ✅ **Advanced Features** - Hot reloading, audit logging, environment overrides, schema validation
-- ✅ **Developer Experience** - Rich type system, format preservation, automatic type conversion
-- ✅ **Quality Assurance** - 89+ tests, 100% passing, zero clippy warnings, comprehensive edge case coverage
+**What's complete**:
+- **Universal Format Support** - All 8 configuration formats with consistent API (CONF, INI, JSON, XML, HCL, Properties, NOML, TOML)
+- **Multi-Tier Caching** - Designed for sub-50ns cached reads on hot paths
+- **Production Safety** - Zero unsafe code, comprehensive error handling, poison-resistant locking
+- **Advanced Features** - Hot reloading, audit logging, environment overrides, schema validation
+- **Developer Experience** - Rich type system, format preservation (NOML/TOML), automatic type conversion
+- **Quality Assurance** - Comprehensive test suite with 89+ tests, zero clippy warnings
 
-**Performance Benchmarks**:
-- **24.9ns** cached value access (exceeds 50ns enterprise target by 50%)
-- **457ns** average hot cache retrieval for frequently accessed values
-- **Zero-copy** parsing optimizations minimize memory allocations
-- **Lock-free** data structures with graceful degradation under contention
+**What's planned for v1.0.0**:
+- Unified `Config` API (consolidating current `Config` + `EnterpriseConfig`)
+- Lock-free cached reads with verified sub-50ns benchmarks
+- Event-driven hot reload via `notify` (inotify / FSEvents / ReadDirectoryChangesW)
+- Fuzz-tested parsers for every format
+- Stability contract: API frozen for the lifetime of v1.x
 
-**v0.9.0 Production Readiness**:
-- **API Stability** - Finalized public interface with comprehensive backward compatibility
-- **Parser Reliability** - All format parsers operational with standardized error handling
-- **Feature Completeness** - All advertised features fully implemented and tested
-- **Code Quality** - Zero technical debt, optimized algorithms, clean architecture
-- **Enterprise Validation** - Production-grade caching, audit trails, compliance features
+**Performance targets** (to be verified by committed benchmarks before v1.0.0):
+- **<50ns** cached value access on hot paths
+- **<500ns** cached write
+- **<100ms** hot-reload detection latency (event-driven)
+- **Zero-allocation** hot-path reads
+
+**Note on API stability**: The public API is **not yet frozen**. Expect refinements through `0.9.x` releases. The `v1.0.0` release will lock down the stability contract documented in `docs/STABILITY-1.0.md`.
 
 ---
 
