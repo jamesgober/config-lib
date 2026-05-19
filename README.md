@@ -73,7 +73,7 @@
 - **Zero Unsafe Code** - All `unwrap()` calls eliminated, comprehensive error handling
 - **Type Safety** - Rich type system with automatic conversions and validation
 - **Enterprise Error Handling** - Production-ready error messages with context preservation
-- **Comprehensive Testing** - 89+ unit tests, integration tests, and doc tests
+- **Comprehensive Testing** - Extensive unit, integration, and doc test coverage
 
 ---
 
@@ -199,7 +199,7 @@ database.host = "localhost"
 server.port = 8080
 "#, Some("conf"))?;
 
-// Sub-50ns cached access (24.9ns average)
+// Sub-50ns target for cached access (verified at v1.0.0)
 let cached_value = config.get("database.host");
 
 // View cache performance stats
@@ -440,7 +440,7 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 - **Production Safety** - Zero unsafe code, comprehensive error handling, poison-resistant locking
 - **Advanced Features** - Hot reloading, audit logging, environment overrides, schema validation
 - **Developer Experience** - Rich type system, format preservation (NOML/TOML), automatic type conversion
-- **Quality Assurance** - Comprehensive test suite with 89+ tests, zero clippy warnings
+- **Quality Assurance** - Comprehensive test suite, zero clippy warnings
 
 **What's planned for v1.0.0**:
 - Unified `Config` API (consolidating current `Config` + `EnterpriseConfig`)
@@ -482,7 +482,7 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 - **[Validation System](examples/validation_demo.rs)** - Schema validation and type checking
 
 ### **Common Use Cases**
-- **Web Applications**: [Environment overrides](examples/env_override_demo.rs), JSON/TOML configs
+- **Web Applications**: Environment overrides, JSON/TOML configs
 - **DevOps Tools**: [HCL integration](examples/hcl_demo.rs), audit logging, hot reloading
 - **Enterprise Systems**: [XML support](examples/xml_demo.rs), validation, caching
 - **Microservices**: Multi-format support, environment-based configuration
@@ -500,7 +500,7 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 
 <details>
   <summary><b>Poor performance with large configuration files?</b></summary>
-    <p>✅ Enable caching with <code>EnterpriseConfig</code> for sub-30ns access times on frequently accessed values.</p>
+    <p>✅ Enable caching with <code>EnterpriseConfig</code> for sub-50ns target access times on frequently accessed values.</p>
 </details>
 
 <details>
@@ -516,9 +516,10 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 ---
 
 ### **Version Compatibility**
-- **Rust**: 1.82+ (2021 edition)
-- **MSRV Policy**: Guaranteed compatibility with last 6 Rust releases
-- **API Stability**: v0.9.0+ maintains backward compatibility
+- **Rust**: 1.82+ (currently); MSRV will be lowered to **1.75** in `v1.0.0` per portfolio standard
+- **Edition**: 2021 (currently); will move to **2024** in `v1.0.0`
+- **MSRV Policy**: Once `v1.0.0` ships, MSRV is guaranteed within the last 12 stable Rust releases
+- **API Stability**: Pre-1.0 — expect refinements. `v1.0.0` will freeze the public API.
 - **Feature Flags**: All optional features maintain independent compatibility
 
 ### **Development Setup**
@@ -539,11 +540,16 @@ We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for deta
 <!-- LICENSE
 ############################################# -->
 <div id="license">
-    <h2>⚖️ License</h2>
-    <p>Licensed under the <b>Apache License</b>, version 2.0 (the <b>"License"</b>); you may not use this software, including, but not limited to the source code, media files, ideas, techniques, or any other associated property or concept belonging to, associated with, or otherwise packaged with this software except in compliance with the <b>License</b>.</p>
-    <p>You may obtain a copy of the <b>License</b> at: <a href="http://www.apache.org/licenses/LICENSE-2.0" title="Apache-2.0 License" target="_blank">http://www.apache.org/licenses/LICENSE-2.0</a>.</p>
-    <p>Unless required by applicable law or agreed to in writing, software distributed under the <b>License</b> is distributed on an "<b>AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND</b>, either express or implied.</p>
-    <p>See the <a href="./LICENSE" title="Software License file">LICENSE</a> file included with this project for the specific language governing permissions and limitations under the <b>License</b>.</p>
+    <h2>License</h2>
+    <p><b>config-lib</b> is dual-licensed under either of:</p>
+    <ul>
+        <li><b>Apache License, Version 2.0</b> — see <a href="./LICENSE-APACHE" title="Apache-2.0 License">LICENSE-APACHE</a> or <a href="http://www.apache.org/licenses/LICENSE-2.0" title="Apache-2.0 License" target="_blank">apache.org/licenses/LICENSE-2.0</a></li>
+        <li><b>MIT License</b> — see <a href="./LICENSE-MIT" title="MIT License">LICENSE-MIT</a> or <a href="https://opensource.org/licenses/MIT" title="MIT License" target="_blank">opensource.org/licenses/MIT</a></li>
+    </ul>
+    <p>at your option.</p>
+    <h3>Contribution</h3>
+    <p>Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in <b>config-lib</b> by you, as defined in the Apache-2.0 license, shall be dual-licensed as above, without any additional terms or conditions.</p>
+    <p>Unless required by applicable law or agreed to in writing, software distributed under the Licenses is distributed on an <b>"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND</b>, either express or implied.</p>
 </div>
 
 
@@ -551,5 +557,5 @@ We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for deta
 ################################################# -->
 <div align="center">
   <h2></h2>
-  <sup>COPYRIGHT <small>&copy;</small> 2025 <strong>JAMES GOBER.</strong></sup>
+  <sup>COPYRIGHT <small>&copy;</small> 2026 <strong>JAMES GOBER.</strong></sup>
 </div>
