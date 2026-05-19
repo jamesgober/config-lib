@@ -6,7 +6,7 @@
 > **Reads:** `REPS.md` (supreme authority), `_strategy/UNIVERSAL_PROMPT.md` (peak performance + max efficiency + max concurrency + nuclear-proof security + cross-platform), `.dev/AUDIT-0.9.1.md` (current state assessment).
 >
 > **Target ship date:** 4-6 focused weeks from audit (2026-05-18).
-> **Status:** Roadmap committed; Phase 0.9.2 in progress.
+> **Status:** Phase 0.9.2 complete (2026-05-19); Phase 0.9.3 next.
 
 ---
 
@@ -82,7 +82,7 @@ When `config-lib 1.0.0` ships, it commits to:
 
 **Effort:** 1-2 days.
 
-**Status:** In progress.
+**Status:** Complete (2026-05-19). Released as [`v0.9.2`](../.dev/release/v0.9.2.md).
 
 ### Tasks
 
@@ -96,24 +96,27 @@ When `config-lib 1.0.0` ships, it commits to:
 - [x] `clippy.toml` — portfolio standard
 - [x] CI workflow renamed `main.yml` → `ci.yml` (matches badge + portfolio convention)
 - [x] README updated for dual licensing + accurate pre-1.0 status
-- [ ] Move root config fixtures (`debug_test.conf`, `test.ini`, `test.properties`) into `tests/fixtures/`
-- [ ] Consolidate the three typos config files (`.typos.toml`, `_typos.toml`, `typos.toml`) into one — keep `typos.toml`, delete the others
-- [ ] Clean up examples directory:
-  - Keep: `basic.rs`, `multi_format.rs`, `enterprise_demo.rs`, `hot_reload_demo.rs`, `validation_demo.rs`, `audit_demo.rs`, `xml_demo.rs`, `hcl_demo.rs`
-  - Delete or move to `.dev/scratch/`: `debug.rs`, `detection_debug.rs`, `ini_debug.rs`, `ini_direct_test.rs`, `ini_test.rs`, `format_test.rs`, `path_detection_test.rs`, `test_properties.rs`, `config_trace.rs`, `caching_demo.rs` (review one-by-one), `new_api_demo.rs`
-- [ ] Create `docs/release-notes/` directory
-- [ ] Move `v0.9.2.md` release notes draft into `docs/release-notes/`
-- [ ] Update `Cargo.toml`:
-  - [ ] `license = "Apache-2.0 OR MIT"`
-  - [ ] Verify `homepage`, `repository`, `documentation` URLs
-  - [ ] Verify `keywords` and `categories` arrays
+- [x] Move root config fixtures (`debug_test.conf`, `test.ini`, `test.properties`) into `tests/fixtures/`
+- [x] Consolidate the three typos config files (`.typos.toml`, `_typos.toml`, `typos.toml`) into one — keep `typos.toml`, delete the others
+- [x] Clean up examples directory:
+  - Keep (8): `basic.rs`, `multi_format.rs`, `enterprise_demo.rs`, `hot_reload_demo.rs`, `validation_demo.rs`, `audit_demo.rs`, `xml_demo.rs`, `hcl_demo.rs`
+  - Deleted (12): `debug.rs`, `detection_debug.rs`, `ini_debug.rs`, `ini_direct_test.rs`, `ini_test.rs`, `format_test.rs`, `path_detection_test.rs`, `test_properties.rs`, `config_trace.rs`, `caching_demo.rs`, `new_api_demo.rs`, `ini_demo.rs` (last one not on the original delete list but uses `.unwrap()` and references soon-to-be-moved root fixtures — its INI coverage is already in `multi_format.rs` and `tests/`)
+- [x] ~~Create `docs/release-notes/` directory~~ — superseded: release notes live in `.dev/release/` per project directive, mirroring `metrics-lib/.dev/release/`. Roadmap reference paths updated accordingly.
+- [x] Write `.dev/release/v0.9.2.md` (release notes for this phase, modeled on `metrics-lib/.dev/release/v0.9.2.md`)
+- [x] Update `Cargo.toml`:
+  - [x] `license = "Apache-2.0 OR MIT"`
+  - [x] `homepage`, `repository`, `documentation` URLs verified correct
+  - [x] `keywords` tightened: dropped duplicative `configuration` and weak `settings`; added high-signal `multi-format` and `hot-reload`
+  - [x] `categories` corrected: dropped incorrect `template-engine`; kept `config`, `parsing`, `data-structures`, `development-tools`
+  - [x] `version` bumped to `0.9.2`
+- [x] `CHANGELOG.md` `[0.9.2]` section added; footer compare-URLs corrected (were pointing at `metrics-lib` from a copy-paste leftover)
 
 ### Exit criteria
 
-- [ ] Project structure matches `_strategy/PROJECT_STRUCTURE.md` 0.1.0 minimum + portfolio conventions
-- [ ] No clutter at repo root (only the standard files)
-- [ ] Examples directory is curated (every file is a real, runnable example)
-- [ ] All standards documents present at root and in `.dev/`
+- [x] Project structure matches `_strategy/PROJECT_STRUCTURE.md` 0.1.0 minimum + portfolio conventions
+- [x] No clutter at repo root (only the standard files)
+- [x] Examples directory is curated — every file is a real, runnable example
+- [x] All standards documents present at root and in `.dev/`
 
 ---
 
@@ -525,7 +528,7 @@ These must be eliminated before 1.0.
   - [ ] `# Errors` if returns `Result`
   - [ ] `# Panics` if can panic (rare — library code shouldn't)
 - [ ] **Verify `cargo doc --no-deps --all-features` clean** with `RUSTDOCFLAGS="-D warnings"`
-- [ ] **Write `docs/release-notes/v1.0.0.md`** per `_strategy/RELEASE_NOTES_TEMPLATE.md`:
+- [ ] **Write `.dev/release/v1.0.0.md`** per `_strategy/RELEASE_NOTES_TEMPLATE.md`:
   - [ ] The contract section (1.0.0-specific)
   - [ ] Highlights
   - [ ] Migration from 0.9.x
@@ -572,7 +575,7 @@ These must be eliminated before 1.0.
 
 - [ ] Update `Cargo.toml` version → `1.0.0`
 - [ ] Move `[Unreleased]` CHANGELOG → `[1.0.0] - <date>`
-- [ ] Finalize `docs/release-notes/v1.0.0.md`
+- [ ] Finalize `.dev/release/v1.0.0.md`
 - [ ] Commit: `Milestone Update v1.0.0`
 - [ ] Push to `main`
 - [ ] Verify CI green
@@ -580,7 +583,7 @@ These must be eliminated before 1.0.
 - [ ] Push tag: `git push origin v1.0.0`
 - [ ] Create GitHub release (NOT marked as pre-release):
   - Title: `v1.0.0 — First Stable Release`
-  - Body: contents of `docs/release-notes/v1.0.0.md`
+  - Body: contents of `.dev/release/v1.0.0.md`
 - [ ] `cargo publish --dry-run` → verify clean
 - [ ] `cargo publish` → ship it
 - [ ] Verify crates.io shows `1.0.0`

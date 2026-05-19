@@ -439,7 +439,7 @@ impl Config {
     // --- CONVENIENCE METHODS & BUILDER PATTERN ---
 
     /// Get a value by path with a more ergonomic API
-    pub fn key(&self, path: &str) -> ConfigValue {
+    pub fn key(&self, path: &str) -> ConfigValue<'_> {
         ConfigValue::new(self.get(path))
     }
 

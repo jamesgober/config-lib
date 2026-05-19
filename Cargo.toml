@@ -2,7 +2,7 @@
 #▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 name = "config-lib"
-version = "0.9.0"
+version = "0.9.2"
 
 # Project Metadata
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
@@ -10,7 +10,7 @@ rust-version = "1.82"
 edition = "2021"
 readme  = "README.md"
 publish = true
-license = "Apache-2.0"
+license = "Apache-2.0 OR MIT"
 
 # links
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
@@ -24,24 +24,23 @@ documentation = "https://docs.rs/config-lib"
 description = "Enterprise-grade multi-format configuration library supporting 8 formats (CONF, INI, Properties, JSON, XML, HCL, TOML, NOML) with sub-50ns caching, hot reloading, and comprehensive validation."
 
 
-# Categories (5 NAX)
+# Categories (max 5)
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 categories = [
     "config",
-    "parsing", 
+    "parsing",
     "data-structures",
     "development-tools",
-    "template-engine"
 ]
 
-# Keywords (5 NAX)
+# Keywords (max 5)
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 keywords = [
-    "config", 
-    "parser", 
+    "config",
+    "parser",
     "toml",
-    "configuration",
-    "settings",
+    "multi-format",
+    "hot-reload",
 ]
 
 # Exclude files from the package

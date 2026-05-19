@@ -1,14 +1,85 @@
+# config-lib typos configuration
+#
+# Consolidated from .typos.toml + _typos.toml + typos.toml (Phase 0.9.2).
+# Single source of truth for `cargo typos` / `typos-cli` runs.
+
+[default]
+
+# Identifiers that look like typos to the default dictionary but are
+# valid technical terms, abbreviations, or file globs in this crate.
+extend-ignore-identifiers-re = [
+    # Project / format identifiers
+    "noml",
+    "toml",
+    "hcl",
+    # Rust idioms commonly flagged
+    "vals",
+    "configs",
+    "structs",
+    "impls",
+    "repr",
+    "cfg",
+    "benchs",
+    "clippy",
+    "rustfmt",
+    "deser",
+    "ser",
+    "deserialize",
+    "serialize",
+    # File extensions and paths (skip whole-token matches that hit globs)
+    ".*\\.rs$",
+    ".*\\.toml$",
+    ".*\\.yml$",
+    ".*\\.yaml$",
+    ".*\\.json$",
+    ".*\\.xml$",
+    ".*\\.conf$",
+    ".*\\.properties$",
+    ".*\\.ini$",
+]
+
+# Words allowed in prose, comments, and docs.
+extend-ignore-words-re = [
+    "performant",
+    "config",
+    "configs",
+    "validator",
+    "validators",
+    "env",
+    "vars",
+]
+
+# Brand names and proper nouns that mirror common dictionary words.
 [default.extend-words]
 HashiCorp = "HashiCorp"
-Hashi = "HashiCorp"
+hashicorp = "hashicorp"
+Hashi     = "HashiCorp"
+DevOps    = "DevOps"
 
+# Contractions written without an apostrophe — accept as-is in code/comments
+# rather than auto-correcting (these are intentional identifiers in some tests).
+[default.extend-identifiers]
+dont = "don't"
+wont = "won't"
+cant = "can't"
+
+[files]
+# Skip files that pollute the dictionary with version numbers, lockfile
+# hashes, and historical text that we do not want to rewrite.
+extend-exclude = [
+    "target/",
+    "*.lock",
+    "CHANGELOG.md",
+]
+
+# File-type globs used by typos to route per-language rules.
 [type.toml]
 extend-glob = ["*.toml"]
 
 [type.rust]
 extend-glob = ["*.rs"]
 
-[type.markdown] 
+[type.markdown]
 extend-glob = ["*.md"]
 
 [type.yaml]

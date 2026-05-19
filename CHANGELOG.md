@@ -15,6 +15,30 @@
 <br>
 
 
+## [0.9.2] - 2026-05-19
+
+### Changed
+- **Dual licensing.** `Cargo.toml` now declares `license = "Apache-2.0 OR MIT"` (both `LICENSE-APACHE` and `LICENSE-MIT` were already in the tree; the manifest had been stuck on `Apache-2.0` only).
+- **Package metadata.** Dropped the incorrect `template-engine` crates.io category. Tightened keywords from `["config", "parser", "toml", "configuration", "settings"]` to `["config", "parser", "toml", "multi-format", "hot-reload"]` — drops the `config`/`configuration` duplicate and the low-value `settings`, adds the two distinguishing-feature keywords most likely to surface this crate in search.
+- **Repository structure.**
+  - Moved `debug_test.conf`, `test.ini`, and `test.properties` out of the repo root and into `tests/fixtures/`. No source/test/bench/doc was referencing them outside the deleted scratch examples (verified by grep).
+  - Consolidated three competing typos configs (`.typos.toml`, `_typos.toml`, `typos.toml`) into a single canonical `typos.toml`. Merged content preserves every previously-allow-listed identifier, word, brand name, and file-type glob — nothing is lost.
+
+### Removed
+- **12 non-curated example files.** `caching_demo.rs`, `config_trace.rs`, `debug.rs`, `detection_debug.rs`, `format_test.rs`, `ini_debug.rs`, `ini_demo.rs`, `ini_direct_test.rs`, `ini_test.rs`, `new_api_demo.rs`, `path_detection_test.rs`, `test_properties.rs`. These were scratch / debugging files that grew alongside the parser work in 0.4.x – 0.6.x and never made it into the curated demo set. They referenced fixtures at repo-root relative paths (`test.ini`) and used `.unwrap()` patterns that violate REPS, so keeping them would have either broken the fixture move or violated the lint pass coming in 0.9.3.
+- The `examples/` directory is now exactly the eight curated demos listed in the roadmap: `audit_demo`, `basic`, `enterprise_demo`, `hcl_demo`, `hot_reload_demo`, `multi_format`, `validation_demo`, `xml_demo`. Every remaining example is a real, runnable, user-facing demonstration of a documented feature.
+
+### Fixed
+- **CHANGELOG footer compare URLs.** All `[X.Y.Z]:` link references pointed at `github.com/jamesgober/metrics-lib` (a copy-paste leftover from an early template). Corrected to `github.com/jamesgober/config-lib`.
+
+### Internal
+- This is Phase 0.9.2 (Structure normalization) of the [roadmap to 1.0](.dev/ROADMAP.md). No code logic was changed in this release; the work is purely structural so that Phase 0.9.3 (toolchain + REPS lint discipline) can land cleanly without churn from concurrent layout moves.
+
+
+
+<br>
+
+
 ## [0.9.0] - 2025-09-29
 
 ### Security
@@ -302,10 +326,11 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/metrics-lib/compare/v0.9.0...HEAD
-[0.9.0]: https://github.com/jamesgober/metrics-lib/compare/v0.6.0...v0.9.0
-[0.6.0]: https://github.com/jamesgober/metrics-lib/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/jamesgober/metrics-lib/compare/v0.4.5...v0.5.0
-[0.4.5]: https://github.com/jamesgober/metrics-lib/compare/v0.4.0...v0.4.5 
-[0.4.0]: https://github.com/jamesgober/metrics-lib/compare/v0.1.0...v0.4.0
-[0.1.0]: https://github.com/jamesgober/metrics-lib/releases/tag/v0.1.0
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/jamesgober/config-lib/compare/v0.9.0...v0.9.2
+[0.9.0]: https://github.com/jamesgober/config-lib/compare/v0.6.0...v0.9.0
+[0.6.0]: https://github.com/jamesgober/config-lib/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/jamesgober/config-lib/compare/v0.4.5...v0.5.0
+[0.4.5]: https://github.com/jamesgober/config-lib/compare/v0.4.0...v0.4.5
+[0.4.0]: https://github.com/jamesgober/config-lib/compare/v0.1.0...v0.4.0
+[0.1.0]: https://github.com/jamesgober/config-lib/releases/tag/v0.1.0
