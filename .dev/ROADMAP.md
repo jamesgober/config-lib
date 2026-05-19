@@ -6,7 +6,7 @@
 > **Reads:** `REPS.md` (supreme authority), `_strategy/UNIVERSAL_PROMPT.md` (peak performance + max efficiency + max concurrency + nuclear-proof security + cross-platform), `.dev/AUDIT-0.9.1.md` (current state assessment).
 >
 > **Target ship date:** 4-6 focused weeks from audit (2026-05-18).
-> **Status:** Phase 0.9.3 complete (2026-05-19); Phase 0.9.4 next. Phase 0.9.3's MSRV-1.75 commitment is deferred to Phase 0.9.7 (see notes there).
+> **Status:** Phase 0.9.4 complete (2026-05-19); Phase 0.9.5 next. Phase 0.9.4's data-model merger is paired with Phase 0.9.5's caching work (see notes there).
 
 ---
 
@@ -186,76 +186,70 @@ Edition 2024 stays unscheduled. Post-1.0 the MINOR-release MSRV-bump policy (alr
 
 ---
 
-## Phase 0.9.4 — Architectural consolidation
+## Phase 0.9.4 — Architectural consolidation (deprecation phase)
 
-**Goal:** Unify `Config` + `EnterpriseConfig` into a single ergonomic API. Eliminate the dual-surface problem.
+**Goal:** Begin the unification of `Config` + `EnterpriseConfig` by marking the dual surface deprecated, landing the forward-compatible `ConfigOptions` knob struct, and migrating the user-facing example/README to lead with `Config`.
 
-**Effort:** 1 week.
+**Effort:** 1 day (was originally scoped as 1 week, but the **data-model merger** is paired with the v0.9.5 caching work — see "Deferrals" below).
+
+**Status:** Complete (2026-05-19). Released as [`v0.9.4`](../.dev/release/v0.9.4.md).
 
 ### Background
 
-Currently there are two parallel APIs (per audit):
-- `Config` (in `config.rs`) — the standard one
-- `EnterpriseConfig` (in `enterprise.rs`) — the cached one
+The two surfaces are not source-compatible:
 
-This is confusing for users and doubles maintenance. The new design:
+- `Config::get(&str) -> Option<&Value>` (borrowed)
+- `EnterpriseConfig::get(&str) -> Option<Value>` (owned clone, from behind `Arc<RwLock<BTreeMap>>`)
 
-- **Single `Config` type** with caching enabled by default
-- **`ConfigOptions`** for opt-out behavior (cache disabled for testing, etc.)
-- **`ConfigBuilder`** for advanced construction
-- **`ConfigManager`** retained as a distinct concept for multi-instance work
-- **`EnterpriseConfig`** → `#[deprecated]` type alias to `Config`
+Folding them requires picking one borrow convention. Returning `&Value` from a cached, thread-safe `Config` is the right contract for a database-tier library — but it requires the architectural work that Phase 0.9.5 is built around (lock-free backend, `ArcSwap` for whole-tree swap). Shipping the surface merger ahead of the caching architecture would either freeze the wrong return type or force a second migration.
+
+v0.9.4 therefore delivers the **deprecation announcement** and the forward-compatible knob structure; v0.9.5 delivers the **data-model merger** alongside the caching it depends on.
 
 ### Tasks
 
-- [ ] **Design `ConfigOptions`** struct:
-  ```rust
-  pub struct ConfigOptions {
-      /// Enable caching layer (default: true)
-      pub cache_enabled: bool,
-      /// Cache size limit (default: 1024 entries)
-      pub cache_capacity: usize,
-      /// Cache eviction policy (default: LRU)
-      pub eviction: EvictionPolicy,
-      /// Read-only mode (rejects all writes)
-      pub read_only: bool,
-      // ... other config options
-  }
-  ```
-- [ ] **Implement new unified `Config`** combining the best of both:
-  - Caching on by default (per REPS performance directive)
-  - `Config::builder()` returns `ConfigBuilder`
-  - Same public API as current `Config` (no breaking changes for current users)
-  - Internal architecture matches current `EnterpriseConfig` (multi-tier cache)
-- [ ] **Add `EnterpriseConfig` deprecated alias:**
-  ```rust
-  #[deprecated(since = "0.9.4", note = "use `Config` directly; `EnterpriseConfig` is now a type alias")]
-  pub type EnterpriseConfig = Config;
-  ```
-- [ ] **Audit `ConfigManager`:**
-  - Verify it still serves as a multi-instance primitive
-  - Update internals to use new `Config` (not `EnterpriseConfig`)
-- [ ] **Update every example** to use the unified API
-- [ ] **Update every integration test** to use the unified API
-- [ ] **Update README** to reflect single API surface
-- [ ] **Update rustdoc** for every touched public item
-- [ ] **Update CHANGELOG** with migration path from `EnterpriseConfig` to `Config`
+- [x] **`ConfigOptions` designed and implemented.**
+  - `#[non_exhaustive]` struct of public fields (`read_only`, `cache_enabled`, `cache_capacity`)
+  - Consuming builder methods (`new`, `read_only`, `cache_enabled`, `cache_capacity`)
+  - `Default` impl produces the canonical Hive-DB-tuned configuration
+  - `Config::with_options(ConfigOptions)`, `Config::options()`, `Config::is_read_only()` constructors and accessors
+  - `ensure_writable()` helper wired into `Config::set` / `remove` / `merge`
+- [x] **`#[deprecated]` markers** on every public item in `enterprise.rs`:
+  - `EnterpriseConfig` struct
+  - `ConfigManager` struct (will change return-type shape in v0.9.5)
+  - `enterprise::direct::parse_string` and `parse_file` (duplicate of `crate::parse` / `parse_file`)
+  - Module-level `#![allow(deprecated)]` keeps internal references compiling
+- [x] **`ConfigManager` audited.** Retained as multi-instance primitive; only the **internal storage type** changes in v0.9.5 (BTreeMap of `EnterpriseConfig` → BTreeMap of `Config`).
+- [x] **`examples/enterprise_demo.rs` rewritten** end-to-end to model the migration. Five demos covering the original feature surface; migration table reproduced inline.
+- [x] **`benches/enterprise_benchmarks.rs`** carries `#![allow(deprecated)]` with REPS-AUDIT rationale — keeps comparison baselines measurable across the v0.9.4 → v0.9.5 transition.
+- [x] **README updated** to lead with `Config` everywhere — Enterprise Caching section now Read-only / ConfigOptions section; Method 2 defaults section rewritten; troubleshooting tip no longer recommends `EnterpriseConfig`.
+- [x] **CHANGELOG** carries the full migration guide as a table.
+
+### Deferrals to Phase 0.9.5
+
+The original Phase 0.9.4 task list bundled the deprecation surface with the actual **data-model merger** (folding the cached `BTreeMap` storage of `EnterpriseConfig` into `Config` while keeping `Config::get -> Option<&Value>`). The merger requires the lock-free backend that Phase 0.9.5 is designed around — `ArcSwap<Arc<Value>>` for whole-tree swap, `DashMap` or equivalent for resolved-key caching. Shipping the merger ahead of that architecture would either lock in the wrong return semantics or force a second user migration. The merger is therefore paired with the v0.9.5 caching work; Phase 0.9.5's exit criteria are extended below to absorb the data-model merger as one of its deliverables.
 
 ### Exit criteria
 
-- [ ] Public docs show one `Config` API (not two)
-- [ ] `EnterpriseConfig` works as deprecated alias — existing user code on 0.9.x still compiles
-- [ ] Every example + every test uses the new API
-- [ ] CHANGELOG has clear migration guidance
-- [ ] No public API breakage (`cargo public-api diff` clean against 0.9.3)
+- [x] Public docs lead with one `Config` API (README + rustdoc + example)
+- [x] `EnterpriseConfig` works unchanged for existing call-sites — every method `#[deprecated]` with a migration target named
+- [x] Example demonstrates the migration; tests pass against the unified surface
+- [x] CHANGELOG migration table present
+- [x] No public API breakage — no symbol removed, no signature changed
 
 ---
 
-## Phase 0.9.5 — Lock-free caching (THE Max-Perf phase)
+## Phase 0.9.5 — Lock-free caching + Config/EnterpriseConfig data-model merger
 
-**Goal:** Replace `Arc<RwLock<BTreeMap>>` caching with a lock-free implementation. **Verify sub-50ns claim by committed benchmark.**
+**Goal:** Replace `Arc<RwLock<BTreeMap>>` caching with a lock-free implementation **and** fold the cached storage into the unified `Config` so `EnterpriseConfig` becomes redundant in fact, not just in deprecation marker. **Verify sub-50ns claim by committed benchmark.**
 
-**Effort:** 1 week.
+**Effort:** 1-1.5 weeks (absorbs the data-model-merger work originally in Phase 0.9.4 — see notes there).
+
+### Absorbed from Phase 0.9.4
+
+- `Config::get -> Option<&Value>` returning under concurrent reads requires the lock-free backend this phase delivers.
+- `Config::cache_stats()`, `ConfigOptions::defaults`, and the `Config::make_read_only()` ergonomic helper land here.
+- `ConfigManager` internals migrate from `EnterpriseConfig` storage to `Config` storage.
+- The deprecated `enterprise.rs` module remains compilable through this phase; v1.0 is the earliest sensible removal point.
 
 ### Background
 

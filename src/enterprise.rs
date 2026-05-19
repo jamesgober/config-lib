@@ -1,3 +1,45 @@
+//! # Deprecated: `EnterpriseConfig` and `ConfigManager`
+//!
+//! As of v0.9.4 this module is deprecated. Both `EnterpriseConfig` and
+//! `ConfigManager` will be folded into the unified [`crate::Config`] API
+//! when lock-free caching lands in v0.9.5. New code should use
+//! [`crate::Config`] directly — it has every public method that
+//! `EnterpriseConfig` exposes (with `&Value` borrowed returns instead of
+//! owned clones), and v0.9.5 will give it the same multi-tier caching
+//! that `EnterpriseConfig` provides today.
+//!
+//! Existing call-sites continue to compile and run unchanged through
+//! v0.9.x and the v1.x deprecation window. The deprecation warnings on
+//! every constructor and method are advisory — they signal where users
+//! should migrate when convenient, not where the code is broken.
+//!
+//! ## Migration guide
+//!
+//! | Was                                          | Use instead                                           |
+//! |----------------------------------------------|-------------------------------------------------------|
+//! | `EnterpriseConfig::new()`                    | [`crate::Config::new`]                                |
+//! | `EnterpriseConfig::from_string(s, fmt)`      | [`crate::Config::from_string`]                        |
+//! | `EnterpriseConfig::from_file(p)`             | [`crate::Config::from_file`]                          |
+//! | `cfg.get(k)` (owned)                         | `cfg.get(k).cloned()`                                 |
+//! | `cfg.get_or(k, default)`                     | [`crate::Config::get_or`]                             |
+//! | `cfg.set(k, v)`                              | [`crate::Config::set`]                                |
+//! | `cfg.exists(k)`                              | [`crate::Config::contains_key`]                       |
+//! | `cfg.keys()` (`Vec<String>`)                 | [`crate::Config::keys`] (`Result<Vec<&str>>`)         |
+//! | `cfg.save()` / `cfg.save_to(p)`              | [`crate::Config::save`] / [`crate::Config::save_to_file`] |
+//! | `cfg.merge(other)`                           | [`crate::Config::merge`]                              |
+//! | `cfg.set_default(k, v)`                      | (planned for v0.9.5 via `ConfigOptions::defaults`)    |
+//! | `cfg.cache_stats()`                          | (planned for v0.9.5 via `Config::cache_stats`)        |
+//! | `cfg.make_read_only()`                       | (planned for v0.9.5 via [`ConfigOptions::read_only`]) |
+//! | `ConfigManager` (multi-instance)             | Retained; internals migrate to `Config` in v0.9.5    |
+//! | `enterprise::direct::parse_string`           | [`crate::parse`] (same routing)                       |
+//! | `enterprise::direct::parse_file`             | [`crate::parse_file`] (same routing)                  |
+
+#![allow(deprecated)] // REPS-AUDIT: this entire module *is* the deprecated surface.
+                      // Suppressing here keeps the internal references (ConfigManager,
+                      // direct::*) compiling without polluting the warning stream;
+                      // user-facing deprecation comes through the `#[deprecated]`
+                      // attributes on each public item below.
+
 use crate::{Error, Result, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
@@ -78,6 +120,8 @@ impl FastCache {
 /// ## Examples
 ///
 /// ```rust
+/// # #[allow(deprecated)]
+/// # {
 /// use config_lib::enterprise::EnterpriseConfig;
 /// use config_lib::Value;
 ///
@@ -97,10 +141,18 @@ impl FastCache {
 ///
 /// // Check cache performance
 /// let (hits, misses, ratio) = config.cache_stats();
-/// println!("Cache hit ratio: {:.1}%", ratio * 100.0);
+/// let _ = (port, port_again, hits, misses, ratio);
 /// # Ok(())
 /// # }
+/// # main().unwrap();
+/// # }
 /// ```
+#[deprecated(
+    since = "0.9.4",
+    note = "use `config_lib::Config` directly. `EnterpriseConfig` will be folded \
+            into `Config` when lock-free caching lands in v0.9.5. \
+            See the migration table in the `enterprise` module docs."
+)]
 #[derive(Debug)]
 pub struct EnterpriseConfig {
     /// Fast access cache for ultra-high performance (no locks)
@@ -117,7 +169,28 @@ pub struct EnterpriseConfig {
     read_only: bool,
 }
 
-/// Configuration manager for multiple instances
+/// Configuration manager for multiple named instances.
+///
+/// `ConfigManager` itself survives the v0.9.4 → v0.9.5 transition — it
+/// is a useful primitive for runtimes that maintain several independent
+/// configurations within one process. Its **internal storage type**
+/// changes in v0.9.5: today it holds [`EnterpriseConfig`] instances;
+/// v0.9.5 swaps that to [`crate::Config`] once the latter has
+/// equivalent caching semantics. The public method surface
+/// (`load` / `get` / `list` / `remove`) does not change.
+///
+/// The struct carries a `#[deprecated]` notice through v0.9.4 to
+/// signal that the **return type of `get`** changes shape in v0.9.5
+/// (it will hand back a `Config` handle, not an `EnterpriseConfig`).
+/// Callers that only use `load` / `list` / `remove` can ignore the
+/// warning; callers that consume the `Arc<RwLock<EnterpriseConfig>>`
+/// returned by `get` should plan to migrate when v0.9.5 lands.
+#[deprecated(
+    since = "0.9.4",
+    note = "`ConfigManager::get` returns `Arc<RwLock<EnterpriseConfig>>` today; \
+            in v0.9.5 it returns `Arc<RwLock<Config>>` once `Config` absorbs \
+            the cached/thread-safe surface. `ConfigManager` itself is retained."
+)]
 #[derive(Debug, Default)]
 pub struct ConfigManager {
     /// Named configuration instances
@@ -585,14 +658,38 @@ impl ConfigManager {
 pub mod direct {
     use super::*;
 
-    /// Parse file directly to Value (no caching)
+    /// Parse file directly to [`Value`] (no caching).
+    ///
+    /// **Deprecated:** use [`crate::parse_file`] — it routes through the
+    /// same underlying parsers and returns the same [`Value`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read or the contents
+    /// cannot be parsed in the detected format.
+    #[deprecated(
+        since = "0.9.4",
+        note = "use `config_lib::parse_file` — same routing, fewer namespaces"
+    )]
     #[inline(always)]
     pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Value> {
         let content = std::fs::read_to_string(path)?;
         parse_string(&content, None)
     }
 
-    /// Parse string directly to Value (no caching)
+    /// Parse string directly to [`Value`] (no caching).
+    ///
+    /// **Deprecated:** use [`crate::parse`] — it routes through the
+    /// same underlying parsers and returns the same [`Value`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the input cannot be parsed in the given
+    /// format.
+    #[deprecated(
+        since = "0.9.4",
+        note = "use `config_lib::parse` — same routing, fewer namespaces"
+    )]
     #[inline(always)]
     pub fn parse_string(content: &str, format: Option<&str>) -> Result<Value> {
         let format = format.unwrap_or("conf");

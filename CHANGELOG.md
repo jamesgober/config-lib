@@ -15,6 +15,57 @@
 <br>
 
 
+## [0.9.4] - 2026-05-19
+
+### Added
+- **`ConfigOptions`** — opt-out behavior knobs for `Config`. Lays the groundwork for the lock-free caching work landing in v0.9.5 without breaking the public API surface a second time when caching actually switches on. Fields: `read_only`, `cache_enabled` (reserved), `cache_capacity` (reserved). `#[non_exhaustive]` with consuming builder methods (`new`, `read_only(bool)`, `cache_enabled(bool)`, `cache_capacity(usize)`) so v0.9.x can add new knobs without breaking SemVer.
+- **`Config::with_options(ConfigOptions)`** — explicit constructor for non-default configurations.
+- **`Config::options()`** — read access to the active `ConfigOptions`.
+- **`Config::is_read_only()`** — convenience check that does not require pulling out the whole options struct.
+- **`Config::set` / `Config::remove` / `Config::merge`** now reject mutations when the configuration was constructed with `ConfigOptions::read_only = true`. They return `Error::general("Configuration is read-only")` instead of panicking or silently dropping the write.
+
+### Deprecated
+- **`EnterpriseConfig`** (and every method on it) is now marked `#[deprecated(since = "0.9.4")]`. The deprecation is **advisory** — existing call-sites continue to compile and run unchanged through the entire v0.9.x line and the v1.x deprecation window. The deprecation signals that the data-model merger lands with the caching work in v0.9.5, at which point the unified `Config` will absorb every `EnterpriseConfig` operation and the type can be safely removed in v2.0.
+- **`ConfigManager`** is marked `#[deprecated(since = "0.9.4")]` because its `get(&self, name) -> Option<Arc<RwLock<EnterpriseConfig>>>` return shape changes in v0.9.5 (it will hand back `Arc<RwLock<Config>>` once `Config` absorbs the cached/thread-safe surface). The struct itself is retained — only the warning about the upcoming return-type shape is new.
+- **`enterprise::direct::parse_string`** and **`enterprise::direct::parse_file`** — these were thin wrappers around the existing `crate::parse` / `crate::parse_file` free functions. Use the top-level functions; the routing through the parser tree is identical.
+
+### Migration guide
+
+The deprecation does not require any change today. When you have time, prefer the unified `Config` API for new code:
+
+| Was (`EnterpriseConfig`)                | Use (`Config` + `ConfigOptions`)                                 |
+|-----------------------------------------|------------------------------------------------------------------|
+| `EnterpriseConfig::new()`               | `Config::new()`                                                  |
+| `EnterpriseConfig::from_string(s, fmt)` | `Config::from_string(s, fmt)`                                    |
+| `EnterpriseConfig::from_file(p)`        | `Config::from_file(p)`                                           |
+| `cfg.get("k")` *(owned `Value`)*        | `cfg.get("k").cloned()` *(owned)* or `cfg.get("k")` *(borrowed)* |
+| `cfg.set("k", v)`                       | `cfg.set("k", v)`                                                |
+| `cfg.exists("k")`                       | `cfg.contains_key("k")`                                          |
+| `cfg.keys()` *(`Vec<String>`)*          | `cfg.keys()` *(`Result<Vec<&str>>`)*                             |
+| `cfg.save() / save_to(p)`               | `cfg.save() / save_to_file(p)`                                   |
+| `cfg.merge(other)`                      | `cfg.merge(other)`                                               |
+| `cfg.set_default(k, v)`                 | `cfg.get(k).and_then(..).unwrap_or(v)` *(rich defaults table returns in v0.9.5)* |
+| `cfg.cache_stats()`                     | *Not yet on `Config` — lands in v0.9.5.*                         |
+| `cfg.make_read_only()`                  | `Config::with_options(ConfigOptions::new().read_only(true))`     |
+| `ConfigManager` (multi-instance)        | Retained; only the internal storage type changes in v0.9.5.      |
+| `enterprise::direct::parse_string(s,f)` | `config_lib::parse(s, f)`                                        |
+| `enterprise::direct::parse_file(p)`     | `config_lib::parse_file(p)`                                      |
+
+See [`examples/enterprise_demo.rs`](examples/enterprise_demo.rs) for a runnable side-by-side translation.
+
+### Changed
+- **`examples/enterprise_demo.rs`** rewritten end-to-end to use the unified `Config` API. The example still demonstrates the five scenarios its predecessor covered (set/get with nested keys, default-value lookup, read-only mode, file load, one-shot string parsing) and now closes with the migration table reproduced inline for reference.
+- **`benches/enterprise_benchmarks.rs`** carries `#![allow(deprecated)]` so the comparison baselines remain measurable across the v0.9.4 → v0.9.5 transition. The bench will be retired once the v0.9.5 unified-Config benchmarks land and the relative performance has been recorded.
+- **`README.md`** leads with `Config` everywhere a configuration API is recommended. The previous **Enterprise Caching** section is now a **Read-only mode and forward-compatible options** section featuring `ConfigOptions`, with an explicit deprecation banner pointing readers at v0.9.5. The **Default Configuration Settings — Method 2** section was rewritten from the `EnterpriseConfig::set_default` pattern to the simpler inline-default pattern. The troubleshooting tip about cached reads no longer recommends `EnterpriseConfig` for new code.
+
+### Internal
+- This is Phase 0.9.4 (Architectural consolidation) of the [roadmap to 1.0](.dev/ROADMAP.md). The deprecation surface is in force; the **data-model merger** (combining the borrowed-`&Value` return convention of `Config` with the lock-free caching of `EnterpriseConfig`) lands with the v0.9.5 caching work. Doing them as one release is intentional: the caching architecture decides how the unified `Config::get` actually returns its `&Value` under contention, and shipping the merger ahead of that design would either freeze the wrong API or force a second migration. All 95 tests pass (63 unit + 14 integration + 11 validation + 7 doc, up from 6 doc — the new `ConfigOptions` example added a doctest). `cargo clippy --all-targets --all-features -- -D warnings` clean.
+
+
+
+<br>
+
+
 ## [0.9.3] - 2026-05-19
 
 ### Added
@@ -354,7 +405,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.4...HEAD
+[0.9.4]: https://github.com/jamesgober/config-lib/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/jamesgober/config-lib/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/jamesgober/config-lib/compare/v0.9.0...v0.9.2
 [0.9.0]: https://github.com/jamesgober/config-lib/compare/v0.6.0...v0.9.0

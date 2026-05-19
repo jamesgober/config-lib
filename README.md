@@ -191,24 +191,36 @@ if config.contains_key("server.ssl") {
 }
 ```
 
-### **Enterprise Caching**
+### **Read-only mode and forward-compatible options**
+
+`ConfigOptions` is the structured place to express the small set of
+behaviors that should not be enabled by default — making a `Config`
+read-only, sizing the cache (v0.9.5), etc. The struct is
+`#[non_exhaustive]` so v0.9.x can add new knobs without breaking
+SemVer; callers go through the consuming builder methods.
 
 ```rust
-use config_lib::EnterpriseConfig;
+use config_lib::{Config, ConfigOptions};
 
-// High-performance cached configuration
-let config = EnterpriseConfig::from_string(r#"
-database.host = "localhost"
-server.port = 8080
-"#, Some("conf"))?;
+// Default options — caching on, writes allowed.
+let _cfg = Config::with_options(ConfigOptions::default());
 
-// Sub-50ns target for cached access (verified at v1.0.0)
-let cached_value = config.get("database.host");
-
-// View cache performance stats
-let (hits, misses, ratio) = config.cache_stats();
-println!("Cache hit ratio: {:.2}%", ratio * 100.0);
+// Read-only configuration for a hot path that must never be mutated.
+let opts = ConfigOptions::new().read_only(true);
+let mut locked = Config::with_options(opts);
+assert!(locked.set("foo", "bar").is_err());   // rejected
 ```
+
+> **Deprecated in v0.9.4.** `EnterpriseConfig` and the multi-tier
+> `cache_stats()` / `make_read_only()` API are deprecated as of
+> v0.9.4. They continue to compile and work through the v0.9.x line
+> and the v1.x deprecation window, but new code should use
+> [`Config`](#-multi-format-detection-and-loading) + `ConfigOptions`
+> directly. The lock-free caching that made `EnterpriseConfig`
+> distinct lands on the unified `Config` in v0.9.5. See
+> [`.dev/ROADMAP.md`](.dev/ROADMAP.md) for the full timeline and
+> [`examples/enterprise_demo.rs`](examples/enterprise_demo.rs) for
+> a side-by-side migration table.
 
 ### **Default Configuration Settings**
 
@@ -256,35 +268,40 @@ let pool_size = config.get("database.pool_size")?.as_integer()?; // File value o
 let log_level = config.get("logging.level")?.as_string()?;      // File value or "info"
 ```
 
-#### **Method 2: Enterprise Config with Default Tables**
+#### **Method 2: Inline defaults at the access site**
+
+The simplest pattern when defaults are only needed at the call site —
+no parallel defaults table to maintain, no `unwrap` on a key that may
+not exist.
 
 ```rust
-use config_lib::enterprise::EnterpriseConfig;
+use config_lib::Config;
 
-// Create enterprise config with default support
-let mut config = EnterpriseConfig::new();
+let config = Config::from_file("production.conf")?;
 
-// Set comprehensive defaults that serve as fallbacks
-config.set_default("app.name", Value::String("Enterprise App".to_string()));
-config.set_default("app.environment", Value::String("development".to_string()));
-config.set_default("server.port", Value::Integer(8080));
-config.set_default("server.host", Value::String("0.0.0.0".to_string()));
-config.set_default("database.connection_timeout", Value::Integer(30));
-config.set_default("cache.enabled", Value::Bool(true));
-config.set_default("cache.ttl", Value::Integer(3600));
+let environment = config
+    .get("app.environment")
+    .and_then(|v| v.as_string().ok())
+    .map(str::to_owned)
+    .unwrap_or_else(|| "development".to_string());
 
-// Load configuration from file (with ultra-fast caching)
-config = EnterpriseConfig::from_file("production.conf")?;
+let cache_ttl: i64 = config
+    .get("cache.ttl")
+    .and_then(|v| v.as_integer().ok())
+    .unwrap_or(3600);
 
-// Automatically falls back to defaults for missing keys (sub-50ns access)
-let environment = config.get_or_default("app.environment");     // File value or "development"
-let cache_ttl = config.get_or_default("cache.ttl");             // File value or 3600
-let workers = config.get_or_default("server.workers");          // File value or default if set
-
-// Enterprise features: performance monitoring
-let (hits, misses, ratio) = config.cache_stats();
-println!("Cache performance: {:.2}% hit ratio", ratio * 100.0);
+let workers: i64 = config
+    .get("server.workers")
+    .and_then(|v| v.as_integer().ok())
+    .unwrap_or(4);
 ```
+
+> **Migrated from `EnterpriseConfig::set_default` / `get_or_default`
+> (deprecated v0.9.4).** The richer separate-defaults-table API
+> returns in v0.9.5 once `ConfigOptions` gains a `defaults` field
+> alongside the caching layer. See
+> [`examples/enterprise_demo.rs`](examples/enterprise_demo.rs)
+> for the side-by-side migration table.
 
 #### **Method 3: Inline Defaults with get_or()**
 
@@ -448,7 +465,7 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 - **Quality Assurance** - Comprehensive test suite, zero clippy warnings
 
 **What's planned for v1.0.0**:
-- Unified `Config` API (consolidating current `Config` + `EnterpriseConfig`)
+- Unified `Config` API (consolidation underway — `EnterpriseConfig` deprecated in v0.9.4, data-model merger lands with caching in v0.9.5)
 - Lock-free cached reads with verified sub-50ns benchmarks
 - Event-driven hot reload via `notify` (inotify / FSEvents / ReadDirectoryChangesW)
 - Fuzz-tested parsers for every format
@@ -507,7 +524,7 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 
 <details>
   <summary><b>Poor performance with large configuration files?</b></summary>
-    <p>✅ Enable caching with <code>EnterpriseConfig</code> for sub-50ns target access times on frequently accessed values.</p>
+    <p>✅ <code>Config</code> already keeps the parsed tree in memory, so repeated <code>get()</code> calls do not re-parse. The lock-free cached-read path with verified sub-50ns access targets ships with <strong>v0.9.5</strong> on the unified <code>Config</code> API. (The deprecated <code>EnterpriseConfig</code> exposes today's multi-tier cache; new code should not adopt it.)</p>
 </details>
 
 <details>

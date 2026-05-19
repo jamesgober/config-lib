@@ -63,6 +63,10 @@ pub struct Config {
     /// Change tracking - has the config been modified?
     modified: bool,
 
+    /// Opt-out behavior knobs (read-only, cache sizing, etc.).
+    /// See [`ConfigOptions`].
+    options: ConfigOptions,
+
     /// Format-specific preservation data
     #[cfg(feature = "noml")]
     noml_document: Option<noml::Document>,
@@ -80,6 +84,7 @@ impl Config {
             file_path: None,
             format: "conf".to_string(),
             modified: false,
+            options: ConfigOptions::default(),
             #[cfg(feature = "noml")]
             noml_document: None,
             #[cfg(feature = "validation")]
@@ -99,6 +104,7 @@ impl Config {
             file_path: None,
             format: detected_format.to_string(),
             modified: false,
+            options: ConfigOptions::default(),
             noml_document: None,
             #[cfg(feature = "validation")]
             validation_rules: None,
@@ -110,6 +116,7 @@ impl Config {
             file_path: None,
             format: detected_format.to_string(),
             modified: false,
+            options: ConfigOptions::default(),
             #[cfg(feature = "validation")]
             validation_rules: None,
         };
@@ -168,14 +175,28 @@ impl Config {
     }
 
     /// Set a value by path
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The configuration was constructed with [`ConfigOptions::read_only`]
+    /// - The path is invalid (e.g. attempts to insert into a non-table value)
     pub fn set<V: Into<Value>>(&mut self, path: &str, value: V) -> Result<()> {
+        self.ensure_writable()?;
         self.values.set_nested(path, value.into())?;
         self.modified = true;
         Ok(())
     }
 
-    /// Remove a value by path  
+    /// Remove a value by path
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The configuration was constructed with [`ConfigOptions::read_only`]
+    /// - The path is malformed
     pub fn remove(&mut self, path: &str) -> Result<Option<Value>> {
+        self.ensure_writable()?;
         let result = self.values.remove(path)?;
         if result.is_some() {
             self.modified = true;
@@ -392,7 +413,13 @@ impl Config {
     }
 
     /// Merge another configuration into this one
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the configuration was constructed with
+    /// [`ConfigOptions::read_only`].
     pub fn merge(&mut self, other: &Config) -> Result<()> {
+        self.ensure_writable()?;
         self.merge_value(&other.values)?;
         self.modified = true;
         Ok(())
@@ -530,6 +557,132 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// =========================================================================
+// ConfigOptions — opt-out behavior knobs (foundation for v0.9.5)
+// =========================================================================
+
+/// Opt-out behavior knobs for [`Config`].
+///
+/// `ConfigOptions` carries the small set of toggles that should not be
+/// enabled by default: making a `Config` read-only, sizing the cache,
+/// and so on. The struct is `#[non_exhaustive]` so v0.9.x can add new
+/// knobs without breaking SemVer. Users construct it via
+/// [`ConfigOptions::new`] or [`ConfigOptions::default`] and apply
+/// individual toggles through the consuming builder methods.
+///
+/// The field set lays the groundwork for the lock-free caching work
+/// landing in v0.9.5. In v0.9.4 the only knob that has runtime effect
+/// is [`ConfigOptions::read_only`]; the cache-related knobs are
+/// accepted today so that the public API surface does not change
+/// again when v0.9.5 switches the cache on.
+///
+/// # Examples
+///
+/// ```rust
+/// use config_lib::{Config, ConfigOptions};
+///
+/// // Default options — caching on, writes allowed.
+/// let _cfg = Config::with_options(ConfigOptions::default());
+///
+/// // Read-only configuration for a hot path that must never be mutated.
+/// let opts = ConfigOptions::new().read_only(true);
+/// let _cfg = Config::with_options(opts);
+/// ```
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct ConfigOptions {
+    /// Reject every `set` / `remove` / `merge` call with
+    /// [`Error::general`] instead of mutating. Useful for once-loaded
+    /// configurations that must never change at runtime.
+    pub read_only: bool,
+
+    /// Whether the internal caching layer is active. **Reserved** — the
+    /// caching layer ships in v0.9.5; in v0.9.4 this field is accepted
+    /// for forward compatibility but does not yet change runtime
+    /// behavior (every `get` already hits an in-memory `Value`).
+    pub cache_enabled: bool,
+
+    /// Maximum number of resolved-key entries the cache will hold
+    /// before evicting. **Reserved for v0.9.5.**
+    pub cache_capacity: usize,
+}
+
+impl Default for ConfigOptions {
+    /// The canonical options for the Hive DB use case:
+    /// caching enabled, writes allowed, capacity tuned for typical
+    /// server config size.
+    fn default() -> Self {
+        Self {
+            read_only: false,
+            cache_enabled: true,
+            cache_capacity: 1024,
+        }
+    }
+}
+
+impl ConfigOptions {
+    /// Construct a `ConfigOptions` with default values
+    /// ([`ConfigOptions::default`]).
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the read-only flag. See [`ConfigOptions::read_only`].
+    pub fn read_only(mut self, read_only: bool) -> Self {
+        self.read_only = read_only;
+        self
+    }
+
+    /// Toggle the caching layer. **Reserved for v0.9.5** — currently
+    /// a no-op at runtime; the setter exists so call-sites compile
+    /// against the same shape they will use after the cache lands.
+    pub fn cache_enabled(mut self, cache_enabled: bool) -> Self {
+        self.cache_enabled = cache_enabled;
+        self
+    }
+
+    /// Set the cache capacity. **Reserved for v0.9.5** — see
+    /// [`ConfigOptions::cache_enabled`].
+    pub fn cache_capacity(mut self, cache_capacity: usize) -> Self {
+        self.cache_capacity = cache_capacity;
+        self
+    }
+}
+
+impl Config {
+    /// Construct a new empty [`Config`] with the supplied
+    /// [`ConfigOptions`].
+    ///
+    /// This is the explicit opt-out constructor. For the canonical
+    /// defaults (caching on, writes allowed), prefer [`Config::new`].
+    pub fn with_options(options: ConfigOptions) -> Self {
+        let mut config = Self::new();
+        config.options = options;
+        config
+    }
+
+    /// Return the [`ConfigOptions`] currently in effect on this config.
+    pub fn options(&self) -> &ConfigOptions {
+        &self.options
+    }
+
+    /// Returns `true` if this configuration was constructed read-only
+    /// (see [`ConfigOptions::read_only`]).
+    pub fn is_read_only(&self) -> bool {
+        self.options.read_only
+    }
+
+    /// Helper used by mutating methods to short-circuit when the
+    /// configuration is in read-only mode.
+    fn ensure_writable(&self) -> Result<()> {
+        if self.options.read_only {
+            Err(Error::general("Configuration is read-only"))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -673,6 +826,7 @@ impl From<Value> for Config {
             file_path: None,
             format: "conf".to_string(),
             modified: false,
+            options: ConfigOptions::default(),
             #[cfg(feature = "noml")]
             noml_document: None,
             #[cfg(feature = "validation")]

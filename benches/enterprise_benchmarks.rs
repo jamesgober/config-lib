@@ -1,3 +1,9 @@
+// REPS-AUDIT: this bench intentionally exercises the v0.9.4-deprecated
+// `EnterpriseConfig` / `ConfigManager` surface. Keeping the file `#[allow]`-ed
+// preserves the 0.9.4 baseline measurements for comparison against the
+// unified-Config caching implementation landing in v0.9.5.
+#![allow(deprecated)]
+
 use config_lib::*;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::collections::BTreeMap;
