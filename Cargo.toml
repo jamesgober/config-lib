@@ -2,11 +2,11 @@
 #▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 name = "config-lib"
-version = "0.9.6"
+version = "0.9.7"
 
 # Project Metadata
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
-rust-version = "1.82"
+rust-version = "1.75"
 edition = "2021"
 readme  = "README.md"
 publish = true
@@ -67,8 +67,14 @@ authors = [
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 
 # Default features
+#
+# v0.9.7: NOML and TOML moved out of the default set. They remain
+# available as opt-in features, but the default build no longer pulls
+# in the pre-1.0 `noml` crate. This is what unblocks the MSRV-1.75
+# commitment in the 1.0 stability contract — see `docs/STABILITY-1.0.md`
+# for the full rationale.
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
-default = ["conf", "noml", "toml", "hot-reload"]
+default = ["conf", "hot-reload"]
 
 # Config Formats
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
@@ -112,7 +118,6 @@ serde = { version = "1.0", features = ["derive"] }  # Serialization
 tokio = { version = "1.0", features = ["fs", "io-util", "macros", "rt"], optional = true }
 chrono = { version = "0.4", features = ["serde"], optional = true }
 serde_json = { version = "1.0", optional = true }
-base64 = { version = "0.21", optional = true }
 regex = { version = "1.0", optional = true }
 
 # Enterprise Format Parsers
@@ -127,8 +132,14 @@ quick-xml = { version = "0.31", optional = true }   # High-performance XML parse
 notify = { version = "6", optional = true }
 
 # NOML Language Library (Published Crate)
+#
+# Pinned EXACTLY rather than caret-bounded. `noml` is pre-1.0 and its
+# SemVer guarantees do not yet apply, so a `0.9.1` release could
+# introduce changes that this crate has not validated. Bumping the
+# pin is a deliberate maintainer action, not a silent `cargo update`.
+# Documented in `docs/STABILITY-1.0.md`.
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
-noml = { version = "0.9", optional = true, features = [] }
+noml = { version = "=0.9.0", optional = true, features = [] }
 
 
 

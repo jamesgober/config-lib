@@ -13,7 +13,7 @@
     <a href="https://crates.io/crates/config-lib" alt="Download"><img alt="Crates.io Downloads" src="https://img.shields.io/crates/d/config-lib?color=%230099ff"></a>
     <a href="https://docs.rs/config-lib"><img src="https://docs.rs/config-lib/badge.svg" alt="Documentation"></a>
     <a href="https://github.com/jamesgober/config-lib/actions"><img alt="GitHub CI" src="https://github.com/jamesgober/config-lib/actions/workflows/ci.yml/badge.svg"></a>
-    <a href="https://github.com/rust-lang/rfcs/blob/master/text/2495-min-rust-version.md" title="MSRV"><img alt="MSRV" src="https://img.shields.io/badge/MSRV-1.82%2B-blue"></a>
+    <a href="https://github.com/rust-lang/rfcs/blob/master/text/2495-min-rust-version.md" title="MSRV"><img alt="MSRV" src="https://img.shields.io/badge/MSRV-1.75%2B-blue"></a>
 </p>
 
 <p align="center">

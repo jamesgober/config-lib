@@ -15,6 +15,58 @@
 <br>
 
 
+## [0.9.7] - 2026-05-19
+
+### Added
+- **`docs/STABILITY-1.0.md`** — the canonical 1.0 stability contract. Locks down: the set of `pub` items that ship under SemVer, the `#[non_exhaustive]` policy and which types it applies to, the exact list of items *not* covered (performance numbers, error message text, transitive deps, iteration order), the MSRV baseline + feature-flag MSRV asymmetry, the feature flag stability promises, the NOML/TOML pre-1.0 caveat, the performance contract with target table, the security contract, the `#[deprecated]` removal timeline, the yank policy, the release process (including the **direct 0.9.9 → 1.0.0 path**, no `1.0.0-rc.1` cut), and the post-1.0 backlog. This document is the single source of truth for "what does 1.0 promise?" — it takes precedence over README / rustdoc / `.dev/` when they conflict.
+
+### Changed
+- **`noml` and `toml` are no longer default features.** The default feature set is now `["conf", "hot-reload"]`. The default build pulls in zero pre-1.0 dependencies — the 1.0 stability contract requires this and v0.9.7 delivers it. Users wanting NOML or TOML parsing must opt in: `features = ["noml"]` or `features = ["toml"]`. See *Migration* below.
+- **`noml` is pinned to `=0.9.0` exactly.** The previous caret bound (`"0.9"`) would silently pick up a `noml 0.9.1` release that this crate has not validated. Bumping the pin is now a deliberate maintainer action documented per release.
+- **MSRV dropped from `1.82` to `1.75`** for the default feature set. `Cargo.toml`'s `rust-version` field reflects this; `clippy.toml`'s `msrv` is synced; the README badge updated. This delivers the MSRV-1.75 commitment in the 1.0 stability contract, deferred since Phase 0.9.3 (where it was blocked by `noml 0.9.0`'s own `rust-version = "1.82"`). Verified locally with `cargo +1.75 check`.
+  - **Feature-flag MSRV asymmetry:** users who explicitly enable the `noml` or `toml` features still need Rust 1.82 because the upstream `noml` crate itself declares `rust-version = "1.82"`. This is documented in `docs/STABILITY-1.0.md` §3.2.
+- **`deny.toml`** allowed-license list extended to include `CC0-1.0` (the license `notify 6.x` is published under — public-domain-equivalent, broadly compatible with Apache-2.0/MIT). `cargo deny check` now passes across `advisories`, `bans`, `licenses`, and `sources`.
+
+### Removed
+- **`base64`** optional dependency. The crate's `Cargo.toml` listed it as an unused optional dep referenced only by a `#[cfg(feature = "base64")]` block — but no `base64` feature was ever defined in `[features]`, so the code path was silently never compiled and the dependency was dead weight. The `noml_parser.rs` binary-value path now unconditionally returns `Value::String("<binary data>")`, which is what every build was already producing.
+
+### Migration
+
+This release contains **one breaking change for users who relied on the implicit default-feature behavior**: `noml` and `toml` are no longer in the default feature set.
+
+Three migration patterns, in order of preference:
+
+```toml
+# Pattern 1 — depend explicitly on the formats you actually parse.
+# (Recommended; the most informative declaration for code reviewers.)
+config-lib = { version = "0.9.7", features = ["noml", "toml"] }
+
+# Pattern 2 — opt into the full v0.9.6 feature surface explicitly.
+config-lib = { version = "0.9.7", features = ["noml", "toml", "json", "xml", "hcl", "validation"] }
+
+# Pattern 3 — preserve EXACTLY the v0.9.6 default-feature behavior.
+config-lib = { version = "0.9.7", features = ["noml", "toml"] }
+# (functionally identical to Pattern 1; documented separately because
+#  this is the "if your call sites depend on the previous defaults,
+#  this is the minimum change required" recipe)
+```
+
+If your code does not reach for NOML or TOML at runtime, **no change is needed** — the default `["conf", "hot-reload"]` set covers the most common case and ships on the lowest MSRV.
+
+### Internal
+- 96 tests pass (63 unit + 14 integration + 11 validation + 8 doc).
+- `cargo clippy --all-targets --all-features -- -D warnings` clean.
+- `cargo doc --no-deps --all-features` clean with `RUSTDOCFLAGS="-D warnings"`.
+- `cargo audit` clean (one allowed `rustls-pemfile` unmaintained warning — now correctly only fires when the user opts into `noml` / `toml`, since that's the only path to `reqwest 0.11.27`).
+- `cargo deny check` clean across `advisories`, `bans`, `licenses`, `sources`.
+- `cargo +1.75 check` passes on the default feature set.
+- `cargo +1.82 check --all-features` passes (noml feature path).
+
+
+
+<br>
+
+
 ## [0.9.6] - 2026-05-19
 
 > **Scope note.** This is the **foundation half** of Phase 0.9.6. It lands the event-driven `notify`-backed watcher implementation, the platform-quirk documentation, and the new public knobs (`with_debounce`, `with_polling_fallback`). The five cross-platform integration tests called for by the roadmap (`hot_reload_modified.rs`, `hot_reload_atomic_write.rs`, `hot_reload_deleted.rs`, `hot_reload_recreated.rs`, `hot_reload_permissions.rs`) and the cross-platform latency benchmarks need to run on actual Linux + macOS + Windows CI to be meaningful; they ship in a follow-up release once CI is wired up. The existing 3 in-module tests verify the watcher works end-to-end on the dev host.
@@ -491,7 +543,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.6...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.7...HEAD
+[0.9.7]: https://github.com/jamesgober/config-lib/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/jamesgober/config-lib/compare/v0.9.5...v0.9.6
 [0.9.5]: https://github.com/jamesgober/config-lib/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/jamesgober/config-lib/compare/v0.9.3...v0.9.4

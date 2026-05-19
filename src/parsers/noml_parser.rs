@@ -58,17 +58,14 @@ fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
         }
         #[cfg(feature = "chrono")]
         noml::Value::DateTime(_) => Ok(Value::String("datetime_value".to_string())),
-        // Handle NOML-specific types by converting to basic types
-        noml::Value::Binary(_data) => {
-            // Convert binary data to base64 string for compatibility
-            #[cfg(feature = "base64")]
-            {
-                use base64::{engine::general_purpose, Engine as _};
-                Ok(Value::String(general_purpose::STANDARD.encode(_data)))
-            }
-            #[cfg(not(feature = "base64"))]
-            Ok(Value::String("<binary data>".to_string()))
-        }
+        // Handle NOML-specific types by converting to basic types.
+        //
+        // Binary values render as the literal `"<binary data>"` placeholder
+        // string. A previous version of this module proposed feature-gated
+        // base64 encoding for binary values, but the `base64` Cargo feature
+        // was never defined — the code path was dead and the optional
+        // `base64` dependency was unused. Removed for v0.9.7.
+        noml::Value::Binary(_) => Ok(Value::String("<binary data>".to_string())),
         noml::Value::Size(size) => {
             // Convert size to integer (bytes)
             Ok(Value::Integer(size as i64))

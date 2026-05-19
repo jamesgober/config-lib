@@ -6,7 +6,7 @@
 > **Reads:** `REPS.md` (supreme authority), `_strategy/UNIVERSAL_PROMPT.md` (peak performance + max efficiency + max concurrency + nuclear-proof security + cross-platform), `.dev/AUDIT-0.9.1.md` (current state assessment).
 >
 > **Target ship date:** 4-6 focused weeks from audit (2026-05-18).
-> **Status:** Phase 0.9.6 **Foundation** complete (2026-05-19); Phase 0.9.7 next. Two pieces are queued for a canonical-CI follow-up — the Phase 0.9.5 lock-free cache implementation (waiting on benchmark hardware) and the Phase 0.9.6 cross-platform integration tests + latency benchmarks (waiting on CI matrix wire-up). Both ship as patch releases against their parent phase.
+> **Status:** Phase 0.9.7 complete (2026-05-19); Phase 0.9.8 next. Two pieces are queued for a canonical-CI follow-up — the Phase 0.9.5 lock-free cache implementation (waiting on benchmark hardware) and the Phase 0.9.6 cross-platform integration tests + latency benchmarks (waiting on CI matrix wire-up). Both ship as patch releases against their parent phase. **Release-path decision (2026-05-19):** `v0.9.9` is the final pre-1.0 polish release; `v1.0.0` ships *directly* from it with no `1.0.0-rc.1` cut. Soak time happens during the v0.9.9 release itself.
 
 ---
 
@@ -465,6 +465,8 @@ Pre-v0.9.6 `hot_reload.rs` used a thread-based polling loop with a `Duration`-ba
 
 **Effort:** 2-3 days.
 
+**Status:** Complete (2026-05-19). Released as [`v0.9.7`](../.dev/release/v0.9.7.md). MSRV 1.75 delivered; pre-1.0 deps gone from default; `docs/STABILITY-1.0.md` canonical.
+
 ### Background
 
 `config-lib`'s 1.0 stability contract depends on the stability of its public dependencies. Currently:
@@ -473,40 +475,22 @@ Pre-v0.9.6 `hot_reload.rs` used a thread-based polling loop with a `Duration`-ba
 
 ### Tasks
 
-- [ ] **Remove NOML/TOML from default features:**
-  ```toml
-  [features]
-  default = ["conf", "ini", "properties", "json", "xml", "hcl"]
-  noml = ["dep:noml"]
-  toml = ["dep:noml"]   # still routes via noml crate
-  ```
-- [ ] **Pin `noml = "=0.9.x"` exactly** — protect against breaking changes in transitive `noml` updates
-- [ ] **Document NOML caveat in `docs/STABILITY-1.0.md`:**
-  - "If you enable the `noml` or `toml` feature, you depend on the upstream `noml` crate which is pre-1.0. We pin to an exact version to mitigate. NOML format support will be re-evaluated for stability when `noml 1.0` ships."
-- [ ] **Audit every other dependency:**
-  - [ ] `thiserror = "1.0"` — stable, keep
-  - [ ] `serde = "1.0"` — stable, keep
-  - [ ] `tokio` (feature: async) — keep optional
-  - [ ] `chrono` (feature: chrono) — keep optional
-  - [ ] `serde_json` (feature: json) — keep optional
-  - [ ] `regex` (feature: validation) — keep optional
-  - [ ] `quick-xml = "0.31"` (feature: xml) — verify MSRV compat
-  - [ ] `notify = "6"` (feature: hot-reload, added in 0.9.6) — keep optional
-- [ ] **Run `cargo audit`** — must be clean
-- [ ] **Run `cargo deny check`** — must be clean
-- [ ] **Verify MSRV compatibility** for every dependency:
-  - Every dep must support Rust 1.75
-  - Document any exceptions in `docs/PLATFORM-NOTES.md`
-- [ ] **Review `deny.toml`** — strengthen if needed (license whitelist, vulnerability gate)
+- [x] **NOML/TOML out of default features.** `default = ["conf", "hot-reload"]`. Zero pre-1.0 deps in the default tree.
+- [x] **`noml` pinned to `=0.9.0` exactly.** A `cargo update` can no longer silently promote to a `noml 0.9.1` this crate hasn't validated.
+- [x] **`docs/STABILITY-1.0.md`** — canonical 1.0 stability contract. §3.2 covers the MSRV asymmetry; §4.3 covers the NOML pre-1.0 caveat; §9 documents the direct 0.9.9 → 1.0.0 release path (no `1.0.0-rc.1` cut).
+- [x] **Dependency audit:** `thiserror`/`serde` (post-1.0, kept); `tokio`/`chrono`/`serde_json`/`regex`/`quick-xml`/`notify` (kept optional); **`base64`** removed entirely (was dead — referenced under `#[cfg(feature = "base64")]` but the feature was never defined).
+- [x] **`cargo audit`** clean (one allowed `rustls-pemfile` unmaintained warning — now correctly only fires when the user opts into `noml`/`toml`, since that's the only path to `reqwest 0.11.27`).
+- [x] **`cargo deny check`** clean across `advisories`, `bans`, `licenses`, `sources`. `deny.toml` allow-list extended with `CC0-1.0` (the license `notify 6.x` is published under).
+- [x] **MSRV 1.75 verified** via `cargo +1.75 check` on the default feature set. Feature-flag asymmetry: `noml`/`toml` need 1.82 because upstream noml does. Documented in §3.2 of the stability contract.
 
 ### Exit criteria
 
-- [ ] Default feature set has zero pre-1.0 dependencies
-- [ ] NOML/TOML are clean opt-in features (clearly documented as such in README)
-- [ ] `cargo audit` clean
-- [ ] `cargo deny check` clean
-- [ ] All dependencies MSRV-compatible with Rust 1.75
-- [ ] `docs/STABILITY-1.0.md` documents the NOML caveat clearly
+- [x] Default feature set has zero pre-1.0 dependencies
+- [x] NOML/TOML are clean opt-in features, documented in README and `docs/STABILITY-1.0.md`
+- [x] `cargo audit` clean
+- [x] `cargo deny check` clean
+- [x] All default-feature dependencies MSRV-compatible with Rust 1.75; noml/toml asymmetry documented
+- [x] `docs/STABILITY-1.0.md` is the canonical 1.0 contract
 
 ---
 
@@ -565,39 +549,32 @@ These must be eliminated before 1.0.
 
 ---
 
-## Phase 0.9.9 — Documentation completeness + Release candidate
+## Phase 0.9.9 — Documentation completeness + final pre-1.0 soak
 
-**Goal:** Final documentation pass. Cut `1.0.0-rc.1`.
+**Goal:** Final documentation pass. Ship `v0.9.9` as the last pre-1.0 release; the *next* release is `v1.0.0` directly. **No `1.0.0-rc.1` cut.** Soak time and external review happen during the v0.9.9 release window itself (see `docs/STABILITY-1.0.md` §9).
 
 **Effort:** 3-4 days.
 
 ### Tasks
 
-- [ ] **Write `docs/STABILITY-1.0.md`** — the 1.0 stability contract:
-  - [ ] List every frozen public symbol
-  - [ ] Document MSRV policy
-  - [ ] Document feature flag stability
-  - [ ] Document the NOML/TOML pre-1.0 dependency caveat
-  - [ ] Document yank policy
-  - [ ] Document deprecation timeline
-  - [ ] List what is NOT part of the 1.x promise (internal performance characteristics, error display text exact wording, transitive dependency versions)
+- [x] **Write `docs/STABILITY-1.0.md`** — the 1.0 stability contract. *(Landed in Phase 0.9.7 — moved up because the contract drives v0.9.7's dependency-hygiene decisions.)*
 - [ ] **Write `docs/ARCHITECTURE.md`** — internal structure:
   - [ ] Module layout
   - [ ] Data flow: file → parser → Value → cache → user
-  - [ ] Caching architecture (post-0.9.5 design)
-  - [ ] Hot reload architecture (post-0.9.6 design)
+  - [ ] Caching architecture (post-0.9.5 design — pending the canonical-CI 0.9.5.x implementation release)
+  - [ ] Hot reload architecture (Phase 0.9.6 design — `notify` + debounce + parent-dir watch)
   - [ ] Thread safety guarantees
   - [ ] Decision log: why DashMap vs ArcSwap (etc.)
-- [ ] **Verify `docs/PERFORMANCE.md`** — completed in Phase 0.9.5, polish:
+- [ ] **Verify `docs/PERFORMANCE.md`** — completed in Phase 0.9.5 Implementation; polish for v0.9.9:
   - [ ] Methodology section accurate
   - [ ] Results table current
   - [ ] Tuning guide actionable
-- [ ] **Verify `docs/PLATFORM-NOTES.md`** — completed in 0.9.6, polish:
+- [ ] **Verify `docs/PLATFORM-NOTES.md`** — landed in 0.9.6 Foundation; polish for v0.9.9 once the cross-platform integration tests in v0.9.6.x have reported their numbers:
   - [ ] Linux notes
   - [ ] macOS notes
   - [ ] Windows notes
   - [ ] Network filesystem caveats
-- [ ] **Update `docs/SECURITY.md`** — completed in 0.9.8, polish
+- [ ] **Update `docs/SECURITY.md`** — landed in 0.9.8 fuzz pass; polish for v0.9.9
 - [ ] **Audit every public item's rustdoc:**
   - [ ] One-line summary
   - [ ] Longer description if non-obvious
@@ -605,29 +582,22 @@ These must be eliminated before 1.0.
   - [ ] `# Errors` if returns `Result`
   - [ ] `# Panics` if can panic (rare — library code shouldn't)
 - [ ] **Verify `cargo doc --no-deps --all-features` clean** with `RUSTDOCFLAGS="-D warnings"`
-- [ ] **Write `.dev/release/v1.0.0.md`** per `_strategy/RELEASE_NOTES_TEMPLATE.md`:
-  - [ ] The contract section (1.0.0-specific)
-  - [ ] Highlights
-  - [ ] Migration from 0.9.x
-  - [ ] Performance characteristics
-  - [ ] Stability commitments
-- [ ] **Cut `1.0.0-rc.1`** per `_strategy/RELEASE_WORKFLOW.md`:
-  - [ ] Bump `Cargo.toml` to `1.0.0-rc.1`
-  - [ ] Move `[Unreleased]` CHANGELOG to `[1.0.0-rc.1]`
-  - [ ] Commit `Milestone Update v1.0.0-rc.1`
+- [ ] **Cut `v0.9.9`** per the usual release workflow:
+  - [ ] Bump `Cargo.toml` to `0.9.9`
+  - [ ] Move `[Unreleased]` CHANGELOG to `[0.9.9]`
+  - [ ] Commit `Milestone Update v0.9.9`
   - [ ] Push, verify CI green
-  - [ ] Tag `v1.0.0-rc.1`
-  - [ ] GitHub release marked as **pre-release**
+  - [ ] Tag `v0.9.9`
+  - [ ] GitHub release **not** marked as pre-release — `0.9.9` is the final pre-1.0 release, not a release candidate
   - [ ] `cargo publish` to crates.io
-- [ ] **Solicit external feedback** during RC soak period (target: 1 week minimum)
-- [ ] **Address any critical findings** with `1.0.0-rc.2`, etc.
+- [ ] **Soak period** — at least one week with `v0.9.9` published before cutting `v1.0.0`. Watch crates.io download stats and the GitHub issue tracker for surprises. Address any critical findings with `v0.9.9.x` patches.
 
 ### Exit criteria
 
 - [ ] All required docs in place
-- [ ] `1.0.0-rc.1` published to crates.io as pre-release
-- [ ] At least 1 week of RC soak with no critical issues
-- [ ] No outstanding issues blocking 1.0.0 release
+- [ ] `v0.9.9` published to crates.io as a normal release (not a pre-release)
+- [ ] At least 1 week of post-publish soak with no critical issues
+- [ ] No outstanding issues blocking the `v1.0.0` cut
 
 ---
 
@@ -639,14 +609,14 @@ These must be eliminated before 1.0.
 
 ### Pre-flight verification
 
-- [ ] **No critical issues** from RC soak
-- [ ] **Final API freeze verification** — no last-minute changes since rc.1
+- [ ] **No critical issues** from the v0.9.9 soak period
+- [ ] **Final API freeze verification** — no last-minute changes since v0.9.9
 - [ ] **All CI checks green** on Linux + macOS + Windows on stable + MSRV
 - [ ] **All benchmark targets met** from Performance Contract
-- [ ] **`cargo public-api diff` clean** vs rc.1
+- [ ] **`cargo public-api diff` clean** vs v0.9.9
 - [ ] **`cargo audit` clean**
 - [ ] **`cargo deny check` clean**
-- [ ] **Documentation review** — STABILITY-1.0.md accurate
+- [ ] **Documentation review** — `docs/STABILITY-1.0.md` accurate
 
 ### Release sequence
 
@@ -727,7 +697,7 @@ config-lib roadmap to 1.0
 0.9.6  Event-driven hot reload              4-5 days
 0.9.7  Dependency hygiene + NOML opt-in     2-3 days
 0.9.8  Fuzz testing (nuclear-proof)         3-4 days
-0.9.9  Docs + Release Candidate             3-4 days
+0.9.9  Docs + final pre-1.0 polish           3-4 days
 1.0.0  Stable Release                       1 day
 ==============================================================
 Total: ~4-6 focused weeks
