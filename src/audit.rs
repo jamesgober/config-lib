@@ -193,7 +193,14 @@ impl ConsoleSink {
 impl AuditSink for ConsoleSink {
     fn write_event(&self, event: &AuditEvent) -> Result<(), String> {
         if event.severity >= self.level_filter {
-            println!("AUDIT: {event}");
+            // REPS-AUDIT: `ConsoleSink` writes audit events to stdout by
+            // contract — that is the sink's stated purpose. Allowed at the
+            // call site only; the crate-level `clippy::print_stdout` deny
+            // remains in force everywhere else.
+            #[allow(clippy::print_stdout)]
+            {
+                println!("AUDIT: {event}");
+            }
         }
         Ok(())
     }
@@ -277,7 +284,15 @@ impl AuditLogger {
 
         for sink in &self.sinks {
             if let Err(e) = sink.write_event(&event) {
-                eprintln!("Audit sink error: {e}");
+                // REPS-AUDIT: last-resort report when an audit sink itself
+                // fails. `log_event` is fire-and-forget (returns `()`); we
+                // cannot bubble the error up. Stderr is the conventional
+                // out-of-band channel for daemon diagnostics. Allowed at
+                // the call site only.
+                #[allow(clippy::print_stderr)]
+                {
+                    eprintln!("Audit sink error: {e}");
+                }
             }
         }
     }
@@ -366,7 +381,14 @@ impl AuditLogger {
     pub fn flush(&self) {
         for sink in &self.sinks {
             if let Err(e) = sink.flush() {
-                eprintln!("Audit sink flush error: {e}");
+                // REPS-AUDIT: same rationale as `log_event` above —
+                // `flush` cannot return an error, so the only way to
+                // surface a sink-side failure is the daemon stderr
+                // channel. Allowed at the call site only.
+                #[allow(clippy::print_stderr)]
+                {
+                    eprintln!("Audit sink flush error: {e}");
+                }
             }
         }
     }

@@ -214,9 +214,11 @@ mod tests {
                 // Successfully parsed
             }
             Ok(_) => panic!("Expected table result"),
-            Err(e) => {
-                // Some HCL syntax might not be fully supported by hcl-rs
-                println!("HCL parsing note: {e}");
+            Err(_) => {
+                // Some HCL syntax variants are not supported by the simplified
+                // parser; the test tolerates any structured `Err` here as long
+                // as it didn't panic. Specific syntax coverage is asserted
+                // separately in `test_terraform_style_hcl`.
             }
         }
     }

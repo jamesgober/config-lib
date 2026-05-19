@@ -293,7 +293,6 @@ mod tests {
         "#;
 
         let result = parse_xml(xml)?;
-        println!("Parsed XML: {result:#?}");
 
         // Test passes if parsing doesn't panic
         assert!(matches!(result, Value::Table(_)));

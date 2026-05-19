@@ -15,6 +15,31 @@
 <br>
 
 
+## [0.9.3] - 2026-05-19
+
+### Added
+- **Full REPS lint discipline in `src/lib.rs`.** Shipping code now denies `clippy::unwrap_used`, `clippy::expect_used`, `clippy::todo`, `clippy::unimplemented`, `clippy::print_stdout`, `clippy::print_stderr`, `clippy::dbg_macro`, `clippy::undocumented_unsafe_blocks`, `clippy::missing_safety_doc`, `unsafe_op_in_unsafe_fn`, `unused_must_use`, and `missing_docs`. `clippy::pedantic` is enabled at warn. Test-module ergonomic exceptions (`unwrap`/`expect`/`panic`/`print_*`/raw-string-hashes/etc.) are scoped to `cfg(test)` only with a documented REPS-AUDIT rationale.
+- **Project-wide audit allowance comments** at every site where a deny was intentionally relaxed — `ConsoleSink` writes to stdout by contract, the audit logger's last-resort `eprintln!` fallback when a sink itself errors, and the test-mode pragmatic-assertion ergonomics.
+
+### Fixed
+- **`audit.rs` last-resort error reporting** when a registered audit sink itself fails inside the fire-and-forget `log_event` / `flush` paths. The `eprintln!` calls are unchanged in behaviour but now carry an explicit `// REPS-AUDIT:` justification at each call site explaining why stderr is the correct out-of-band channel here.
+- **`enterprise.rs` `set_recursive` helper** lifted out of `EnterpriseConfig::set_nested` to module scope. It carried no closure state — the nested-fn form only existed to side-step a borrow-checker complaint that no longer applies. Moving it eliminates `clippy::items_after_statements` noise and makes the recursion straightforward to read.
+- **`hot_reload.rs` default poll interval** declared as `Duration::from_secs(1)` instead of `Duration::from_millis(1000)` — same runtime value, clearer intent, clears `clippy::duration_suboptimal_units`.
+- **Test-only diagnostic prints removed** from `parsers/hcl_parser.rs` and `parsers/xml_parser.rs`. The `println!` calls had no assertion value — they only existed for human-eyeball inspection during parser bring-up. The test logic itself is unchanged; coverage remains identical.
+- **Doctests in `src/lib.rs`** rewritten to use `?` and `ok_or_else(|| Error::key_not_found(...))` instead of `.unwrap()`. The rewritten examples model the recommended user pattern (typed error from a missing key) rather than the throw-and-pray style that the strict deny list rejects.
+- **`clippy.toml` MSRV** synced with `Cargo.toml` (both at `1.82`). The `clippy.toml`-vs-`Cargo.toml` mismatch advisory no longer fires.
+
+### Changed
+- **MSRV stays at `1.82` for 0.9.3.** The roadmap's commitment to MSRV 1.75 cannot be honoured this release because `noml 0.9.0` (currently a default feature) itself declares `rust-version = "1.82"`. Pinning a chain of older transitive crates to fake the constraint would have shipped known-old `url` / `native-tls` / icu crates with their own security trade-offs. The 1.75 promise is deferred to Phase 0.9.7, which already plans to make `noml` and `toml` opt-in — at that point the default feature set will be 1.75-compatible cleanly, with users of the optional NOML/TOML formats accepting the higher MSRV explicitly.
+
+### Internal
+- This is Phase 0.9.3 (Toolchain alignment + REPS lint discipline) of the [roadmap to 1.0](.dev/ROADMAP.md). All 94 tests (63 unit + 14 integration + 11 validation + 6 doc) pass. `cargo clippy --all-targets --all-features -- -D warnings` is clean. `cargo audit` reports zero vulnerabilities (the one allowed `rustls-pemfile` unmaintained advisory carries over from 0.9.2 and is scoped to the Phase 0.9.7 NOML opt-in work).
+
+
+
+<br>
+
+
 ## [0.9.2] - 2026-05-19
 
 ### Security
@@ -329,7 +354,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/jamesgober/config-lib/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/jamesgober/config-lib/compare/v0.9.0...v0.9.2
 [0.9.0]: https://github.com/jamesgober/config-lib/compare/v0.6.0...v0.9.0
 [0.6.0]: https://github.com/jamesgober/config-lib/compare/v0.5.0...v0.6.0

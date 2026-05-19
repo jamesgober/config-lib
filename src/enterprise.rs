@@ -461,34 +461,6 @@ impl EnterpriseConfig {
         }
 
         let parts: Vec<&str> = key.split('.').collect();
-
-        // Recursive helper function to avoid borrow checker issues
-        fn set_recursive(table: &mut BTreeMap<String, Value>, parts: &[&str], value: Value) {
-            if parts.len() == 1 {
-                table.insert(parts[0].to_string(), value);
-                return;
-            }
-
-            let key = parts[0].to_string();
-            let remaining = &parts[1..];
-
-            // Ensure the key exists and is a table
-            if !table.contains_key(&key) {
-                table.insert(key.clone(), Value::table(BTreeMap::new()));
-            }
-
-            // Get mutable reference safely
-            if let Some(entry) = table.get_mut(&key) {
-                if !entry.is_table() {
-                    *entry = Value::table(BTreeMap::new());
-                }
-
-                if let Value::Table(nested_table) = entry {
-                    set_recursive(nested_table, remaining, value);
-                }
-            }
-        }
-
         set_recursive(table, &parts, value);
     }
 
@@ -642,6 +614,33 @@ pub mod direct {
                 .map(|v| T::try_from(v).map_err(|e| Error::general(e.to_string())))
                 .collect(),
             _ => Err(Error::general("Expected array value")),
+        }
+    }
+}
+
+/// Recursive helper for dotted-key inserts used by
+/// [`EnterpriseConfig::set_nested`]. Module-scoped rather than nested
+/// inside the method so the recursion can be reasoned about by clippy
+/// without `items_after_statements` noise.
+fn set_recursive(table: &mut BTreeMap<String, Value>, parts: &[&str], value: Value) {
+    if parts.len() == 1 {
+        table.insert(parts[0].to_string(), value);
+        return;
+    }
+
+    let key = parts[0].to_string();
+    let remaining = &parts[1..];
+
+    if !table.contains_key(&key) {
+        table.insert(key.clone(), Value::table(BTreeMap::new()));
+    }
+
+    if let Some(entry) = table.get_mut(&key) {
+        if !entry.is_table() {
+            *entry = Value::table(BTreeMap::new());
+        }
+        if let Value::Table(nested_table) = entry {
+            set_recursive(nested_table, remaining, value);
         }
     }
 }

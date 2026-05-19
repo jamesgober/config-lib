@@ -14,11 +14,19 @@
 //! let mut config = Config::from_string("port = 8080\nname = \"MyApp\"", None)?;
 //!
 //! // Access values with type safety
-//! let port = config.get("port").unwrap().as_integer()?;
-//! let name = config.get("name").unwrap().as_string()?;
+//! let port: i64 = config
+//!     .get("port")
+//!     .ok_or_else(|| config_lib::Error::key_not_found("port"))?
+//!     .as_integer()?;
+//! let name: String = config
+//!     .get("name")
+//!     .ok_or_else(|| config_lib::Error::key_not_found("name"))?
+//!     .as_string()?
+//!     .to_owned();
 //!
 //! // Modify and save (preserves format and comments)
 //! config.set("port", 9000)?;
+//! # let _ = (port, name);
 //! # Ok(())
 //! # }
 //! ```
@@ -32,15 +40,96 @@
 //!
 //! ## Features
 //!
-//! - **🚀 High Performance** - Zero-copy parsing where possible
-//! - **💾 Format Preservation** - Maintains comments, whitespace, and formatting
-//! - **⚡ Async Native** - Full async/await support (feature: `async`)
-//! - **🔍 Schema Validation** - Type safety and validation (feature: `schema`)
-//! - **🌐 Cross Platform** - Linux, macOS, and Windows support
-//! - **🔧 Type Safety** - Rich type system with automatic conversions
+//! - **High Performance** - Zero-copy parsing where possible
+//! - **Format Preservation** - Maintains comments, whitespace, and formatting
+//! - **Async Native** - Full async/await support (feature: `async`)
+//! - **Schema Validation** - Type safety and validation (feature: `schema`)
+//! - **Cross Platform** - Linux, macOS, and Windows support
+//! - **Type Safety** - Rich type system with automatic conversions
 
-#![warn(missing_docs)]
-#![warn(clippy::all)]
+// REPS — Rust Efficiency & Performance Standards (project-wide lint discipline).
+// Shipping code MUST satisfy these denies; test code carries narrower
+// allows with `REPS-AUDIT:` justifications where ergonomics outweigh the strict rule.
+#![deny(missing_docs)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+#![deny(clippy::unwrap_used)]
+#![deny(clippy::expect_used)]
+#![deny(clippy::todo)]
+#![deny(clippy::unimplemented)]
+#![deny(clippy::print_stdout)]
+#![deny(clippy::print_stderr)]
+#![deny(clippy::dbg_macro)]
+#![deny(clippy::undocumented_unsafe_blocks)]
+#![deny(clippy::missing_safety_doc)]
+#![warn(clippy::pedantic)]
+// REPS-AUDIT: `clippy::pedantic` is a curated lint group, not a hard rule.
+// The following lints are turned back to `allow` because they fire on
+// idioms this crate uses deliberately, or because they trade real
+// readability against pure stylistic preference. The denies above
+// (REPS safety / correctness rules) remain in force.
+//
+// Style / API-shape noise:
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::wildcard_imports)]
+#![allow(clippy::used_underscore_binding)]
+#![allow(clippy::no_effect_underscore_binding)]
+// Numeric casts at bounded parser/stats boundaries:
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+// Documentation style preference:
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+// Refactor suggestions deferred to a dedicated cleanup phase
+// (see `.dev/ROADMAP.md` post-1.0 backlog):
+#![allow(clippy::unused_self)]
+#![allow(clippy::self_only_used_in_recursion)]
+#![allow(clippy::unnecessary_wraps)]
+#![allow(clippy::needless_pass_by_value)]
+#![allow(clippy::redundant_closure_for_method_calls)]
+#![allow(clippy::map_unwrap_or)]
+#![allow(clippy::manual_let_else)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::single_match_else)]
+#![allow(clippy::inline_always)]
+#![allow(clippy::format_push_string)]
+#![allow(clippy::case_sensitive_file_extension_comparisons)]
+#![allow(clippy::single_char_pattern)]
+#![allow(clippy::unnecessary_literal_bound)]
+#![allow(clippy::if_not_else)]
+#![allow(clippy::struct_excessive_bools)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::large_enum_variant)]
+#![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::needless_for_each)]
+#![allow(clippy::implicit_hasher)]
+#![allow(clippy::ignored_unit_patterns)]
+// REPS-AUDIT: test modules use `.unwrap()` / `.expect()` / `panic!` for terse
+// failure assertions, may emit `println!` / `eprintln!` for debug context,
+// and use raw-string-with-hashes / direct float `==` / unseparated literals
+// where the test input is more readable left as written. Allowed under
+// `cfg(test)` only; never reachable in shipped binaries.
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::print_stdout,
+        clippy::print_stderr,
+        clippy::needless_raw_string_hashes,
+        clippy::float_cmp,
+        clippy::unreadable_literal,
+        clippy::manual_assert,
+        clippy::ignore_without_reason,
+    )
+)]
 
 pub mod config;
 /// Enterprise-grade configuration management with advanced caching, performance optimizations,
@@ -110,8 +199,11 @@ use std::path::Path;
 /// use config_lib::parse;
 ///
 /// let config = parse("port = 8080\nname = \"MyApp\"", Some("conf"))?;
-/// let port = config.get("port").unwrap().as_integer()?;
-///
+/// let port = config
+///     .get("port")
+///     .ok_or_else(|| config_lib::Error::key_not_found("port"))?
+///     .as_integer()?;
+/// # let _ = port;
 /// # Ok::<(), config_lib::Error>(())
 /// ```
 pub fn parse(source: &str, format: Option<&str>) -> Result<Value> {
@@ -145,8 +237,11 @@ pub fn parse(source: &str, format: Option<&str>) -> Result<Value> {
 /// use config_lib::parse_file;
 ///
 /// let config = parse_file("app.conf")?;
-/// let port = config.get("server.port").unwrap().as_integer()?;
-///
+/// let port = config
+///     .get("server.port")
+///     .ok_or_else(|| config_lib::Error::key_not_found("server.port"))?
+///     .as_integer()?;
+/// # let _ = port;
 /// # Ok::<(), config_lib::Error>(())
 /// ```
 pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Value> {

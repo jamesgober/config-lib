@@ -80,7 +80,7 @@ impl HotReloadConfig {
             file_path: path,
             last_modified,
             event_sender: None,
-            poll_interval: Duration::from_millis(1000), // Default 1 second polling
+            poll_interval: Duration::from_secs(1), // Default 1 second polling
         })
     }
 
