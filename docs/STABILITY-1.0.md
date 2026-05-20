@@ -6,10 +6,10 @@ the implementation, and it is the single source of truth when answers
 to "is this API stable?", "what's the MSRV policy?", or "what's *not*
 guaranteed?" matter.
 
-This contract takes effect **at the `v1.0.0` release**. The
-pre-1.0 path (`0.9.x`) is the build-up to it, and individual
-elements of the contract may already be in force in late `0.9.x`
-releases — those are noted as they appear.
+This contract is **in force as of `v1.0.0`**. Every promise below
+applies to the v1.x SemVer line. Items in force during the `0.9.x`
+build-up (e.g. the `#[non_exhaustive]` markers, the MSRV 1.75
+commitment) are unchanged.
 
 ---
 
@@ -48,7 +48,7 @@ SemVer:
 | `AuditSeverity`      | `audit.rs`           | Parallel to `ValidationSeverity`.                                         |
 | `FieldType`          | `schema.rs`          | Schema field types grow with format support.                              |
 | `CacheStats`         | `config.rs`          | Born non-exhaustive in 0.9.5; new counter fields planned for 0.9.5.x.     |
-| `ConfigOptions`      | `config.rs`          | Born non-exhaustive in 0.9.4; new knobs coming (defaults table, eviction policy). |
+| `ConfigOptions`      | `config.rs`          | Born non-exhaustive in 0.9.4; new knobs may be added (eviction policy, etc.).      |
 
 Adding a new variant / field to any `#[non_exhaustive]` type is **not**
 a breaking change; v1.x users are required to use wildcard match arms

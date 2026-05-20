@@ -9,6 +9,12 @@
 //! event-driven watcher requires the `hot-reload` Cargo feature.
 
 #![cfg(feature = "hot-reload")]
+// REPS-AUDIT: deliberately uses the v1.0.0-deprecated
+// `with_change_notifications` API. These integration tests serve as
+// regression coverage that the deprecated mpsc bridge still routes
+// through the new lock-free dispatch path correctly. Tests of the
+// new `on_change` API live in the `hot_reload::tests` module.
+#![allow(deprecated)]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use config_lib::hot_reload::{ConfigChangeEvent, HotReloadConfig};

@@ -1,5 +1,5 @@
 <h1 align="center">
-    <img width="90px" height="auto" src="https://raw.githubusercontent.com/jamesgober/jamesgober/main/media/icons/hexagon-3.svg" alt="Triple Hexagon">
+    <img width="99" alt="Rust logo" src="https://raw.githubusercontent.com/jamesgober/rust-collection/72baabd71f00e14aa9184efcb16fa3deddda3a0a/assets/rust-logo.svg">
     <br>
     <b>config-lib</b>
     <br>
@@ -134,7 +134,7 @@ config-lib supports **8 configuration formats** with consistent API access:
 ## 🔧 **Technical Specifications**
 
 ### **System Requirements**
-- **Rust Version**: 1.82+ (2021 edition)
+- **Rust Version**: 1.75+ for the default feature set; 1.82+ when `noml` or `toml` features are enabled (2021 edition)
 - **Platform Support**: Linux, macOS, Windows
 - **Memory**: Optimized for minimal allocations
 - **Dependencies**: See [`Cargo.toml`](../Cargo.toml) for complete list

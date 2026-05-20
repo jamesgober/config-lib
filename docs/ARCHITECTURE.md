@@ -171,6 +171,81 @@ diagnostic, not behavioural.
 
 ---
 
+## 3a. Notification dispatch (v1.0.0+)
+
+`HotReloadConfig::on_change` and `HotReloadHandle::on_change` are the
+public surface for receiving `ConfigChangeEvent`s. The dispatch path
+is **lock-free, allocation-free, and channel-free** — handlers run
+inline on the reloader thread.
+
+### Backend: `ArcSwap<Vec<(u64, Arc<dyn Fn>)>>`
+
+The handler list lives behind an `arc_swap::ArcSwap` pointer:
+
+```text
+HandlerList {
+    handlers: ArcSwap<Vec<(u64, Handler)>>,  // <-- snapshot pointer
+    next_id:  AtomicU64,                      // <-- monotonic ids
+}
+```
+
+- **Dispatch** (`HandlerList::dispatch`) issues one
+  `ArcSwap::load` — a relaxed atomic pointer load — then iterates
+  the resulting `&[(u64, Handler)]`. Each handler is invoked
+  through `Arc<dyn Fn>` (refcount bump only), inside a
+  `catch_unwind` so a panicking handler can't take down the
+  watcher or block subsequent handlers.
+
+- **Register** (`HandlerList::register`) issues an `ArcSwap::rcu`
+  copy-on-write: allocate a new Vec with capacity `n + 1`, copy
+  the old contents, push the new handler, atomic-swap the pointer.
+  An in-flight `dispatch` continues iterating the old snapshot
+  safely; the next dispatch sees the new handler.
+
+- **Unregister** (`HandlerList::unregister`) does the same RCU
+  pattern with one entry filtered out. Idempotent.
+
+### Subscription lifecycle
+
+`HotReloadConfig::on_change` returns a [`Subscription`] — an RAII
+guard whose `Drop` impl calls `HandlerList::unregister(id)`. The
+common pattern is `let _sub = hot.on_change(...);` — the handler
+runs for the surrounding scope and unregisters at scope exit. For
+process-lifetime handlers, `Subscription::forget()` detaches the
+drop hook.
+
+The handler list is shared between the `HotReloadConfig` and its
+spawned worker thread via `Arc<HandlerList>`, so handlers can be
+registered both **before** `start_watching` (on the config) and
+**after** (on the returned `HotReloadHandle`).
+
+### Why not registry-io?
+
+An early v1.0.0 design proposal pulled in the
+[`registry-io`](https://crates.io/crates/registry-io) crate for
+the same `ArcSwap`-backed dispatch pattern. We rejected it: the
+performance characteristics are identical (it's the same
+underlying primitive), but it adds a dependency, a wrapper type
+mismatch with our existing `Receiver`-style API, and a
+1-for-1-replacement-shape problem. We took the load-bearing
+primitive (`arc-swap`) and built the dispatch surface in-tree.
+See the canonical decision log in `.dev/registry-io-integration.md`
+and the v1.0.0 release notes for the full rationale.
+
+### The deprecated `with_change_notifications` bridge
+
+For v0.9.x source compatibility, `with_change_notifications()`
+still returns `(Self, Receiver<ConfigChangeEvent>)`. Internally it
+calls `on_change` with a closure that forwards each event into an
+`mpsc::Sender`. The bridge `Subscription` is stored in
+`HotReloadConfig::bridges` (and moves into `HotReloadHandle` on
+`start_watching`) so the channel keeps receiving events for the
+lifetime of the watcher. The bridge pays one `mpsc::send` per event
+on top of the lock-free dispatch — exactly the cost the new API
+exists to avoid. Marked `#[deprecated(since = "1.0.0")]`.
+
+---
+
 ## 4. Hot reload architecture
 
 The hot-reload layer (v0.9.6+) lives in `src/hot_reload.rs`. It is

@@ -5,8 +5,8 @@
 >
 > **Reads:** `REPS.md` (supreme authority), `_strategy/UNIVERSAL_PROMPT.md` (peak performance + max efficiency + max concurrency + nuclear-proof security + cross-platform), `.dev/AUDIT-0.9.1.md` (current state assessment).
 >
-> **Target ship date:** 4-6 focused weeks from audit (2026-05-18).
-> **Status:** Phase 0.9.9 complete (2026-05-19); `v0.9.9` is the **final pre-1.0 release** and absorbs the implementation halves of Phases 0.9.5 + 0.9.6 + 0.9.8 along with the original 0.9.9 polish scope. `v1.0.0` is next, with **new architectural scope**: integration with the forthcoming `registry-io` dependency (separate James-maintained crate) and the refactoring that integration requires. **Release-path decision (2026-05-19):** `v0.9.9 → v1.0.0` is a direct cut, no `1.0.0-rc.1`; soak happens during the v0.9.9 window. **Hardware-deferred verification (committed benchmark numbers + 1-CPU-hour fuzz runs)** still lands as part of the v1.0.0 cut — the *code* shipped in v0.9.9, the *measurements that the stability contract cites* land alongside v1.0.0 on canonical hardware.
+> **Target ship date:** 4-6 focused weeks from audit (2026-05-18). **Met.**
+> **Status:** **`v1.0.0` shipped (2026-05-19).** The original "registry-io integration for v1.0.0" plan was scrapped after analysis showed it would have added a dependency boundary and 3-4 days of refactor work for zero perf gain over an in-tree `ArcSwap`-backed implementation. v1.0.0 instead delivers an **in-house lock-free notification subsystem** (`HotReloadConfig::on_change` + `Subscription` + `HandlerList`) that takes only the load-bearing primitive (`arc-swap = "1.7"`) without the wrapper crate. Hardware-deferred verification (committed benchmark numbers + 1-CPU-hour fuzz runs) lands as a v1.0.1 patch on canonical hardware.
 
 ---
 
@@ -556,34 +556,55 @@ v0.9.8.x patch (Pending):
 
 ---
 
-## Phase 1.0.0 — Stable release + `registry-io` integration
+## Phase 1.0.0 — Stable release + in-house lock-free notification refactor
 
-**Goal:** Ship `config-lib 1.0.0` — the canonical configuration library — **with integration into the forthcoming `registry-io` dependency**. The 1.0.0 cut is therefore both a stabilization release (locking down what `v0.9.9` made stable) AND an architecturally new release (the refactoring required to consume `registry-io` cleanly).
+**Goal:** Ship `config-lib 1.0.0` — the stable, canonical configuration library — with a lock-free in-process notification subsystem replacing the v0.9.x `mpsc::channel`-based design.
 
-**Effort:** Driven by the `registry-io` integration. Cannot be estimated until `registry-io` is published / available.
+**Effort:** ~1 focused session for the refactor + release prep.
 
-**Scope:**
+**Status:** **Complete (2026-05-19).** Released as [`v1.0.0`](../.dev/release/v1.0.0.md).
 
-1. **`registry-io` integration** — separate James-maintained crate that `config-lib 1.0.0` will depend on. The integration shape is being designed in parallel with `registry-io` itself; the refactoring lands in this phase. Specific deliverables TBD once `registry-io` is available.
-2. **All Phase 0.9.x verification work** that was deferred to canonical hardware:
-   - Committed `benches/baselines.json` from the maintainer's reference hardware
-   - Committed cross-platform hot-reload latency baselines from the CI matrix
-   - 1-CPU-hour clean fuzz runs per target, with any corpus findings promoted to `tests/parser_corpus.rs`
-3. **The stability gates** the v1.0 contract requires.
+### Design decision: in-house instead of `registry-io`
 
-### Pre-flight verification
+An earlier v1.0.0 plan (`.dev/PROMPT-v1.0.0.md`, `.dev/registry-io-integration.md`) called for taking a dependency on a separate `registry-io` crate that provides typed event-registry dispatch. **That plan was scrapped after analysis.** The reasoning, in full:
 
-- [ ] **No critical issues** from the v0.9.9 soak period
-- [ ] **`registry-io` integration design finalized** and implemented (this is the main new work in v1.0.0)
-- [ ] **Final API freeze verification** — no last-minute changes since v0.9.9 *outside* the registry-io integration surface
-- [ ] **All CI checks green** on Linux + macOS + Windows on stable + MSRV (1.75 default / 1.82 with noml feature)
-- [ ] **All Performance Contract benchmark targets met** — measured on the maintainer's reference hardware and committed to `benches/baselines.json`
-- [ ] **Cross-platform hot-reload latency baselines** measured on the CI matrix and committed
-- [ ] **1-CPU-hour clean fuzz runs per target** — no panic, no hang, no OOM on any of the seven harnesses
-- [ ] **`cargo public-api diff` clean** vs v0.9.9 (modulo the deliberate `registry-io` integration surface)
-- [ ] **`cargo audit` clean**
-- [ ] **`cargo deny check` clean**
-- [ ] **Documentation review** — `docs/STABILITY-1.0.md` accurate; new doc sections for the `registry-io` integration written
+- **No performance gap to close.** `registry-io` internally uses `ArcSwap<Vec<Handler>>` — the same primitive we'd use ourselves. There's no perf delta vs. an in-tree implementation.
+- **API-shape mismatch.** config-lib's existing change-notification surface returned `(Self, Receiver<ConfigChangeEvent>)`. `registry-io` is `SyncRegistry<T>::register(closure) → HandlerId`. The two don't compose 1-for-1; integrating would have meant a wrapper layer AND a deprecation cycle for the old `Receiver`-flavored API anyway — same migration cost, plus a new external dependency.
+- **REPS principle: take the load-bearing primitive, not the wrapper.** We added `arc-swap = "1.7"` (~700 LOC, MSRV 1.46, stable, transitive-dep in many ecosystems) and built the dispatch surface inline. ~80 lines of real code in `src/hot_reload.rs` + ~30 lines of docs.
+
+The decision is recorded in `docs/ARCHITECTURE.md` §3a ("Why not registry-io?") and the v1.0.0 release notes.
+
+### What shipped
+
+- **`HotReloadConfig::on_change(closure) → Subscription`** — new lock-free notification API.
+- **`HotReloadHandle::on_change(closure) → Subscription`** — same API accessible post-`start_watching`.
+- **`Subscription`** — RAII guard with `Drop`-based unregister; `Subscription::forget()` detaches the drop hook for process-lifetime handlers.
+- **`HandlerList` (private)** — `ArcSwap<Vec<(u64, Arc<dyn Fn>)>>` backing; dispatch = one `load()` + iterate + `Arc::clone` + `catch_unwind`-wrapped call per handler.
+- **`with_change_notifications` deprecated** with internal bridge: registers a closure that forwards events to an `mpsc::Sender`. Existing v0.9.x users keep compiling.
+- **`arc-swap = "1.7"`** as a regular (non-optional) dependency.
+- **`examples/on_change_demo.rs`** — runnable demo of the new API.
+- **`examples/hot_reload_demo.rs`** migrated off the deprecated API.
+- **`benches/notification.rs`** — criterion harness for the dispatch path.
+- **`docs/STABILITY-1.0.md`** — opening line updated to "in force as of v1.0.0".
+- **`docs/ARCHITECTURE.md`** — new §3a "Notification dispatch (v1.0.0+)" + decision log.
+- **`docs/PERFORMANCE.md`** — five new Performance Contract rows for notification dispatch; `benches/notification.rs` documented.
+- **README** — version-compat section rewritten for v1.x; deprecation banners simplified; install snippets bumped from `"0.9"` to `"1.0"`.
+
+### Pre-flight verification (all met)
+
+- [x] **No critical issues** from the v0.9.9 soak
+- [x] **Final API freeze verification** — no breaking changes; `with_change_notifications` continues to work via bridge
+- [x] **All local gates green** on stable + 1.82
+- [x] **`cargo +1.75 check`** passes on default features
+- [x] **`cargo audit`** clean
+- [x] **`cargo deny check`** clean
+- [x] **Documentation review** — `docs/STABILITY-1.0.md` accurate
+
+Deferred to **v1.0.1** patch (pending canonical hardware):
+
+- [ ] Committed `benches/baselines.json` from reference hardware
+- [ ] Cross-platform hot-reload latency baselines from the CI matrix
+- [ ] 1-CPU-hour clean fuzz runs per target
 
 ### Release sequence
 

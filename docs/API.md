@@ -1,7 +1,7 @@
 <h1 id="top" align="center">
-    <img width="90px" height="auto" src="https://raw.githubusercontent.com/jamesgober/jamesgober/main/media/icons/hexagon-3.svg" alt="Triple Hexagon">
+    <img width="99" alt="Rust logo" src="https://raw.githubusercontent.com/jamesgober/rust-collection/72baabd71f00e14aa9184efcb16fa3deddda3a0a/assets/rust-logo.svg">
     <br><b>config-lib</b><br>
-    <sub><sup>API REFERENCE</sup></sub>
+    <sub><sup>API REFERENCE — v1.0.0</sup></sub>
 </h1>
 <div align="center">
     <sup>
@@ -13,1828 +13,1553 @@
         <span>&nbsp;│&nbsp;</span>
         <a href="./FORMATS.md" title="Formats"><b>FORMATS</b></a>
         <span>&nbsp;│&nbsp;</span>
+        <a href="./ARCHITECTURE.md" title="Architecture"><b>ARCHITECTURE</b></a>
+        <span>&nbsp;│&nbsp;</span>
+        <a href="./PERFORMANCE.md" title="Performance"><b>PERFORMANCE</b></a>
+        <span>&nbsp;│&nbsp;</span>
+        <a href="./PLATFORM-NOTES.md" title="Platform Notes"><b>PLATFORM</b></a>
+        <span>&nbsp;│&nbsp;</span>
+        <a href="./SECURITY.md" title="Security"><b>SECURITY</b></a>
+        <span>&nbsp;│&nbsp;</span>
+        <a href="./STABILITY-1.0.md" title="Stability Contract"><b>STABILITY</b></a>
+        <span>&nbsp;│&nbsp;</span>
         <a href="./GUIDELINES.md" title="Developer Guidelines"><b>GUIDELINES</b></a>
     </sup>
 </div>
 
 <br>
 
+> Canonical API reference for `config-lib v1.0.0`. Every public type and free function is documented here with description, key methods, parameter notes, and at least one runnable code example. The full v1.x stability contract for these items is in [`STABILITY-1.0.md`](./STABILITY-1.0.md).
+
+---
+
 ## Table of Contents
 
-### **Core Library**
-- **[Installation](#installation)**
-- **[Feature Flags](#feature-flags)**
-- **[Core Functions](#core-functions)**
-  - [`parse()`](#parse)
-  - [`parse_file()`](#parse_file)
-  - [`validate()`](#validate)
-  - [`parse_file_async()`](#parse_file_async)
-- **[Error Handling](#error-handling)**
+### Getting Started
+- [Installation](#installation)
+- [Feature Flags](#feature-flags)
 
-### **Configuration Management**
-- **[Config API](#config-api)**
-  - [Creation & Loading](#config-creation)
-  - [Value Access](#config-access)
-  - [Modification & Persistence](#config-modification)
-  - [Validation & Schema](#schema-api)
-- **[ConfigBuilder API](#configbuilder-api)**
-  - [Default Settings](#default-settings)
-  - [Multi-Source Loading](#multi-source-loading)
-  - [Environment Integration](#environment-integration)
-- **[Value API](#value-api)**
-  - [Type Construction](#value-construction)
-  - [Type Checking](#value-checking)
-  - [Type Conversion](#value-conversion)
+### Top-Level Free Functions
+- [`parse`](#parse)
+- [`parse_file`](#parse_file)
+- [`parse_file_async`](#parse_file_async)
+- [`validate`](#validate)
 
-### **Enterprise Features**
-- **[EnterpriseConfig API](#enterpriseconfig-api)**
-  - [Performance & Caching](#enterprise-performance)
-  - [Thread Safety](#enterprise-threading)
-  - [Statistics & Monitoring](#enterprise-monitoring)
+### Core Types
+- [`Error` / `Result`](#error)
+- [`Value`](#value)
+- [`Config`](#config)
+- [`ConfigOptions`](#configoptions)
+- [`ConfigBuilder`](#configbuilder)
+- [`ConfigValue`](#configvalue)
+- [`CacheStats`](#cachestats)
 
-### **Advanced Features**
-- **[Hot Reload API](#hot-reload-api)**
-- **[Audit Logging API](#audit-api)**
-- **[Environment Override API](#env-override-api)**
-- **[Schema Validation API](#schema-api)**
-- **[Async Operations API](#async-api)**
+### Hot Reload (`hot_reload` module)
+- [`HotReloadConfig`](#hotreloadconfig)
+- [`HotReloadHandle`](#hotreloadhandle)
+- [`Subscription`](#subscription)
+- [`ConfigChangeEvent`](#configchangeevent)
 
-<hr>
-<br>
+### Multi-Instance
+- [`ConfigManager`](#configmanager)
+
+### Schema Validation (feature: `schema`)
+- [`Schema`](#schema)
+- [`SchemaBuilder`](#schemabuilder)
+- [`FieldType`](#fieldtype)
+- [`FieldSchema`](#fieldschema)
+
+### Rule-Based Validation (feature: `validation`)
+- [`ValidationRule`](#validationrule)
+- [`ValidationRuleSet`](#validationruleset)
+- [`ValidationError`](#validationerror)
+- [`ValidationResult`](#validationresult)
+- [`ValidationSeverity`](#validationseverity)
+- [`ValueType`](#valuetype)
+- [`TypeValidator` / `RangeValidator` / `RequiredKeyValidator`](#built-in-validators)
+
+### Audit Logging (`audit` module, always compiled)
+- [`AuditLogger`](#auditlogger)
+- [`AuditEvent`](#auditevent)
+- [`AuditEventType`](#auditeventtype)
+- [`AuditSeverity`](#auditseverity)
+- [`AuditSink` (trait)](#auditsink-trait)
+- [`ConsoleSink` / `FileSink`](#audit-sinks)
+- [`init_audit_logger` / `get_audit_logger` / `audit_log`](#audit-free-functions)
+
+### Environment Variable Overrides (feature: `env-override`)
+- [`EnvOverrideConfig`](#envoverrideconfig)
+- [`EnvOverrideSystem`](#envoverridesystem)
+- [`apply_env_overrides` / `apply_env_overrides_default`](#apply_env_overrides)
+
+### Parser Submodules (`parsers::*`)
+- [Top-level dispatch: `parse_string` / `parse_file` / `detect_format`](#parsers-top-level)
+- [Per-format parsers](#parsers-per-format)
+
+### Deprecated APIs
+- [`EnterpriseConfig`](#enterpriseconfig-deprecated)
+- [`enterprise::direct::*`](#enterprise-direct-deprecated)
+- [`HotReloadConfig::with_change_notifications`](#with_change_notifications-deprecated)
+
+---
 
 <h2 id="installation">Installation</h2>
 
-
-### 📋 Install Manually
 ```toml
 [dependencies]
-config-lib  = "0.9.0"
-```
-> Add this to your `Cargo.toml`:
+config-lib = "1.0"
 
+# Common feature additions:
+config-lib = { version = "1.0", features = ["json", "validation", "env-override"] }
 
-#### Install Features
-```toml
-[dependencies]
+# Everything on:
+config-lib = { version = "1.0", features = [
+    "json", "xml", "hcl", "noml", "toml",
+    "validation", "schema", "async", "chrono",
+    "env-override",
+] }
 
-# Single feature
-config-lib = { version = "0.9.0", features = ["async"] }
-
-# Multiple features
-config-lib = { version = "0.9.0", features = ["async, noml"] }
-
-# Disable Default
-config-lib = { version = "0.9.0", features = ["async"] }
-```
-> **[Features](#feature-flags)**
-
-<br>
-
-
-### 📋 Install via Terminal
-```bash
-# Basic installation
-cargo add config-lib
-
-# Enable a feature
-cargo add config-lib --features async
-
-# Enable multiple features
-cargo add config-lib --features async,noml
-
-# Disable Default
-cargo add config-lib --features async
+# Slim build (CONF only, no hot reload, no extras):
+config-lib = { version = "1.0", default-features = false, features = ["conf"] }
 ```
 
-
-
-
-<hr>
-<a href="#top">&uarr; <b>TOP</b></a>
-<br>
-<br>
+**MSRV:** Rust `1.75+` for the default feature set; Rust `1.82+` if `noml` or `toml` features are enabled (upstream `noml = "=0.9.0"` declares 1.82).
 
 <h2 id="feature-flags">Feature Flags</h2>
 
-### **Format Support**
+| Feature        | Default? | Purpose                                                                                |
+|----------------|----------|----------------------------------------------------------------------------------------|
+| `conf`         | yes      | Built-in CONF format parser                                                            |
+| `hot-reload`   | yes      | Event-driven file watching via `notify` (inotify/FSEvents/RDCW)                        |
+| `json`         | no       | JSON parsing via `serde_json`                                                          |
+| `xml`          | no       | XML parsing via `quick-xml`                                                            |
+| `hcl`          | no       | HashiCorp Configuration Language (built-in parser)                                     |
+| `noml`         | no       | NOML parsing via the upstream `noml` crate (pinned `=0.9.0`)                           |
+| `toml`         | no       | TOML parsing via the `noml` crate for format preservation                              |
+| `validation`   | no       | Rule-based validation framework (`regex`-backed)                                       |
+| `schema`       | no       | Schema validation framework                                                            |
+| `async`        | no       | Async file I/O via `tokio`                                                             |
+| `chrono`       | no       | DateTime support via `chrono`                                                          |
+| `env-override` | no       | Environment-variable override system                                                   |
 
-| Feature               | Default | Description |
-|-----------------------|:-------:|---------------------------------------------------------------|
-| `conf`                |  ✅     | CONF file support (built-in parser) - always available        |
-| `ini`                 |  ✅     | INI file support (built-in parser) - always available         |
-| `properties`          |  ✅     | Java Properties file support (built-in parser)                |
-| `json`                |  ❌     | JSON format support with serde_json backend                   |
-| `xml`                 |  ❌     | XML format support with quick-xml backend                     |
-| `hcl`                 |  ❌     | HashiCorp Configuration Language support                      |
-| `toml`                |  ❌     | TOML format support with format preservation                  |
-| `noml`                |  ❌     | NOML format support with dynamic features                     |
+Feature names and their effects are part of the v1.x stability contract — see [`STABILITY-1.0.md`](./STABILITY-1.0.md) §4.
 
-### **Enterprise & Advanced Features**
+---
 
-| Feature               | Default | Description |
-|-----------------------|:-------:|---------------------------------------------------------------|
-| `async`               |  ❌     | Async file operations and hot reloading                       |
-| `validation`          |  ❌     | Schema validation and type checking system                    |
-| `env-override`        |  ❌     | Environment variable override system                          |
-| `audit`               |  ❌     | Comprehensive audit logging for compliance                    |
-| `hot-reload`          |  ❌     | Zero-downtime configuration hot reloading                     |
-| `enterprise`          |  ❌     | Enterprise caching and performance optimizations              |
+# Top-Level Free Functions
 
-### **Optional Integrations**
+The crate root re-exports four free functions for users who only need parse-once / validate-once semantics.
 
-| Feature               | Default | Description |
-|-----------------------|:-------:|---------------------------------------------------------------|
-| `chrono`              |  ❌     | DateTime support with chrono integration                      |
-| `serde`               |  ❌     | Serde serialization/deserialization support                  |
+<h2 id="parse"><code>parse</code></h2>
 
-<hr>
-<a href="#top">&uarr; <b>TOP</b></a>
-<br>
-<br>
+```rust
+pub fn parse(source: &str, format: Option<&str>) -> Result<Value>
+```
 
-<h2 id="core-functions">Core Functions</h2>
-
-The core library provides simple, standalone functions for parsing and validating configuration data without requiring complex setup.
-
-<br>
-
-<h3 id="parse">parse()</h3>
-
-Parse configuration from a string with optional format hint.
-
-**Signature:** `pub fn parse(source: &str, format: Option<&str>) -> Result<Value>`
+Parse configuration data from an in-memory string and return the resulting [`Value`](#value) tree. Auto-detects the format when `format` is `None`.
 
 **Parameters:**
-- `source` - The configuration data as a string
-- `format` - Optional format hint ("conf", "ini", "properties", "json", "xml", "hcl", "toml", "noml")
 
-**Returns:** `Result<Value>` containing the parsed configuration data
+| Name     | Type             | Description                                                                  |
+|----------|------------------|------------------------------------------------------------------------------|
+| `source` | `&str`           | The configuration text                                                       |
+| `format` | `Option<&str>`   | Format hint: `"conf"`, `"ini"`, `"properties"`, `"json"`, `"xml"`, `"hcl"`, `"noml"`, `"toml"`. `None` triggers content-based auto-detection |
 
-**Errors:**
-- Format is unknown or unsupported
-- Input contains syntax errors  
-- Required features are not enabled for the detected format
+**Errors:** Returns [`Error::Parse`](#error) on syntax errors, [`Error::UnknownFormat`](#error) when detection fails, or [`Error::FeatureNotEnabled`](#error) when the format requires a Cargo feature that isn't enabled.
 
-**Examples:**
+**Example — explicit format:**
 
 ```rust
 use config_lib::parse;
 
-// Parse with automatic format detection
-let config = parse(r#"
-port = 8080
-name = "MyApp"
-debug = true
-"#, None)?;
-
-// Parse with explicit format
-let config = parse(r#"
-{
-  "server": {
-    "port": 8080,
-    "host": "localhost"
-  }
-}
-"#, Some("json"))?;
-
-// Access parsed values
-let port = config.get("port")?.as_integer()?;
-let name = config.get("name")?.as_string()?;
-let host = config.get("server.host")?.as_string()?;
-
+let value = parse("port = 8080\nname = \"app\"", Some("conf"))?;
+assert_eq!(value.get("port").unwrap().as_integer()?, 8080);
 # Ok::<(), config_lib::Error>(())
 ```
 
-<br>
+**Example — auto-detection:**
 
-<h3 id="parse_file">parse_file()</h3>
+```rust
+use config_lib::parse;
 
-Parse configuration from a file, auto-detecting format from extension.
+// Auto-detects JSON from the leading `{`.
+let value = parse(r#"{"port": 8080}"#, None)?;
+assert_eq!(value.get("port").unwrap().as_integer()?, 8080);
+# Ok::<(), config_lib::Error>(())
+```
 
-**Signature:** `pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Value>`
+<h2 id="parse_file"><code>parse_file</code></h2>
 
-**Parameters:**
-- `path` - Path to the configuration file
+```rust
+pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Value>
+```
 
-**Returns:** `Result<Value>` containing the parsed configuration data
+Read a configuration file from disk and parse it. Format is detected from the file extension first (`.conf`, `.ini`, `.json`, `.xml`, `.hcl`, `.toml`, `.noml`, `.properties`); falls back to content-based detection if the extension isn't recognized.
 
-**Errors:**
-- File cannot be read (I/O error)
-- File format cannot be detected from extension
-- File contains syntax errors
-- Required features are not enabled for the detected format
+**Errors:** Returns [`Error::Io`](#error) on filesystem errors, plus all errors documented for [`parse`](#parse).
 
-**Supported Extensions:**
-- `.conf`, `.cfg` → CONF format
-- `.ini` → INI format  
-- `.properties` → Properties format
-- `.json` → JSON format (requires `json` feature)
-- `.xml` → XML format (requires `xml` feature)
-- `.hcl` → HCL format (requires `hcl` feature)
-- `.toml` → TOML format (requires `toml` feature)
-- `.noml` → NOML format (requires `noml` feature)
-
-**Examples:**
+**Example:**
 
 ```rust
 use config_lib::parse_file;
 
-// Parse different file formats
-let app_config = parse_file("app.conf")?;
-let database_config = parse_file("database.ini")?;  
-let api_config = parse_file("api.json")?;
-
-// Access values from any format
-let app_port = app_config.get("server.port")?.as_integer()?;
-let db_host = database_config.get("connection.host")?.as_string()?;
-let api_key = api_config.get("auth.key")?.as_string()?;
-
+let value = parse_file("app.conf")?;
+let port = value
+    .get("server.port")
+    .ok_or_else(|| config_lib::Error::key_not_found("server.port"))?
+    .as_integer()?;
 # Ok::<(), config_lib::Error>(())
 ```
 
-<br>
-
-<h3 id="validate">validate() <span style="color: #888">[requires: validation]</span></h3>
-
-Validate configuration against a schema definition.
-
-**Signature:** `pub fn validate(config: &Value, schema: &Schema) -> Result<()>`
-
-**Parameters:**
-- `config` - Configuration value to validate
-- `schema` - Schema definition for validation
-
-**Returns:** `Result<()>` - Ok if validation passes, Error with details if fails
-
-**Requires:** `validation` feature flag
-
-**Examples:**
+<h2 id="parse_file_async"><code>parse_file_async</code></h2>
 
 ```rust
-# #[cfg(feature = "validation")]
-# {
-use config_lib::{parse, SchemaBuilder};
-
-let config = parse(r#"
-    app_name = "my-service"
-    server_port = 8080
-    debug_mode = true
-    allowed_hosts = ["localhost", "127.0.0.1"]
-"#, None)?;
-
-// Define validation schema
-let schema = SchemaBuilder::new()
-    .require_string("app_name")
-    .require_integer_range("server_port", 1, 65535)
-    .require_bool("debug_mode")
-    .require_array("allowed_hosts")
-    .build();
-
-// Validate configuration
-config_lib::validate(&config, &schema)?;
-println!("Configuration is valid!");
-# }
-
-# Ok::<(), config_lib::Error>(())
+#[cfg(feature = "async")]
+pub async fn parse_file_async<P: AsRef<Path>>(path: P) -> Result<Value>
 ```
 
-<br>
+Async variant of [`parse_file`](#parse_file). Reads via `tokio::fs::read_to_string`. Requires the `async` feature.
 
-<h3 id="parse_file_async">parse_file_async() <span style="color: #888">[requires: async]</span></h3>
-
-Async version of parse_file for non-blocking file operations.
-
-**Signature:** `pub async fn parse_file_async<P: AsRef<Path>>(path: P) -> Result<Value>`
-
-**Parameters:**
-- `path` - Path to the configuration file
-
-**Returns:** `Result<Value>` containing the parsed configuration data
-
-**Requires:** `async` feature flag
-
-**Examples:**
-
-```rust
-# #[cfg(feature = "async")]
-# {
-use config_lib::parse_file_async;
-
-async fn load_config() -> Result<(), config_lib::Error> {
-    // Non-blocking file parsing
-    let config = parse_file_async("large-config.toml").await?;
-    
-    let server_config = config.get("server")?;
-    println!("Server configuration loaded: {:?}", server_config);
-    
-    Ok(())
-}
-
-// Usage in async context
-# tokio_test::block_on(async {
-let config = parse_file_async("app.conf").await?;
-let port = config.get("port")?.as_integer()?;
-# Ok::<(), config_lib::Error>(())
-# })?;
-# }
-
-# Ok::<(), config_lib::Error>(())
-```
-
-<hr>
-<a href="#top">&uarr; <b>TOP</b></a>
-<br>
-<br>
-
-<h2 id="error-handling">Error Handling</h2>
-
-All functions return `Result<T, Error>` for comprehensive error handling.
-
-### **Error Types**
-
-```rust
-use config_lib::{Error, Result};
-
-// Common error patterns
-match parse("invalid config", None) {
-    Ok(config) => println!("Parsed successfully"),
-    Err(Error::ParseError { message, line, column }) => {
-        eprintln!("Parse error at line {}, column {}: {}", line, column, message);
-    },
-    Err(Error::IoError(io_err)) => {
-        eprintln!("File I/O error: {}", io_err);
-    },
-    Err(Error::UnsupportedFormat(format)) => {
-        eprintln!("Format '{}' not supported or feature not enabled", format);
-    },
-    Err(err) => {
-        eprintln!("Other error: {}", err);
-    }
-}
-```
-
-### **Error Categories**
-
-- **`ParseError`** - Syntax errors in configuration files
-- **`IoError`** - File system access errors
-- **`UnsupportedFormat`** - Format not supported or feature not enabled
-- **`ValidationError`** - Schema validation failures
-- **`TypeError`** - Type conversion errors
-- **`PathError`** - Invalid configuration paths
-
-<hr>
-<a href="#top">&uarr; <b>TOP</b></a>
-<br>
-<br>
-
-<h2 id="config-api">Config API</h2>
-
-<h3 id="config-creation">Creation & Loading</h3>
-
-#### **Config::new()**
-
-Create a new empty configuration.
-
-**Signature:** `pub fn new() -> Self`
-
-**Returns:** Empty Config instance with CONF format
+The async file I/O is worker-thread-pool-backed on every platform — see [`PLATFORM-NOTES.md`](./PLATFORM-NOTES.md). Use this when you don't want to block the current async runtime's executor thread.
 
 **Example:**
-```rust
-use config_lib::Config;
 
-let mut config = Config::new();
-config.set("app.name", "MyApp")?;
-config.set("server.port", 8080)?;
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **Config::from_string()**
-
-Load configuration from a string with optional format hint.
-
-**Signature:** `pub fn from_string(source: &str, format: Option<&str>) -> Result<Self>`
-
-**Parameters:**
-- `source` - Configuration data as string
-- `format` - Optional format hint
-
-**Returns:** `Result<Config>` with loaded configuration
-
-**Examples:**
-```rust
-use config_lib::Config;
-
-// Auto-detect format
-let config = Config::from_string(r#"
-server_port = 8080
-app_name = "my-service"
-debug = true
-"#, None)?;
-
-// Explicit format
-let json_config = Config::from_string(r#"
-{
-  "database": {
-    "host": "localhost",
-    "port": 5432
-  }
-}
-"#, Some("json"))?;
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **Config::from_file()**
-
-Load configuration from a file with automatic format detection.
-
-**Signature:** `pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self>`
-
-**Parameters:**
-- `path` - Path to configuration file
-
-**Returns:** `Result<Config>` with loaded configuration
-
-**Examples:**
-```rust
-use config_lib::Config;
-
-// Load different formats
-let app_config = Config::from_file("app.conf")?;
-let db_config = Config::from_file("database.toml")?;
-let api_config = Config::from_file("api.json")?;
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **Config::from_file_async()** <span style="color: #888">[requires: async]</span>
-
-Async version of from_file for non-blocking file operations.
-
-**Signature:** `pub async fn from_file_async<P: AsRef<Path>>(path: P) -> Result<Self>`
-
-**Examples:**
-```rust
+```rust,no_run
 # #[cfg(feature = "async")]
-# {
-use config_lib::Config;
+# async fn run() -> Result<(), Box<dyn std::error::Error>> {
+use config_lib::parse_file_async;
 
-async fn load_configs() -> Result<(), config_lib::Error> {
-    let config = Config::from_file_async("large-config.toml").await?;
-    println!("Config loaded asynchronously");
-    Ok(())
-}
+let value = parse_file_async("app.conf").await?;
+let port = value.get("server.port").unwrap().as_integer()?;
+# Ok(())
 # }
+```
 
+<h2 id="validate"><code>validate</code></h2>
+
+```rust
+#[cfg(feature = "schema")]
+pub fn validate(config: &Value, schema: &Schema) -> Result<()>
+```
+
+Validate a [`Value`](#value) tree against a [`Schema`](#schema). Returns `Ok(())` on success; returns [`Error::Schema`](#error) (or accumulates [`ValidationError`](#validationerror) details inside the error) on failure. Requires the `schema` feature.
+
+**Example:**
+
+```rust
+# #[cfg(feature = "schema")]
+# {
+use config_lib::{parse, SchemaBuilder, validate};
+
+let value = parse(r#"name = "my-app"
+port = 8080"#, Some("conf"))?;
+
+let schema = SchemaBuilder::new()
+    .require_string("name")
+    .require_integer("port")
+    .build();
+
+validate(&value, &schema)?;
+# }
 # Ok::<(), config_lib::Error>(())
 ```
 
-<br>
+---
 
-<h3 id="config-access">Value Access</h3>
+# Core Types
 
-#### **Config::get()**
+<h2 id="error"><code>Error</code> / <code>Result</code></h2>
 
-Get a value by path using dot notation.
-
-**Signature:** `pub fn get(&self, path: &str) -> Option<&Value>`
-
-**Parameters:**
-- `path` - Dot-separated path to the value
-
-**Returns:** `Option<&Value>` - Some if found, None if missing
-
-**Examples:**
 ```rust
-use config_lib::Config;
+pub type Result<T> = std::result::Result<T, Error>;
 
-let config = Config::from_string(r#"
-[server]
-port = 8080
-host = "localhost"
-
-[database]
-url = "postgres://localhost/mydb"
-"#, Some("toml"))?;
-
-// Access nested values
-let port = config.get("server.port")?.as_integer()?;
-let host = config.get("server.host")?.as_string()?;
-let db_url = config.get("database.url")?.as_string()?;
-
-// Safe access with defaults
-let timeout = config.get("server.timeout")
-    .and_then(|v| v.as_integer().ok())
-    .unwrap_or(30);
-
-# Ok::<(), config_lib::Error>(())
+#[non_exhaustive]
+pub enum Error {
+    Parse { message: String, line: usize, column: usize, file: Option<String> },
+    UnknownFormat { format: String },
+    KeyNotFound { key: String, available: Vec<String> },
+    Type { value: String, expected_type: String, actual_type: String },
+    Io { path: String, source: std::io::Error },
+    Schema { path: String, message: String, expected: Option<String> },  // feature: schema
+    Validation { message: String },
+    General { message: String },
+    FeatureNotEnabled { feature: String },
+    Concurrency { message: String },
+    Noml { source: noml::NomlError },                                     // feature: noml
+    Internal { message: String, context: Option<String> },
+    // ... `#[non_exhaustive]` — new variants may be added in MINOR releases
+}
 ```
 
-#### **Config::contains_key()**
+`Error` is `#[non_exhaustive]` — match on it with a wildcard arm.
 
-Check if a path exists in the configuration.
+**Constructor helpers:** prefer these over struct-literal construction.
 
-**Signature:** `pub fn contains_key(&self, path: &str) -> bool`
+| Method                                          | Description                                                |
+|-------------------------------------------------|------------------------------------------------------------|
+| `Error::parse(msg, line, column)`               | Syntax error at a known position                           |
+| `Error::parse_with_file(msg, line, col, file)`  | Same, plus the file path                                   |
+| `Error::key_not_found(key)`                     | Path not found in the configuration                        |
+| `Error::key_not_found_with_suggestions(k, vs)`  | Same, with suggested neighbors                             |
+| `Error::type_error(value, expected, actual)`    | Type conversion failed                                     |
+| `Error::io(path, source)`                       | Wrap a `std::io::Error` with file context                  |
+| `Error::unknown_format(format)`                 | Format detection / dispatch failed                         |
+| `Error::feature_not_enabled(feature)`           | Operation requires a Cargo feature that isn't enabled      |
+| `Error::concurrency(msg)`                       | Lock poisoning / thread coordination failure               |
+| `Error::serialize(msg)`                         | Serialization error                                        |
+| `Error::schema(path, msg)` *(schema feature)*   | Schema validation failure                                  |
+| `Error::validation(msg)`                        | Validation rule failed                                     |
+| `Error::general(msg)`                           | Generic error with message                                 |
+| `Error::internal(msg)`                          | Internal invariant violation (should never happen)         |
 
-**Examples:**
+`Error` implements `std::error::Error` (via `thiserror`), `Debug`, and `Display`.
+
+**Example:**
+
 ```rust
-use config_lib::Config;
+use config_lib::{parse, Error};
 
-let config = Config::from_string("app.name = \"MyApp\"", None)?;
-
-if config.contains_key("app.name") {
-    println!("App name is configured");
+let value = parse("port = 8080", Some("conf"))?;
+match value.get("missing_key") {
+    Some(v) => println!("found: {v:?}"),
+    None => println!("not found"),
 }
 
-if !config.contains_key("app.version") {
-    println!("Version not set, using default");
+// Propagating with `?`:
+fn require_port(v: &config_lib::Value) -> Result<i64, Error> {
+    v.get("port")
+        .ok_or_else(|| Error::key_not_found("port"))?
+        .as_integer()
 }
-
-# Ok::<(), config_lib::Error>(())
+# Ok::<(), Error>(())
 ```
 
-#### **Config::keys()**
+<h2 id="value"><code>Value</code></h2>
 
-Get all available keys in the configuration.
-
-**Signature:** `pub fn keys(&self) -> Result<Vec<&str>>`
-
-**Examples:**
 ```rust
-use config_lib::Config;
-
-let config = Config::from_string(r#"
-app.name = "MyApp"
-server.port = 8080
-database.host = "localhost"
-"#, None)?;
-
-let keys = config.keys()?;
-for key in keys {
-    println!("Available key: {}", key);
+pub enum Value {
+    Null,
+    Bool(bool),
+    Integer(i64),
+    Float(f64),
+    String(String),
+    Array(Vec<Value>),
+    Table(BTreeMap<String, Value>),
+    #[cfg(feature = "chrono")]
+    DateTime(chrono::DateTime<chrono::Utc>),
 }
-// Output: app.name, server.port, database.host
-
-# Ok::<(), config_lib::Error>(())
 ```
 
-<br>
+The variant-data type that every parser produces and every accessor returns. `Value` is **not** `#[non_exhaustive]` — exhaustive pattern matching against every variant is a deliberate feature for users writing format converters and type dispatchers.
 
-<h3 id="config-modification">Modification & Persistence</h3>
+### Construction
 
-#### **Config::set()**
+| Method                              | Returns                                       |
+|-------------------------------------|-----------------------------------------------|
+| `Value::null()`                     | `Value::Null`                                 |
+| `Value::bool(b)`                    | `Value::Bool(b)`                              |
+| `Value::integer(n)`                 | `Value::Integer(n)`                           |
+| `Value::float(f)`                   | `Value::Float(f)`                             |
+| `Value::string(s)` *(`impl Into<String>`)* | `Value::String(s.into())`              |
+| `Value::array(vec)`                 | `Value::Array(vec)`                           |
+| `Value::table(map)`                 | `Value::Table(map)`                           |
+| `Value::datetime(dt)` *(chrono)*    | `Value::DateTime(dt)`                         |
 
-Set a value by path, creating nested structure as needed.
+### Type Inspection
 
-**Signature:** `pub fn set<V: Into<Value>>(&mut self, path: &str, value: V) -> Result<()>`
+`type_name()`, `is_null()`, `is_bool()`, `is_integer()`, `is_float()`, `is_string()`, `is_array()`, `is_table()` — all return `bool` or `&'static str` and do not allocate.
 
-**Parameters:**
-- `path` - Dot-separated path to set
-- `value` - Value to set (any type implementing Into<Value>)
+### Type Conversion (fallible)
 
-**Examples:**
 ```rust
-use config_lib::Config;
+pub fn as_bool(&self) -> Result<bool>;
+pub fn as_integer(&self) -> Result<i64>;
+pub fn as_float(&self) -> Result<f64>;
+pub fn as_string(&self) -> Result<&str>;
+pub fn as_array(&self) -> Result<&Vec<Value>>;
+pub fn as_array_mut(&mut self) -> Result<&mut Vec<Value>>;
+pub fn as_table(&self) -> Result<&BTreeMap<String, Value>>;
+pub fn as_table_mut(&mut self) -> Result<&mut BTreeMap<String, Value>>;
+pub fn to_string_representation(&self) -> Result<String>;
+```
 
-let mut config = Config::new();
+Each `as_*` returns `Ok(...)` on the matching variant and `Err(Error::Type { ... })` otherwise. Numeric conversions are strict: `as_integer` on a `Value::Float` returns `Err`, not silent truncation.
 
-// Set various types
-config.set("app.name", "MyApp")?;
-config.set("server.port", 8080)?;
-config.set("features.debug", true)?;
-config.set("allowed_hosts", vec!["localhost", "127.0.0.1"])?;
+### Path Access
 
-// Nested structure created automatically
-config.set("database.connection.pool_size", 10)?;
+```rust
+pub fn get(&self, path: &str) -> Option<&Value>;
+pub fn get_mut_nested(&mut self, path: &str) -> Result<&mut Value>;
+pub fn set_nested(&mut self, path: &str, value: Value) -> Result<()>;
+pub fn remove(&mut self, path: &str) -> Result<Option<Value>>;
+pub fn contains_key(&self, path: &str) -> bool;
+pub fn keys(&self) -> Result<Vec<&str>>;
+pub fn len(&self) -> usize;
+pub fn is_empty(&self) -> bool;
+```
 
+Paths use dot notation: `"server.database.host"`. All return `Err(Error::Type)` when applied to a non-table `Value`.
+
+**Example — construction + traversal:**
+
+```rust
+use config_lib::Value;
+use std::collections::BTreeMap;
+
+let mut tree = BTreeMap::new();
+tree.insert("port".to_string(), Value::integer(8080));
+tree.insert("name".to_string(), Value::string("my-app"));
+
+let v = Value::table(tree);
+assert_eq!(v.get("port").unwrap().as_integer()?, 8080);
+assert_eq!(v.get("name").unwrap().as_string()?, "my-app");
+assert!(v.contains_key("port"));
+assert!(!v.contains_key("missing"));
 # Ok::<(), config_lib::Error>(())
 ```
 
-#### **Config::remove()**
+<h2 id="config"><code>Config</code></h2>
 
-Remove a value by path.
+```rust
+#[derive(Debug)]
+pub struct Config { /* ... */ }
+```
 
-**Signature:** `pub fn remove(&mut self, path: &str) -> Result<Option<Value>>`
+The primary user-facing configuration type. Owns a [`Value`](#value) tree, tracks the source file path + format, exposes the cache + defaults table + read-only mode introduced in v0.9.5–v0.9.9.
 
-**Returns:** The removed value if it existed
+`Config: Send + Sync` (every field is `Send + Sync`). Multi-thread sharing patterns are documented in [`ARCHITECTURE.md`](./ARCHITECTURE.md) §5.
 
-**Examples:**
+### Construction
+
+| Constructor                                | Description                                                                |
+|--------------------------------------------|----------------------------------------------------------------------------|
+| `Config::new()`                            | Empty configuration (no values, no file path)                              |
+| `Config::from_string(source, format)`      | Parse from in-memory string with optional format hint                      |
+| `Config::from_file(path)`                  | Read + parse from disk; format detected by extension or content            |
+| `Config::from_file_async(path)` *(async)*  | Async variant; requires the `async` feature                                |
+| `Config::with_options(opts)`               | Empty `Config` with non-default [`ConfigOptions`](#configoptions)          |
+| `Config::from(value)`                      | Construct from an existing [`Value`](#value) tree                          |
+
+### Value Access (read)
+
+```rust
+pub fn get(&self, path: &str) -> Option<&Value>;
+pub fn get_arc(&self, path: &str) -> Option<Arc<Value>>;
+pub fn key(&self, path: &str) -> ConfigValue<'_>;
+pub fn contains_key(&self, path: &str) -> bool;
+pub fn has(&self, path: &str) -> bool;  // alias for contains_key
+pub fn keys(&self) -> Result<Vec<&str>>;
+pub fn get_or<V>(&self, path: &str, default: V) -> V
+    where V: TryFrom<Value> + Clone;
+pub fn as_value(&self) -> &Value;
+```
+
+| Accessor      | Returns               | Use when                                                                  |
+|---------------|-----------------------|---------------------------------------------------------------------------|
+| `get`         | `Option<&Value>`      | Single-threaded peek-and-drop. Zero allocation.                           |
+| `get_arc`     | `Option<Arc<Value>>`  | Multi-threaded reads, hot loops. Cache-backed (v1.0.0+).                  |
+| `key`         | `ConfigValue<'_>`     | Fluent-style chained accessors with defaults                              |
+| `contains_key`| `bool`                | Existence check without resolving the value                               |
+
+### Value Access (mutate)
+
+```rust
+pub fn get_mut(&mut self, path: &str) -> Result<&mut Value>;
+pub fn set<V: Into<Value>>(&mut self, path: &str, value: V) -> Result<()>;
+pub fn remove(&mut self, path: &str) -> Result<Option<Value>>;
+pub fn merge(&mut self, other: &Config) -> Result<()>;
+```
+
+All three mutating methods (`set`, `remove`, `merge`) invalidate the resolved-path cache wholesale on success. They return `Err(Error::general("Configuration is read-only"))` if the `Config` was constructed with `ConfigOptions::read_only = true` or had [`make_read_only`](#config-make-read-only) called on it.
+
+### Cache Management
+
+```rust
+pub fn cache_stats(&self) -> CacheStats;
+pub fn clear_cache(&self);
+```
+
+`cache_stats` is a relaxed-atomic snapshot — see [`CacheStats`](#cachestats). `clear_cache` is the explicit invalidation hook for out-of-band mutations.
+
+### Defaults Table
+
+```rust
+pub fn set_default<V: Into<Value>>(&self, path: &str, value: V) -> Result<()>;
+pub fn get_or_default(&self, path: &str) -> Option<Value>;
+```
+
+Per-path fallback table consulted when the main value tree doesn't have a key. **Independent of `read_only`** — defaults are deployment-time declarations, not user-supplied data. Note the `&self` receiver: defaults can be set on a `Config` that you don't have `&mut` access to.
+
+### File I/O
+
+```rust
+pub fn save(&mut self) -> Result<()>;
+pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()>;
+pub fn save_async(&mut self) -> Result<()>;             // feature: async
+pub fn save_to_file_async<P: AsRef<Path>>(&self, path: P) -> Result<()>;  // feature: async
+pub fn serialize(&self) -> Result<String>;
+pub fn format(&self) -> &str;
+pub fn file_path(&self) -> Option<&Path>;
+```
+
+`save` writes back to the original file path (errors if `Config::new()` was used and no path was set). `save_to_file` accepts any path. `serialize` returns the on-disk representation in the configured format.
+
+### Modification Tracking
+
+```rust
+pub fn is_modified(&self) -> bool;
+pub fn mark_clean(&mut self);
+```
+
+Set automatically on any `set` / `remove` / `merge`. Reset by `save` and explicitly by `mark_clean`.
+
+### Validation Integration (`validation` feature)
+
+```rust
+#[cfg(feature = "validation")]
+pub fn set_validation_rules(&mut self, rules: ValidationRuleSet);
+pub fn validate(&mut self) -> Result<Vec<ValidationError>>;
+pub fn validate_critical_only(&mut self) -> Result<Vec<ValidationError>>;
+pub fn is_valid(&mut self) -> Result<bool>;
+pub fn validate_path(&mut self, path: &str) -> Result<Vec<ValidationError>>;
+```
+
+Attach a [`ValidationRuleSet`](#validationruleset) and call `validate()` to collect violations; `is_valid()` is the "any critical errors?" boolean.
+
+### Schema Integration (`schema` feature)
+
+```rust
+#[cfg(feature = "schema")]
+pub fn validate_schema(&self, schema: &Schema) -> Result<()>;
+```
+
+### Options + Read-Only Mode
+
+<a id="config-make-read-only"></a>
+
+```rust
+pub fn options(&self) -> &ConfigOptions;
+pub fn is_read_only(&self) -> bool;
+pub fn make_read_only(&mut self);
+```
+
+`make_read_only` is a one-way switch — no `make_writable` companion. See [`ConfigOptions`](#configoptions) for construction-time configuration.
+
+**Example — load + access + modify:**
+
 ```rust
 use config_lib::Config;
 
 let mut config = Config::from_string(r#"
-app.name = "MyApp"
-server.port = 8080
-debug = true
-"#, None)?;
-
-// Remove a value
-let old_port = config.remove("server.port")?;
-println!("Removed port: {:?}", old_port);
-
-// Try to remove non-existent value
-let missing = config.remove("nonexistent")?;
-assert!(missing.is_none());
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **Config::is_modified()**
-
-Check if the configuration has been modified since loading.
-
-**Signature:** `pub fn is_modified(&self) -> bool`
-
-**Examples:**
-```rust
-use config_lib::Config;
-
-let mut config = Config::from_file("app.conf")?;
-assert!(!config.is_modified()); // Clean after loading
-
-config.set("new_setting", "value")?;
-assert!(config.is_modified()); // Modified after change
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **Config::save()**
-
-Save configuration back to file, preserving format and comments.
-
-**Signature:** `pub fn save(&self) -> Result<()>`
-
-**Requires:** Must have been loaded from a file
-
-**Examples:**
-```rust
-use config_lib::Config;
-
-let mut config = Config::from_file("app.conf")?;
-config.set("server.port", 9090)?;
-config.set("app.version", "1.2.0")?;
-
-// Save preserves format and comments
-config.save()?;
-println!("Configuration saved with format preservation");
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **Config::save_to_file()**
-
-Save configuration to a specific file path.
-
-**Signature:** `pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()>`
-
-**Examples:**
-```rust
-use config_lib::Config;
-
-let config = Config::from_string(r#"
-app.name = "MyApp"
-server.port = 8080
-"#, None)?;
-
-// Save to different file
-config.save_to_file("backup.conf")?;
-config.save_to_file("configs/app.conf")?;
-
-# Ok::<(), config_lib::Error>(())
-```
-
-<hr>
-<a href="#top">&uarr; <b>TOP</b></a>
-<br>
-<br>
-
-<h2 id="configbuilder-api">ConfigBuilder API</h2>
-
-Fluent API for building configurations with advanced options and multiple sources.
-
-#### **ConfigBuilder::new()**
-
-Create a new configuration builder.
-
-**Signature:** `pub fn new() -> Self`
-
-**Example:**
-```rust
-use config_lib::ConfigBuilder;
-
-let config = ConfigBuilder::new()
-    .from_file("base.conf")?
-    .merge_file("override.conf")?
-    .build()?;
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **ConfigBuilder::from_file()**
-
-Load initial configuration from a file.
-
-**Signature:** `pub fn from_file<P: AsRef<Path>>(mut self, path: P) -> Result<Self>`
-
-**Example:**
-```rust
-use config_lib::ConfigBuilder;
-
-let builder = ConfigBuilder::new()
-    .from_file("app.conf")?;
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **ConfigBuilder::from_string()**
-
-Load initial configuration from a string.
-
-**Signature:** `pub fn from_string(mut self, source: &str, format: Option<&str>) -> Result<Self>`
-
-**Example:**
-```rust
-use config_lib::ConfigBuilder;
-
-let builder = ConfigBuilder::new()
-    .from_string(r#"
-server.port = 8080
-app.name = "MyApp"
-"#, Some("conf"))?;
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **ConfigBuilder::merge_file()**
-
-Merge additional configuration from a file.
-
-**Signature:** `pub fn merge_file<P: AsRef<Path>>(mut self, path: P) -> Result<Self>`
-
-**Example:**
-```rust
-use config_lib::ConfigBuilder;
-
-// Layer multiple configuration files
-let config = ConfigBuilder::new()
-    .from_file("defaults.conf")?      // Base configuration
-    .merge_file("environment.json")?  // Environment-specific overrides
-    .merge_file("local.toml")?        // Local development overrides
-    .build()?;
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **ConfigBuilder::with_env_overrides()**
-
-Enable environment variable overrides.
-
-**Signature:** `pub fn with_env_overrides(mut self, prefix: &str) -> Self`
-
-**Example:**
-```rust
-use config_lib::ConfigBuilder;
-
-let config = ConfigBuilder::new()
-    .from_file("app.conf")?
-    .with_env_overrides("MYAPP_")  // MYAPP_SERVER_PORT overrides server.port
-    .build()?;
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **ConfigBuilder::with_defaults()**
-
-Set default values that are used when keys are missing from the loaded configuration. This is the primary method for implementing preset/fallback configuration values.
-
-**Signature:** `pub fn with_defaults(mut self, defaults: HashMap<String, Value>) -> Self`
-
-**Parameters:**
-- `defaults` - HashMap of key-value pairs to use as defaults
-
-**Returns:**
-- `Self` - Builder for method chaining
-
-**Description:**
-Defaults are applied first, then configuration files override them. This ensures your application always has sensible values while allowing customization through configuration files. Supports nested keys using dot notation (e.g., `"database.host"`).
-
-**Examples:**
-
-**Basic Usage:**
-```rust
-use config_lib::{ConfigBuilder, Value};
-use std::collections::HashMap;
-
-// Set up essential application defaults
-let mut defaults = HashMap::new();
-defaults.insert("server.port".to_string(), Value::Integer(8080));
-defaults.insert("app.debug".to_string(), Value::Bool(false));
-defaults.insert("database.timeout".to_string(), Value::Integer(30));
-defaults.insert("app.name".to_string(), Value::String("MyApp".to_string()));
-
-let config = ConfigBuilder::new()
-    .with_defaults(defaults)
-    .from_file("app.conf")?  // File values override defaults
-    .build()?;
-
-// Defaults are available even if not in configuration file
-let port = config.get("server.port")?.as_integer()?;      // From file or 8080
-let timeout = config.get("database.timeout")?.as_integer()?; // From file or 30
-let debug = config.get("app.debug")?.as_bool()?;          // From file or false
-
-# Ok::<(), config_lib::Error>(())
-```
-
-**Comprehensive Production Defaults:**
-```rust
-use config_lib::{ConfigBuilder, Value};
-use std::collections::HashMap;
-
-// Production-ready defaults with security and performance in mind
-let defaults = HashMap::from([
-    // Application defaults
-    ("app.name".to_string(), Value::String("ProductionApp".to_string())),
-    ("app.version".to_string(), Value::String("1.0.0".to_string())),
-    ("app.environment".to_string(), Value::String("production".to_string())),
-    ("app.debug".to_string(), Value::Bool(false)),
-    
-    // Server defaults (secure by default)
-    ("server.host".to_string(), Value::String("127.0.0.1".to_string())),
-    ("server.port".to_string(), Value::Integer(8443)),
-    ("server.ssl_enabled".to_string(), Value::Bool(true)),
-    ("server.timeout".to_string(), Value::Integer(30)),
-    ("server.workers".to_string(), Value::Integer(4)),
-    
-    // Database defaults
-    ("database.host".to_string(), Value::String("localhost".to_string())),
-    ("database.port".to_string(), Value::Integer(5432)),
-    ("database.pool_size".to_string(), Value::Integer(10)),
-    ("database.connection_timeout".to_string(), Value::Integer(60)),
-    ("database.ssl_mode".to_string(), Value::String("require".to_string())),
-    
-    // Caching defaults
-    ("cache.enabled".to_string(), Value::Bool(true)),
-    ("cache.ttl".to_string(), Value::Integer(3600)),
-    ("cache.max_size".to_string(), Value::String("128MB".to_string())),
-    
-    // Logging defaults
-    ("logging.level".to_string(), Value::String("warn".to_string())),
-    ("logging.file".to_string(), Value::String("/var/log/app.log".to_string())),
-    ("logging.max_size".to_string(), Value::String("100MB".to_string())),
-    ("logging.rotate".to_string(), Value::Bool(true)),
-    
-    // Feature flags (conservative defaults)
-    ("features.analytics".to_string(), Value::Bool(false)),
-    ("features.monitoring".to_string(), Value::Bool(true)),
-    ("features.api_versioning".to_string(), Value::Bool(true)),
-]);
-
-let config = ConfigBuilder::new()
-    .with_defaults(defaults)
-    .from_file("production.conf")?
-    .build()?;
-
-// All configuration guaranteed to have values
-let app_name = config.get("app.name")?.as_string()?;
-let ssl_enabled = config.get("server.ssl_enabled")?.as_bool()?;
-let pool_size = config.get("database.pool_size")?.as_integer()?;
-
-# Ok::<(), config_lib::Error>(())
-```
-
-**Type-Safe Default Patterns:**
-```rust
-use config_lib::{ConfigBuilder, Value};
-use std::collections::HashMap;
-
-// Helper function for creating typed defaults
-fn create_server_defaults() -> HashMap<String, Value> {
-    HashMap::from([
-        ("server.host".to_string(), Value::String("localhost".to_string())),
-        ("server.port".to_string(), Value::Integer(8080)),
-        ("server.ssl_enabled".to_string(), Value::Bool(false)),
-        ("server.timeout".to_string(), Value::Integer(30)),
-    ])
-}
-
-fn create_database_defaults() -> HashMap<String, Value> {
-    HashMap::from([
-        ("database.host".to_string(), Value::String("localhost".to_string())),
-        ("database.port".to_string(), Value::Integer(5432)),
-        ("database.pool_size".to_string(), Value::Integer(10)),
-        ("database.ssl_mode".to_string(), Value::String("prefer".to_string())),
-    ])
-}
-
-// Combine defaults from multiple sources
-let mut all_defaults = create_server_defaults();
-all_defaults.extend(create_database_defaults());
-
-let config = ConfigBuilder::new()
-    .with_defaults(all_defaults)
-    .from_file("app.conf")?
-    .build()?;
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **ConfigBuilder::with_validation()**
-
-Enable schema validation during build.
-
-**Signature:** `pub fn with_validation(mut self, schema: Schema) -> Self`
-
-**Example:**
-```rust
-# #[cfg(feature = "validation")]
-# {
-use config_lib::{ConfigBuilder, SchemaBuilder};
-
-let schema = SchemaBuilder::new()
-    .require_string("app.name")
-    .require_integer_range("server.port", 1, 65535)
-    .build();
-
-let config = ConfigBuilder::new()
-    .from_file("app.conf")?
-    .with_validation(schema)  // Validates during build()
-    .build()?;  // Will fail if validation errors
-# }
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **ConfigBuilder::build()**
-
-Finalize the configuration builder and create a Config instance.
-
-**Signature:** `pub fn build(self) -> Result<Config>`
-
-**Example:**
-```rust
-use config_lib::ConfigBuilder;
-
-// Complete configuration building process
-let config = ConfigBuilder::new()
-    .from_file("base.conf")?
-    .merge_file("overrides.json")?
-    .with_env_overrides("APP_")
-    .build()?;
-
-// Now use the built configuration
-let port = config.get("server.port")?.as_integer()?;
-let name = config.get("app.name")?.as_string()?;
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **Advanced Builder Pattern Example**
-
-```rust
-use config_lib::{ConfigBuilder, ConfigValue};
-use std::collections::HashMap;
-
-// Complex configuration setup
-let mut defaults = HashMap::new();
-defaults.insert("server.port".to_string(), ConfigValue::Integer(8080));
-defaults.insert("server.host".to_string(), ConfigValue::String("localhost".to_string()));
-defaults.insert("app.debug".to_string(), ConfigValue::Bool(false));
-defaults.insert("database.pool_size".to_string(), ConfigValue::Integer(10));
-
-let config = ConfigBuilder::new()
-    // 1. Start with sensible defaults
-    .with_defaults(defaults)
-    // 2. Load base configuration
-    .from_file("config/default.conf")?
-    // 3. Layer environment-specific settings
-    .merge_file("config/production.toml")?
-    // 4. Add local overrides if they exist
-    .merge_file_optional("config/local.json")?
-    // 5. Allow environment variable overrides
-    .with_env_overrides("MYAPP_")
-    // 6. Enable validation
-    # #[cfg(feature = "validation")]
-    .with_validation(create_app_schema())
-    // 7. Build final configuration
-    .build()?;
-
-# #[cfg(feature = "validation")]
-fn create_app_schema() -> config_lib::Schema {
-    config_lib::SchemaBuilder::new()
-        .require_string("app.name")
-        .require_integer_range("server.port", 1, 65535)
-        .build()
-}
-
-# Ok::<(), config_lib::Error>(())
-```
-
-<hr>
-<a href="#top">&uarr; <b>TOP</b></a>
-<br>
-<br>
-
----
-
-<h2 id="default-settings">Default Settings</h2>
-
-config-lib provides comprehensive support for default/preset configuration values that serve as fallbacks when keys are missing from configuration files. This ensures applications always have sensible defaults while allowing configuration files to override specific values.
-
-### **Default Setting Strategies**
-
-#### **1. ConfigBuilder Defaults (Recommended)**
-
-The primary method for setting defaults using the builder pattern:
-
-```rust
-use config_lib::{ConfigBuilder, Value};
-use std::collections::HashMap;
-
-let defaults = HashMap::from([
-    ("server.port".to_string(), Value::Integer(8080)),
-    ("app.debug".to_string(), Value::Bool(false)),
-    ("database.timeout".to_string(), Value::Integer(30)),
-]);
-
-let config = ConfigBuilder::new()
-    .with_defaults(defaults)     // Defaults applied first
-    .from_file("app.conf")?      // File overrides defaults
-    .build()?;
-```
-
-#### **2. Enterprise Config Defaults**
-
-High-performance defaults with caching for enterprise applications:
-
-```rust
-use config_lib::enterprise::EnterpriseConfig;
-
-let mut config = EnterpriseConfig::new();
-
-// Set cached defaults
-config.set_default("server.port", Value::Integer(8080));
-config.set_default("cache.enabled", Value::Bool(true));
-
-// Load file with defaults as fallback
-config = EnterpriseConfig::from_file("production.conf")?;
-
-// Sub-50ns access with automatic fallback to defaults
-let port = config.get_or_default("server.port");
-```
-
-#### **3. Inline Defaults with get_or()**
-
-Provide defaults at access time for maximum flexibility:
-
-```rust
-use config_lib::Config;
-
-let config = Config::from_file("app.conf")?;
-
-// Inline defaults (type-safe)
-let port = config.get_or("server.port", 8080);
-let debug = config.get_or("app.debug", false);
-let name = config.get_or("app.name", "DefaultApp".to_string());
-```
-
-#### **4. Configuration Merging**
-
-Merge multiple configuration sources with priority ordering:
-
-```rust
-use config_lib::Config;
-
-// Base configuration with all defaults
-let mut base = Config::from_string(r#"
-server.port = 8080
-app.debug = false
-database.timeout = 30
-"#, Some("conf"))?;
-
-// User configuration overrides defaults
-let user = Config::from_file("user.conf")?;
-base.merge(&user)?;
-
-// Environment-specific overrides
-let env = Config::from_file("production.conf")?;
-base.merge(&env)?;
-
-// Final priority: defaults < user.conf < production.conf
-```
-
-### **Best Practices**
-
-#### **Security-First Defaults**
-```rust
-// Secure defaults for production
-let secure_defaults = HashMap::from([
-    ("server.host".to_string(), Value::String("127.0.0.1".to_string())), // Localhost only
-    ("server.ssl_enabled".to_string(), Value::Bool(true)),                // SSL required
-    ("database.ssl_mode".to_string(), Value::String("require".to_string())), // DB SSL required
-    ("logging.level".to_string(), Value::String("warn".to_string())),      // Minimal logging
-    ("features.debug".to_string(), Value::Bool(false)),                   // No debug info
-]);
-```
-
-#### **Environment-Specific Defaults**
-```rust
-// Different defaults per environment
-let defaults = match env::var("ENVIRONMENT").as_deref() {
-    Ok("production") => HashMap::from([
-        ("logging.level".to_string(), Value::String("error".to_string())),
-        ("database.pool_size".to_string(), Value::Integer(20)),
-        ("cache.enabled".to_string(), Value::Bool(true)),
-    ]),
-    Ok("development") => HashMap::from([
-        ("logging.level".to_string(), Value::String("debug".to_string())),
-        ("database.pool_size".to_string(), Value::Integer(5)),
-        ("cache.enabled".to_string(), Value::Bool(false)),
-    ]),
-    _ => HashMap::from([
-        ("logging.level".to_string(), Value::String("info".to_string())),
-        ("database.pool_size".to_string(), Value::Integer(10)),
-        ("cache.enabled".to_string(), Value::Bool(true)),
-    ]),
-};
-```
-
-#### **Validation with Defaults**
-```rust
-# #[cfg(feature = "validation")]
-# {
-use config_lib::validation::{Validator, ValidationRule};
-
-// Ensure defaults meet validation requirements
-let defaults = HashMap::from([
-    ("server.port".to_string(), Value::Integer(8080)),  // Valid port range
-    ("app.name".to_string(), Value::String("ValidApp".to_string())), // Valid pattern
-]);
-
-let validator = Validator::new()
-    .add_rule("server.port", ValidationRule::IntegerRange(1, 65535))
-    .add_rule("app.name", ValidationRule::StringPattern(r"^[a-zA-Z][a-zA-Z0-9_-]*$"));
-
-let config = ConfigBuilder::new()
-    .with_defaults(defaults)        // Validated defaults
-    .from_file("app.conf")?
-    .with_validation(validator)     // Validates defaults + file
-    .build()?;
-# }
-```
-
-### **Performance Considerations**
-
-- **Enterprise Config**: Use for high-frequency access (sub-50ns cached defaults)
-- **ConfigBuilder**: Best for application startup with comprehensive defaults
-- **Inline get_or()**: Lowest overhead for occasional access
-- **Merging**: Good for complex multi-source configurations
-
-### **Common Patterns**
-
-```rust
-// Pattern 1: Complete application configuration
-struct AppConfig {
-    server_port: i64,
-    debug_mode: bool,
-    db_pool_size: i64,
-}
-
-impl AppConfig {
-    fn from_config_with_defaults(config: &Config) -> Result<Self> {
-        Ok(AppConfig {
-            server_port: config.get_or("server.port", 8080),
-            debug_mode: config.get_or("app.debug", false),
-            db_pool_size: config.get_or("database.pool_size", 10),
-        })
-    }
-}
-
-// Pattern 2: Feature flag defaults
-let feature_defaults = HashMap::from([
-    ("features.analytics".to_string(), Value::Bool(false)),     // Opt-in
-    ("features.caching".to_string(), Value::Bool(true)),        // Opt-out
-    ("features.monitoring".to_string(), Value::Bool(true)),     // Always on
-]);
-
-// Pattern 3: Tiered default priority
-let config = ConfigBuilder::new()
-    .with_defaults(system_defaults)      // Lowest priority
-    .merge_defaults(app_defaults)        // Medium priority
-    .merge_defaults(user_defaults)       // High priority
-    .from_file("config.conf")?           // Highest priority
-    .build()?;
-```
-
----
-
-<h2 id="value-api">Value API</h2>
-
-The `Value` enum represents all possible configuration data types with comprehensive conversion and validation methods.
-
-<br>
-
-<h3 id="value-construction">Type Construction</h3>
-
-#### **Creating Values**
-
-```rust
-use config_lib::Value;
-
-// Basic types
-let null = Value::null();
-let boolean = Value::bool(true);
-let integer = Value::integer(42);
-let float = Value::float(3.14);
-let string = Value::string("hello");
-
-// Collections
-let array = Value::array(vec![
-    Value::string("first"),
-    Value::integer(123),
-    Value::bool(false)
-]);
-
-use std::collections::BTreeMap;
-let mut table = BTreeMap::new();
-table.insert("name".to_string(), Value::string("MyApp"));
-table.insert("port".to_string(), Value::integer(8080));
-let table_value = Value::table(table);
-
-// DateTime (requires chrono feature)
-# #[cfg(feature = "chrono")]
-# {
-let datetime = Value::datetime(chrono::Utc::now());
-# }
-```
-
-<br>
-
-<h3 id="value-checking">Type Checking</h3>
-
-```rust
-use config_lib::Value;
-
-let value = Value::integer(42);
-
-// Type checking methods
-assert!(value.is_integer());
-assert!(!value.is_string());
-assert!(!value.is_null());
-
-// Get type name
-assert_eq!(value.type_name(), "integer");
-
-// Pattern matching
-match value {
-    Value::Integer(n) => println!("Number: {}", n),
-    Value::String(s) => println!("Text: {}", s),
-    Value::Bool(b) => println!("Boolean: {}", b),
-    _ => println!("Other type: {}", value.type_name()),
-}
-```
-
-<br>
-
-<h3 id="value-conversion">Type Conversion</h3>
-
-#### **Safe Conversion Methods**
-
-```rust
-use config_lib::Value;
-
-let config = config_lib::parse(r#"
-port = 8080
-name = "MyApp"
-debug = true
-version = 1.5
-tags = ["web", "api"]
-"#, None)?;
-
-// Safe conversions with error handling
-let port = config.get("port")?.as_integer()?;
-let name = config.get("name")?.as_string()?;
-let debug = config.get("debug")?.as_bool()?;
-let version = config.get("version")?.as_float()?;
-let tags = config.get("tags")?.as_array()?;
-
-// Conversion with defaults
-let timeout = config.get("timeout")
-    .and_then(|v| v.as_integer().ok())
-    .unwrap_or(30);
-
-let log_level = config.get("log_level")
-    .and_then(|v| v.as_string().ok())
-    .unwrap_or_else(|| "info".to_string());
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **Conversion Methods Reference**
-
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `as_bool()` | `Result<bool>` | Convert to boolean |
-| `as_integer()` | `Result<i64>` | Convert to 64-bit integer |
-| `as_float()` | `Result<f64>` | Convert to 64-bit float |
-| `as_string()` | `Result<String>` | Convert to string |
-| `as_array()` | `Result<&Vec<Value>>` | Get array reference |
-| `as_table()` | `Result<&BTreeMap<String, Value>>` | Get table reference |
-| `as_datetime()` | `Result<chrono::DateTime<Utc>>` | Convert to datetime (requires chrono) |
-
-#### **Nested Value Access**
-
-```rust
-use config_lib::Value;
-
-let config = config_lib::parse(r#"
 [server]
-host = "localhost"
 port = 8080
+host = "localhost"
+"#, Some("conf"))?;
 
-[database]
-connections = 10
-timeout = 30
-"#, Some("toml"))?;
+// Read
+let port = config.get("server.port").unwrap().as_integer()?;
+assert_eq!(port, 8080);
 
-// Navigate nested structures
-let server_section = config.get("server")?.as_table()?;
-let host = server_section.get("host").unwrap().as_string()?;
+// Write (invalidates cache)
+config.set("server.port", 9090)?;
+config.set("server.workers", 4i64)?;
 
-// Direct path access (preferred)
-let port = config.get("server.port")?.as_integer()?;
-let db_timeout = config.get("database.timeout")?.as_integer()?;
+// Defaults
+config.set_default("server.timeout", 30i64)?;
+let timeout = config.get_or_default("server.timeout").unwrap().as_integer()?;
+assert_eq!(timeout, 30);
 
+// Modification tracking
+assert!(config.is_modified());
 # Ok::<(), config_lib::Error>(())
 ```
 
-<hr>
-<a href="#top">&uarr; <b>TOP</b></a>
-<br>
-<br>
+**Example — thread-safe cached access via `get_arc`:**
 
-<h2 id="enterpriseconfig-api">EnterpriseConfig API</h2>
-
-Enterprise-grade configuration management with multi-tier caching, thread safety, and performance optimizations.
-
-<br>
-
-<h3 id="enterprise-performance">Performance & Caching</h3>
-
-#### **EnterpriseConfig::new()**
-
-Create a new enterprise configuration instance with optimized caching.
-
-**Signature:** `pub fn new() -> Self`
-
-**Performance:** Initializes multi-tier cache system
-
-**Example:**
 ```rust
-use config_lib::EnterpriseConfig;
-
-let mut config = EnterpriseConfig::new();
-config.load_from_string(r#"
-server.port = 8080
-database.pool_size = 20
-cache.ttl = 300
-"#, None)?;
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **EnterpriseConfig::from_file()**
-
-Load configuration with automatic caching optimization.
-
-**Signature:** `pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self>`
-
-**Performance:** ~3µs first access, ~457ns cached access
-
-**Example:**
-```rust
-use config_lib::EnterpriseConfig;
-
-// Load with automatic performance optimization
-let config = EnterpriseConfig::from_file("production.conf")?;
-
-// First access: populates cache (~3µs)
-let port = config.get("server.port");
-
-// Subsequent access: hits fast cache (~457ns)
-let port_again = config.get("server.port");
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **EnterpriseConfig::get_cached()**
-
-Ultra-fast cached value retrieval.
-
-**Signature:** `pub fn get_cached(&self, path: &str) -> Option<&Value>`
-
-**Performance:** 24.9ns average (50% better than 50ns target)
-
-**Example:**
-```rust
-use config_lib::EnterpriseConfig;
-
-let config = EnterpriseConfig::from_file("app.conf")?;
-
-// Ultra-fast cached access
-let port = config.get_cached("server.port");
-let host = config.get_cached("server.host");
-let timeout = config.get_cached("database.timeout");
-
-// Perfect for high-frequency access in hot paths
-for _ in 0..1_000_000 {
-    let _port = config.get_cached("server.port"); // ~25ns each
-}
-
-# Ok::<(), config_lib::Error>(())
-```
-
-<br>
-
-<h3 id="enterprise-monitoring">Statistics & Monitoring</h3>
-
-#### **EnterpriseConfig::cache_stats()**
-
-Get detailed cache performance statistics.
-
-**Signature:** `pub fn cache_stats(&self) -> (u64, u64, f64)`
-
-**Returns:** `(hits, misses, hit_ratio)`
-
-**Example:**
-```rust
-use config_lib::EnterpriseConfig;
-
-let config = EnterpriseConfig::from_file("app.conf")?;
-
-// Generate some cache activity
-for _ in 0..100 {
-    let _port = config.get_cached("server.port");
-    let _host = config.get_cached("server.host");
-}
-
-// Check performance metrics
-let (hits, misses, ratio) = config.cache_stats();
-println!("Cache hits: {}", hits);
-println!("Cache misses: {}", misses);
-println!("Hit ratio: {:.2}%", ratio * 100.0);
-
-// Expected output for repeated access:
-// Cache hits: 200
-// Cache misses: 2  
-// Hit ratio: 99.01%
-
-# Ok::<(), config_lib::Error>(())
-```
-
-<br>
-
-<h3 id="enterprise-threading">Thread Safety</h3>
-
-All EnterpriseConfig operations are thread-safe with optimized concurrent access patterns.
-
-**Example:**
-```rust
-use config_lib::EnterpriseConfig;
+use config_lib::Config;
 use std::sync::Arc;
-use std::thread;
 
-let config = Arc::new(EnterpriseConfig::from_file("shared.conf")?);
+let mut config = Config::new();
+config.set("port", 8080i64)?;
+let shared = Arc::new(config);
 
-// Spawn multiple threads for concurrent access
-let handles: Vec<_> = (0..4).map(|i| {
-    let config = Arc::clone(&config);
-    thread::spawn(move || {
-        for _ in 0..1000 {
-            // Thread-safe cached access
-            let _port = config.get_cached("server.port");
-            let _timeout = config.get_cached(&format!("worker_{}.timeout", i));
-        }
+let handles: Vec<_> = (0..4).map(|_| {
+    let cfg = Arc::clone(&shared);
+    std::thread::spawn(move || {
+        // First call walks the tree + populates the cache.
+        // Subsequent calls hit the DashMap-backed cache.
+        let port = cfg.get_arc("port").unwrap();
+        port.as_integer().unwrap()
     })
 }).collect();
 
-// Wait for all threads
-for handle in handles {
-    handle.join().unwrap();
+for h in handles {
+    assert_eq!(h.join().unwrap(), 8080);
 }
 
-// Check final statistics
-let (hits, misses, ratio) = config.cache_stats();
-println!("Concurrent access completed:");
-println!("  Threads: 4");
-println!("  Total requests: {}", hits + misses);
-println!("  Cache hit ratio: {:.2}%", ratio * 100.0);
-
+let stats = shared.cache_stats();
+assert!(stats.hits + stats.misses >= 4);
 # Ok::<(), config_lib::Error>(())
 ```
 
-<hr>
-<a href="#top">&uarr; <b>TOP</b></a>
-<br>
-<br>
+<h2 id="configoptions"><code>ConfigOptions</code></h2>
 
-<h2 id="hot-reload-api">Hot Reload API <span style="color: #888">[requires: hot-reload]</span></h2>
+```rust
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct ConfigOptions {
+    pub read_only: bool,
+    pub cache_enabled: bool,
+    pub cache_capacity: usize,
+}
+```
 
-Zero-downtime configuration updates with file watching and automatic reloading.
+Opt-out behavior knobs for [`Config`](#config). `#[non_exhaustive]` so v1.x MINOR releases can add new knobs without breaking SemVer; callers go through the consuming builder methods rather than struct literals.
 
-#### **Config::from_file_with_hot_reload()**
+**Fields:**
 
-Load configuration with automatic hot reloading enabled.
+| Field              | Default | Effect                                                                       |
+|--------------------|---------|------------------------------------------------------------------------------|
+| `read_only`        | `false` | Reject `set` / `remove` / `merge` with `Err(Error::general(...))`            |
+| `cache_enabled`    | `true`  | Toggle the `get_arc` resolved-path cache (write-heavy workloads may disable) |
+| `cache_capacity`   | `1024`  | Maximum cached entries before eviction (reserved; not yet enforced)          |
 
-**Signature:** `pub fn from_file_with_hot_reload<P, F>(path: P, callback: F) -> Result<HotReloadConfig>` where `F: Fn(&Config) + Send + 'static`
+### Builder Methods
+
+```rust
+pub fn new() -> Self;                                      // == default()
+pub fn read_only(self, read_only: bool) -> Self;
+pub fn cache_enabled(self, cache_enabled: bool) -> Self;
+pub fn cache_capacity(self, cache_capacity: usize) -> Self;
+```
+
+All builder methods consume `self` and return `Self` for fluent chaining.
 
 **Example:**
+
 ```rust
-# #[cfg(feature = "hot-reload")]
-# {
-use config_lib::{Config, hot_reload::ConfigChangeEvent};
+use config_lib::{Config, ConfigOptions};
 
-// Set up hot reloading with callback
-let config = Config::from_file_with_hot_reload("app.conf", |new_config| {
-    println!("Configuration reloaded!");
-    let port = new_config.get("server.port").unwrap().as_integer().unwrap();
-    println!("New port: {}", port);
-})?;
+// Default options: caching on, writes allowed
+let _cfg = Config::with_options(ConfigOptions::default());
 
-// Configuration updates automatically when file changes
-// Access is always thread-safe and uses latest version
-let current_port = config.get("server.port")?.as_integer()?;
-# }
+// Read-only configuration for a hot path
+let opts = ConfigOptions::new().read_only(true);
+let mut locked = Config::with_options(opts);
+assert!(locked.set("foo", "bar").is_err());
 
+// Write-heavy workload: disable cache
+let opts = ConfigOptions::new().cache_enabled(false);
+let _cfg = Config::with_options(opts);
+```
+
+<h2 id="configbuilder"><code>ConfigBuilder</code></h2>
+
+```rust
+pub struct ConfigBuilder { /* ... */ }
+```
+
+Fluent builder for `Config` instances. Useful when you want to compose format hints and validation rules before parsing.
+
+| Method                                         | Description                          |
+|------------------------------------------------|--------------------------------------|
+| `ConfigBuilder::new()`                         | New empty builder                    |
+| `.format(fmt)`                                 | Set the format hint                  |
+| `.validation_rules(rules)` *(validation)*      | Attach a `ValidationRuleSet`         |
+| `.from_string(source)`                         | Parse from an in-memory string       |
+| `.from_file(path)`                             | Parse from a file                    |
+
+**Example:**
+
+```rust
+use config_lib::ConfigBuilder;
+
+let config = ConfigBuilder::new()
+    .format("conf")
+    .from_string("port = 8080\n")?;
+
+assert_eq!(config.get("port").unwrap().as_integer()?, 8080);
 # Ok::<(), config_lib::Error>(())
 ```
 
-#### **HotReloadConfig::stop_watching()**
+<h2 id="configvalue"><code>ConfigValue</code></h2>
 
-Stop the file watcher and hot reload system.
+```rust
+pub struct ConfigValue<'a> { /* ... */ }
+```
+
+Ergonomic accessor wrapper returned by [`Config::key`](#config-value-access-read). Provides fluent-style access with default fallbacks.
+
+| Method                          | Returns          | Notes                                          |
+|---------------------------------|------------------|------------------------------------------------|
+| `.as_string()`                  | `Result<String>` | Errors if missing or non-string                |
+| `.as_string_or(default)`        | `String`         | Returns `default.to_string()` on missing/wrong-type |
+| `.as_integer()`                 | `Result<i64>`    | Errors if missing or non-integer               |
+| `.as_integer_or(default)`       | `i64`            | Returns `default` on missing/wrong-type        |
+| `.as_bool()`                    | `Result<bool>`   | Errors if missing or non-bool                  |
+| `.as_bool_or(default)`          | `bool`           | Returns `default` on missing/wrong-type        |
+| `.exists()`                     | `bool`           | Whether the key was found                      |
+| `.value()`                      | `Option<&Value>` | Borrow the raw `Value` if present              |
 
 **Example:**
+
 ```rust
-# #[cfg(feature = "hot-reload")]
-# {
 use config_lib::Config;
 
-let config = Config::from_file_with_hot_reload("app.conf", |_| {})?;
+let config = Config::from_string("port = 8080\nname = \"app\"", Some("conf"))?;
 
-// Stop hot reloading when no longer needed
-config.stop_watching();
-# }
+let port = config.key("port").as_integer_or(8080);  // 8080 (file value)
+let host = config.key("host").as_string_or("localhost");  // "localhost" (default)
+let debug = config.key("debug").as_bool_or(false);  // false (default)
 
+assert_eq!(port, 8080);
+assert_eq!(host, "localhost");
+assert!(!debug);
 # Ok::<(), config_lib::Error>(())
 ```
 
-<hr>
-<a href="#top">&uarr; <b>TOP</b></a>
-<br>
-<br>
-
-<h2 id="audit-api">Audit Logging API <span style="color: #888">[requires: audit]</span></h2>
-
-Comprehensive audit logging for configuration operations and compliance.
-
-#### **AuditLogger::new()**
-
-Create a new audit logger with configurable sinks and severity levels.
-
-**Example:**
-```rust
-# #[cfg(feature = "audit")]
-# {
-use config_lib::audit::{AuditLogger, Severity};
-
-let audit = AuditLogger::new()
-    .with_console_sink(Severity::Info)
-    .with_file_sink("config_audit.log", Severity::Warning)?
-    .with_json_sink("audit.jsonl", Severity::Debug)?;
-
-// Log configuration operations
-audit.log_config_load("app.conf", "admin_user");
-audit.log_config_change("server.port", "8080", "9090", "admin_user");
-audit.log_config_save("app.conf", "admin_user");
-# }
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **Audit Event Types**
-
-- **`log_config_load()`** - Configuration file loaded
-- **`log_config_save()`** - Configuration file saved  
-- **`log_config_change()`** - Configuration value changed
-- **`log_access_denied()`** - Unauthorized access attempt
-- **`log_validation_error()`** - Schema validation failure
-- **`log_reload()`** - Hot reload event
-
-<hr>
-<a href="#top">&uarr; <b>TOP</b></a>
-<br>
-<br>
-
-<h2 id="env-override-api">Environment Override API <span style="color: #888">[requires: env-override]</span></h2>
-
-Smart environment variable override system with caching and prefix matching.
-
-#### **EnvOverride::new()**
-
-Create environment variable override system.
-
-**Example:**
-```rust
-# #[cfg(feature = "env-override")]
-# {
-use config_lib::{Config, env_override::EnvOverride};
-
-let mut config = Config::from_file("app.conf")?;
-
-// Set up environment overrides
-let env_override = EnvOverride::new()
-    .with_prefix("MYAPP_")           // Maps MYAPP_SERVER_PORT to server.port
-    .with_separator("_")             // Use underscore for path separation
-    .case_insensitive()              // MYAPP_server_port also works
-    .with_cache_ttl(300);            // Cache env vars for 5 minutes
-
-// Apply environment overrides
-config.apply_env_overrides(&env_override)?;
-
-// Now environment variables override file values:
-// MYAPP_SERVER_PORT=9090 overrides server.port
-// MYAPP_DATABASE_HOST=prod.db.com overrides database.host
-let port = config.get("server.port")?.as_integer()?; // From env or file
-# }
-
-# Ok::<(), config_lib::Error>(())
-```
-
-#### **Automatic Type Conversion**
-
-Environment variables are automatically converted to appropriate types:
+<h2 id="cachestats"><code>CacheStats</code></h2>
 
 ```rust
-# #[cfg(feature = "env-override")]
-# {
-use std::env;
+#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+pub struct CacheStats {
+    pub hits: u64,
+    pub misses: u64,
+    pub hit_ratio: f64,  // hits / (hits + misses), 0.0 when total == 0
+}
+```
 
-// Set environment variables (typically done by deployment system)
-env::set_var("MYAPP_SERVER_PORT", "8080");           // → integer
-env::set_var("MYAPP_DEBUG_MODE", "true");            // → boolean  
-env::set_var("MYAPP_APP_NAME", "production-app");    // → string
-env::set_var("MYAPP_WORKER_THREADS", "4");           // → integer
-env::set_var("MYAPP_CACHE_TTL", "300.5");            // → float
+Snapshot of [`Config::get_arc`](#config-value-access-read)'s cache counters. Counters are loaded with `Ordering::Relaxed` — values are statistics, not synchronization primitives.
 
-// Values are automatically converted during override application
-# }
+**Example:**
 
+```rust
+use config_lib::Config;
+
+let mut config = Config::new();
+config.set("port", 8080i64)?;
+
+let _ = config.get_arc("port"); // miss → populates cache
+let _ = config.get_arc("port"); // hit
+let _ = config.get_arc("port"); // hit
+
+let stats = config.cache_stats();
+assert_eq!(stats.hits, 2);
+assert_eq!(stats.misses, 1);
+assert!(stats.hit_ratio > 0.5);
 # Ok::<(), config_lib::Error>(())
 ```
 
-<hr>
-<a href="#top">&uarr; <b>TOP</b></a>
-<br>
-<br>
+---
 
-<h2 id="schema-api">Schema Validation API <span style="color: #888">[requires: validation]</span></h2>
+# Hot Reload (`hot_reload` module)
 
-Comprehensive schema validation with custom rules and type checking.
+The `hot_reload` module ships the event-driven file-watching subsystem and the v1.0.0 lock-free notification dispatch (`on_change`). See [`ARCHITECTURE.md`](./ARCHITECTURE.md) §3a + §4 for the full design.
 
-#### **SchemaBuilder::new()**
+Available when the `hot-reload` Cargo feature is enabled (default in v0.9.6+).
 
-Build validation schemas with fluent API.
+<h2 id="hotreloadconfig"><code>HotReloadConfig</code></h2>
+
+```rust
+pub struct HotReloadConfig { /* ... */ }
+```
+
+Entry point. Wraps a `Config` with file-watching, debouncing, and notification dispatch.
+
+### Construction + builder methods
+
+```rust
+pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self>;
+pub fn with_poll_interval(self, interval: Duration) -> Self;
+pub fn with_debounce(self, debounce: Duration) -> Self;
+pub fn with_polling_fallback(self) -> Self;
+```
+
+| Method                       | Default                  | Effect                                                                                  |
+|------------------------------|--------------------------|-----------------------------------------------------------------------------------------|
+| `with_poll_interval(d)`      | `Duration::from_secs(1)` | Polling cadence (primary when `hot-reload` feature off; watchdog when on)               |
+| `with_debounce(d)`           | `Duration::from_millis(100)` | Collapses bursts of kernel events (atomic-rename saves emit 3-4 events per save)    |
+| `with_polling_fallback()`    | off                      | Run a polling watchdog alongside the event-driven watcher (NFS-safe)                    |
+
+### Notification API (v1.0.0+ — lock-free)
+
+```rust
+pub fn on_change<F>(&self, handler: F) -> Subscription
+where F: Fn(&ConfigChangeEvent) + Send + Sync + 'static;
+```
+
+Register a handler. Returns a [`Subscription`](#subscription) RAII guard whose `Drop` impl unregisters the handler. See [`Subscription`](#subscription) for lifetime management.
+
+### Snapshot / manual reload / start watcher
+
+```rust
+pub fn config(&self) -> Arc<RwLock<Config>>;
+pub fn snapshot(&self) -> Result<Config>;
+pub fn reload(&mut self) -> Result<bool>;
+pub fn start_watching(self) -> HotReloadHandle;
+pub fn file_path(&self) -> &Path;
+pub fn last_modified(&self) -> SystemTime;
+```
+
+- `config()` — share the `Arc<RwLock<Config>>` with other threads; the reloader thread atomically swaps the inner `Config` on each successful reload.
+- `snapshot()` — re-parse the file from disk and return a fresh `Config` (does not affect the watcher's shared state).
+- `reload()` — manually trigger a reload check; returns `Ok(true)` if a reload happened, `Ok(false)` if mtime was unchanged.
+- `start_watching()` — consume self, spawn the background worker, return a [`HotReloadHandle`](#hotreloadhandle).
+
+### Deprecated bridge
+
+<a id="with_change_notifications-deprecated"></a>
+
+```rust
+#[deprecated(since = "1.0.0")]
+pub fn with_change_notifications(self) -> (Self, Receiver<ConfigChangeEvent>);
+```
+
+Returns a `(HotReloadConfig, Receiver)` pair like the v0.9.x API. Internally routes through `on_change`, so it shares the same dispatch path; it just adds an `mpsc::send` per event. Kept for source compatibility through v1.x. New code should use [`on_change`](#hotreloadconfig).
+
+**Example — `on_change` + start_watching:**
+
+```rust,no_run
+use config_lib::hot_reload::{ConfigChangeEvent, HotReloadConfig};
+use std::time::Duration;
+
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+let hot = HotReloadConfig::from_file("app.conf")?
+    .with_debounce(Duration::from_millis(50));
+
+// Register a handler. Stored in `_sub` so it lives for this scope.
+let _sub = hot.on_change(|event: &ConfigChangeEvent| {
+    if let ConfigChangeEvent::Reloaded { path, .. } = event {
+        println!("config reloaded from {}", path.display());
+    }
+});
+
+let handle = hot.start_watching();
+// ... application runs; the handler fires inline on each reload ...
+handle.stop()?;
+# Ok(())
+# }
+```
+
+<h2 id="hotreloadhandle"><code>HotReloadHandle</code></h2>
+
+```rust
+pub struct HotReloadHandle { /* ... */ }
+```
+
+Background-worker handle returned by [`HotReloadConfig::start_watching`](#hotreloadconfig). Dropping the handle (or calling [`HotReloadHandle::stop`](#hotreloadhandle-stop)) tears down the watcher.
+
+### Register handlers after `start_watching`
+
+```rust
+pub fn on_change<F>(&self, handler: F) -> Subscription
+where F: Fn(&ConfigChangeEvent) + Send + Sync + 'static;
+```
+
+Same semantics as [`HotReloadConfig::on_change`](#hotreloadconfig). Use this when the consumer of the handle is a different component from whoever called `start_watching`.
+
+<a id="hotreloadhandle-stop"></a>
+
+### Lifecycle
+
+```rust
+pub fn stop(self) -> Result<()>;
+```
+
+Signals the worker to exit and joins the thread. Drop also runs `stop()` semantics if the handle is dropped without explicit stop.
 
 **Example:**
+
+```rust,no_run
+use config_lib::hot_reload::HotReloadConfig;
+
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+let hot = HotReloadConfig::from_file("app.conf")?;
+let handle = hot.start_watching();
+
+// Different component registers its own handler via the handle:
+let _component_sub = handle.on_change(|event| {
+    // ... handle event ...
+});
+
+// Later:
+handle.stop()?;
+# Ok(())
+# }
+```
+
+<h2 id="subscription"><code>Subscription</code></h2>
+
+```rust
+#[must_use = "..."]
+pub struct Subscription { /* ... */ }
+
+impl Drop for Subscription {
+    fn drop(&mut self) {
+        // unregisters the handler from the watcher's handler list
+    }
+}
+```
+
+RAII handle for a registered change-notification handler. The `#[must_use]` attribute ensures unused `Subscription`s emit a compiler warning — dropping immediately would unregister immediately, which is almost never what the caller wants.
+
+### Lifetime control
+
+```rust
+pub fn forget(self);
+```
+
+Detach the drop-based unregistration hook. The handler stays in the list for the lifetime of the underlying `HotReloadConfig` / `HotReloadHandle`. Use for process-lifetime handlers where you have no convenient owning scope.
+
+**Idiomatic patterns:**
+
+```rust,no_run
+# use config_lib::hot_reload::{HotReloadConfig, ConfigChangeEvent};
+# fn run() -> Result<(), Box<dyn std::error::Error>> {
+# let hot = HotReloadConfig::from_file("app.conf")?;
+
+// Pattern 1: scope-bound subscription.
+let _sub = hot.on_change(|_e: &ConfigChangeEvent| { /* ... */ });
+// Handler runs for the rest of the surrounding scope; drops at end.
+
+// Pattern 2: process-lifetime subscription.
+hot.on_change(|_e: &ConfigChangeEvent| { /* ... */ }).forget();
+// Handler runs until the watcher itself is dropped.
+
+// Pattern 3: explicit early-drop.
+let sub = hot.on_change(|_e: &ConfigChangeEvent| { /* ... */ });
+// ... later:
+drop(sub);  // handler unregistered immediately
+# Ok(())
+# }
+```
+
+<h2 id="configchangeevent"><code>ConfigChangeEvent</code></h2>
+
+```rust
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum ConfigChangeEvent {
+    Reloaded     { path: PathBuf, timestamp: SystemTime },
+    ReloadFailed { path: PathBuf, error: String, timestamp: SystemTime },
+    FileModified { path: PathBuf, timestamp: SystemTime },
+    FileDeleted  { path: PathBuf, timestamp: SystemTime },
+    // #[non_exhaustive] — match with a wildcard arm
+}
+```
+
+The event variant delivered to `on_change` handlers (and to the deprecated `Receiver<ConfigChangeEvent>` bridge).
+
+| Variant         | When it fires                                                                |
+|-----------------|-------------------------------------------------------------------------------|
+| `FileModified`  | Kernel event for the watched file arrived; reload about to be attempted       |
+| `Reloaded`      | Reload succeeded; the shared `Config` has been atomically swapped             |
+| `ReloadFailed`  | Reload attempt failed (parse error, permissions, etc.); last-known-good kept  |
+| `FileDeleted`   | Watched file no longer exists; last-known-good `Config` preserved             |
+
+`#[non_exhaustive]` so v1.x MINOR releases can add new variants (e.g. `Renamed`, `PermissionDenied`) without breaking SemVer.
+
+**Example — exhaustive matching with wildcard arm:**
+
+```rust,no_run
+use config_lib::hot_reload::ConfigChangeEvent;
+
+fn handle_event(event: &ConfigChangeEvent) {
+    match event {
+        ConfigChangeEvent::Reloaded { path, .. } => {
+            println!("reloaded {}", path.display());
+        }
+        ConfigChangeEvent::ReloadFailed { path, error, .. } => {
+            eprintln!("reload of {} failed: {}", path.display(), error);
+        }
+        ConfigChangeEvent::FileModified { .. } => {
+            // typically not actioned — the Reloaded event that follows is the one to handle
+        }
+        ConfigChangeEvent::FileDeleted { path, .. } => {
+            eprintln!("config file {} deleted", path.display());
+        }
+        // Required: `ConfigChangeEvent` is `#[non_exhaustive]`.
+        _ => {}
+    }
+}
+```
+
+---
+
+<h2 id="configmanager"><code>ConfigManager</code></h2>
+
+```rust
+#[derive(Debug, Default)]
+pub struct ConfigManager { /* ... */ }
+```
+
+Multi-instance primitive — name-indexed map of `Arc<RwLock<Config>>`. Useful when one process maintains several independent configurations (e.g. one per database, one per service, plus a global). All loaded `Config`s are independently swappable; cloned `Arc`s share the same underlying `Config` so writes through one handle are visible to all the others.
+
+### API
+
+```rust
+pub fn new() -> Self;
+pub fn load<P: AsRef<Path>>(&self, name: &str, path: P) -> Result<()>;
+pub fn get(&self, name: &str) -> Option<Arc<RwLock<Config>>>;
+pub fn list(&self) -> Vec<String>;
+pub fn remove(&self, name: &str) -> bool;
+```
+
+| Method     | Receiver | Effect                                                                            |
+|------------|----------|-----------------------------------------------------------------------------------|
+| `load`     | `&self`  | Parse a file and insert under `name`; replaces any existing entry under that name |
+| `get`      | `&self`  | Return `Arc<RwLock<Config>>` shared with previous callers of `get(name)`          |
+| `list`     | `&self`  | Names of all currently-loaded configurations                                      |
+| `remove`   | `&self`  | Drop the name → config mapping; existing `Arc` holders keep their handle          |
+
+**Example:**
+
+```rust,no_run
+use config_lib::ConfigManager;
+
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+let manager = ConfigManager::new();
+manager.load("app", "app.conf")?;
+manager.load("db", "database.conf")?;
+
+let app_handle = manager.get("app").unwrap();
+let db_handle = manager.get("db").unwrap();
+
+// Read from one:
+{
+    let app = app_handle.read().unwrap();
+    println!("app name: {:?}", app.get("name"));
+}
+
+// Write to the other:
+{
+    let mut db = db_handle.write().unwrap();
+    db.set("max_connections", 200i64)?;
+}
+
+println!("loaded configs: {:?}", manager.list());
+# Ok(())
+# }
+```
+
+---
+
+# Schema Validation (`schema` feature)
+
+The `schema` feature adds a declarative schema layer for validating `Value` trees against an expected shape. Re-exported at the crate root: `Schema`, `SchemaBuilder`.
+
+<h2 id="schema"><code>Schema</code></h2>
+
+```rust
+pub struct Schema { /* ... */ }
+```
+
+A compiled schema. Construct via [`SchemaBuilder`](#schemabuilder). Validate values via [`validate`](#validate) or [`Config::validate_schema`](#schema-integration-schema-feature).
+
+<h2 id="schemabuilder"><code>SchemaBuilder</code></h2>
+
+```rust
+pub struct SchemaBuilder { /* ... */ }
+```
+
+Fluent builder for `Schema` instances.
+
+| Method                                | Effect                                          |
+|---------------------------------------|-------------------------------------------------|
+| `SchemaBuilder::new()`                | New empty builder                               |
+| `.require_string(key)`                | Field must exist and be a `Value::String`       |
+| `.require_integer(key)`               | Field must exist and be a `Value::Integer`      |
+| `.require_bool(key)`                  | Field must exist and be a `Value::Bool`         |
+| `.optional_string(key)`               | Field may exist; if present, must be a string   |
+| `.build()`                            | Finalize into a `Schema`                        |
+
+(Additional builder methods are exposed for other types and for default-value declarations; see rustdoc for the complete list.)
+
+<h2 id="fieldtype"><code>FieldType</code></h2>
+
+```rust
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum FieldType {
+    Null,
+    Bool,
+    Integer,
+    Float,
+    String,
+    Array(Box<FieldType>),
+    Table(HashMap<String, FieldSchema>),
+    Union(Vec<FieldType>),
+    Any,
+}
+```
+
+The type-shape a `Schema` field can declare. `#[non_exhaustive]`.
+
+<h2 id="fieldschema"><code>FieldSchema</code></h2>
+
+A single field's schema (field type + required-or-not + default + description). Used inside `FieldType::Table`.
+
+**Example — assemble a schema + validate:**
+
+```rust
+# #[cfg(feature = "schema")]
+# {
+use config_lib::{parse, SchemaBuilder, validate};
+
+let value = parse(r#"
+name = "my-app"
+port = 8080
+"#, Some("conf"))?;
+
+let schema = SchemaBuilder::new()
+    .require_string("name")
+    .require_integer("port")
+    .build();
+
+validate(&value, &schema)?;
+# }
+# Ok::<(), config_lib::Error>(())
+```
+
+---
+
+# Rule-Based Validation (`validation` feature)
+
+The `validation` feature adds an extensible rule engine that complements the schema layer. Re-exported at the crate root: `ValidationError`, `ValidationResult`, `ValidationRule`, `ValidationRuleSet`, `ValidationSeverity`.
+
+<h2 id="validationrule"><code>ValidationRule</code></h2>
+
+```rust
+pub trait ValidationRule: Send + Sync {
+    fn name(&self) -> &str;
+    fn validate(&self, path: &str, value: &Value) -> ValidationResult;
+    fn priority(&self) -> u8 { 50 }  // default — lower = higher priority
+}
+```
+
+Implement this trait for custom validation logic. Three built-in implementations ship in the crate:
+
+- [`TypeValidator`](#built-in-validators) — fail if the value isn't a specified type
+- [`RangeValidator`](#built-in-validators) — fail if a numeric value is outside `[min, max]`
+- [`RequiredKeyValidator`](#built-in-validators) — fail if a key is missing from a `Value::Table`
+
+<h2 id="validationruleset"><code>ValidationRuleSet</code></h2>
+
+```rust
+#[derive(Default)]
+pub struct ValidationRuleSet { /* ... */ }
+```
+
+A collection of rules. Implements `Debug` (lists each rule by name).
+
+| Method                              | Effect                                          |
+|-------------------------------------|-------------------------------------------------|
+| `ValidationRuleSet::new()`          | Empty rule set                                  |
+| `.add_rule::<R: ValidationRule + 'static>(rule)` | Add a rule, returns `Self` for chaining |
+| `.validate(path, value)`            | Run every rule against a `(path, value)` pair, returns `Vec<ValidationError>` |
+
+<h2 id="validationerror"><code>ValidationError</code></h2>
+
+```rust
+#[derive(Debug, Clone, PartialEq)]
+pub struct ValidationError {
+    pub path: String,
+    pub rule: String,
+    pub message: String,
+    pub severity: ValidationSeverity,
+}
+```
+
+Single validation failure. Implements `Display` for human-readable diagnostics.
+
+<h2 id="validationresult"><code>ValidationResult</code></h2>
+
+```rust
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValidationResult {
+    Valid,
+    Invalid(ValidationError),
+}
+```
+
+<h2 id="validationseverity"><code>ValidationSeverity</code></h2>
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[non_exhaustive]
+pub enum ValidationSeverity {
+    Critical = 4,
+    Error = 3,    // default
+    Warning = 2,
+    Info = 1,
+}
+```
+
+`#[non_exhaustive]`. Implements `Ord` for severity comparisons. `Config::is_valid()` returns `false` only when any error has severity `Critical`.
+
+<h2 id="valuetype"><code>ValueType</code></h2>
+
+```rust
+pub enum ValueType {
+    Null, Bool, Integer, Float, String, Array, Table, DateTime, Any,
+}
+```
+
+Used by `TypeValidator` to declare the expected type of a `Value`.
+
+<h2 id="built-in-validators">Built-in Validators</h2>
+
+```rust
+pub struct TypeValidator { /* ... */ }
+pub struct RangeValidator { /* ... */ }
+pub struct RequiredKeyValidator { /* ... */ }
+```
+
+Each implements [`ValidationRule`](#validationrule) and exposes a constructor:
+
+- `TypeValidator::new(path, expected_type)` — requires the value at `path` to have type `expected_type`
+- `RangeValidator::new(path, min, max)` — requires a numeric value at `path` to satisfy `min ≤ v ≤ max`
+- `RequiredKeyValidator::new(required_keys)` — requires each name in `required_keys` to be present in the root table
+
+**Example — apply rules to a `Config`:**
+
 ```rust
 # #[cfg(feature = "validation")]
 # {
-use config_lib::{Config, SchemaBuilder, ValidationRule};
+use config_lib::{
+    Config, ValidationRuleSet,
+    validation::{RangeValidator, RequiredKeyValidator, TypeValidator, ValueType},
+};
 
-let schema = SchemaBuilder::new()
-    .require_string("app.name")
-    .require_integer_range("server.port", 1, 65535)
-    .require_bool("debug_mode")
-    .optional_string("log_level", Some("info"))
-    .require_array("allowed_hosts")
-    .custom_rule("database.url", ValidationRule::Url)
-    .custom_rule("admin.email", ValidationRule::Email)
-    .build();
+let mut config = Config::from_string(r#"
+name = "my-app"
+port = 8080
+"#, Some("conf"))?;
 
-let config = Config::from_file("app.conf")?;
+let rules = ValidationRuleSet::new()
+    .add_rule(RequiredKeyValidator::new(vec!["name".into(), "port".into()]))
+    .add_rule(TypeValidator::new("name", ValueType::String))
+    .add_rule(RangeValidator::new("port", 1.0, 65535.0));
 
-// Validate entire configuration
-match config.validate(&schema) {
-    Ok(()) => println!("Configuration is valid"),
-    Err(validation_errors) => {
-        for error in validation_errors {
-            eprintln!("Validation error: {}", error);
-        }
-    }
-}
+config.set_validation_rules(rules);
+let errors = config.validate()?;
+assert!(errors.is_empty());
 # }
-
 # Ok::<(), config_lib::Error>(())
 ```
 
-#### **Built-in Validation Rules**
+---
 
-| Rule | Description | Example |
-|------|-------------|---------|
-| `Required` | Value must exist | `.require_string("app.name")` |
-| `IntegerRange(min, max)` | Integer within range | `.require_integer_range("port", 1, 65535)` |
-| `StringPattern(regex)` | String matches regex | `.string_pattern("version", r"^\d+\.\d+\.\d+$")` |
-| `OneOf(options)` | Value in allowed list | `.one_of("level", vec!["debug", "info", "warn"])` |
-| `Url` | Valid URL format | `.custom_rule("api_url", ValidationRule::Url)` |
-| `Email` | Valid email format | `.custom_rule("contact", ValidationRule::Email)` |
-| `MinLength(n)` | String minimum length | `.min_length("password", 8)` |
-| `MaxLength(n)` | String maximum length | `.max_length("name", 50)` |
+# Audit Logging (`audit` module, always compiled)
 
-<hr>
-<a href="#top">&uarr; <b>TOP</b></a>
-<br>
-<br>
+Structured-event audit logging with pluggable sinks. The module is always compiled (no feature gate) so compliance-grade environments don't have to feature-flag-juggle to enable it.
 
-<h2 id="async-api">Async Operations API <span style="color: #888">[requires: async]</span></h2>
-
-Non-blocking configuration operations for async applications.
-
-#### **Async File Operations**
+<h2 id="auditlogger"><code>AuditLogger</code></h2>
 
 ```rust
-# #[cfg(feature = "async")]
-# {
-use config_lib::Config;
-
-async fn async_config_operations() -> Result<(), config_lib::Error> {
-    // Non-blocking file loading
-    let config = Config::from_file_async("large-config.toml").await?;
-    
-    // Async configuration parsing
-    let remote_config = config_lib::parse_file_async("https://api.example.com/config").await?;
-    
-    // Non-blocking validation
-    let schema = config_lib::SchemaBuilder::new()
-        .require_string("service.name")
-        .build();
-    
-    config.validate_async(&schema).await?;
-    
-    Ok(())
-}
-
-// Usage in tokio runtime
-# tokio_test::block_on(async {
-let config = Config::from_file_async("app.conf").await?;
-let port = config.get("port")?.as_integer()?;
-println!("Loaded port: {}", port);
-# Ok::<(), config_lib::Error>(())
-# })?;
-# }
-
-# Ok::<(), config_lib::Error>(())
+pub struct AuditLogger { /* ... */ }
 ```
 
-#### **Async Hot Reloading**
+Owner of audit-event sinks. Construct one and add sinks; call `log_event(...)` to dispatch events through every registered sink.
+
+| Method                                      | Effect                                                       |
+|---------------------------------------------|--------------------------------------------------------------|
+| `AuditLogger::new()`                        | Empty logger                                                 |
+| `.with_console_sink(min_severity)`          | Add a `ConsoleSink` writing to stdout                        |
+| `.with_file_sink(path, min_severity)`       | Add a `FileSink` writing to the given path                   |
+| `.add_sink(Box<dyn AuditSink>)`             | Add a custom sink                                            |
+| `.enabled(bool)`                            | Toggle the whole logger on/off                               |
+| `.log_event(event)`                         | Dispatch an event through every sink (fire-and-forget)       |
+| `.flush()`                                  | Flush every sink                                             |
+
+<h2 id="auditevent"><code>AuditEvent</code></h2>
 
 ```rust
-# #[cfg(all(feature = "async", feature = "hot-reload"))]
+#[derive(Debug, Clone)]
+pub struct AuditEvent {
+    pub id: String,
+    pub timestamp: SystemTime,
+    pub event_type: AuditEventType,
+    pub severity: AuditSeverity,
+    pub key: Option<String>,
+    pub old_value: Option<Value>,
+    pub new_value: Option<Value>,
+    pub user_context: Option<String>,
+    pub metadata: HashMap<String, String>,
+    pub error_message: Option<String>,
+}
+```
+
+Structured audit record. Implements `Display` for human-readable output.
+
+<h2 id="auditeventtype"><code>AuditEventType</code></h2>
+
+```rust
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum AuditEventType {
+    Access,
+    Modification,
+    ValidationFailure,
+    Reload,
+    Load,
+    Save,
+}
+```
+
+<h2 id="auditseverity"><code>AuditSeverity</code></h2>
+
+```rust
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[non_exhaustive]
+pub enum AuditSeverity {
+    Info = 1,
+    Warning = 2,
+    Error = 3,
+    Critical = 4,
+}
+```
+
+`#[non_exhaustive]`. Implements `PartialOrd` for severity-threshold filtering.
+
+<h2 id="auditsink-trait"><code>AuditSink</code> (trait)</h2>
+
+```rust
+pub trait AuditSink: Send + Sync {
+    fn write_event(&self, event: &AuditEvent) -> Result<(), String>;
+    fn flush(&self) -> Result<(), String>;
+}
+```
+
+Implement this trait to plug in custom audit destinations (syslog, structured-log servers, message brokers, etc.).
+
+<h2 id="audit-sinks">Built-in Sinks</h2>
+
+```rust
+pub struct ConsoleSink { /* ... */ }
+pub struct FileSink { /* ... */ }
+```
+
+| Constructor                              | Behavior                                                              |
+|------------------------------------------|-----------------------------------------------------------------------|
+| `ConsoleSink::new(min_severity)`         | Writes events at `severity ≥ min_severity` to stdout as `AUDIT: <event display>` |
+| `FileSink::new(path, min_severity)`      | Appends events at `severity ≥ min_severity` to the given file         |
+
+<h2 id="audit-free-functions">Process-Global Logger Helpers</h2>
+
+```rust
+pub fn init_audit_logger(logger: AuditLogger);
+pub fn get_audit_logger() -> Option<Arc<AuditLogger>>;
+pub fn audit_log(event: AuditEvent);
+```
+
+Optional convenience layer for users who want one process-global audit destination. Initialize once at startup with `init_audit_logger`; subsequent code calls `audit_log(event)` to dispatch through the global logger.
+
+**Example:**
+
+```rust
+use config_lib::audit::{
+    AuditEvent, AuditEventType, AuditLogger, AuditSeverity,
+    init_audit_logger, audit_log,
+};
+use std::collections::HashMap;
+use std::time::SystemTime;
+
+let logger = AuditLogger::new()
+    .with_console_sink(AuditSeverity::Info);
+init_audit_logger(logger);
+
+audit_log(AuditEvent {
+    id: "evt-001".to_string(),
+    timestamp: SystemTime::now(),
+    event_type: AuditEventType::Load,
+    severity: AuditSeverity::Info,
+    key: None,
+    old_value: None,
+    new_value: None,
+    user_context: Some("admin".to_string()),
+    metadata: HashMap::new(),
+    error_message: None,
+});
+```
+
+---
+
+# Environment Variable Overrides (`env-override` feature)
+
+Override-by-environment-variable, with prefix matching and type-aware parsing. Re-exported at the crate root via `env_override::*`.
+
+<h2 id="envoverrideconfig"><code>EnvOverrideConfig</code></h2>
+
+```rust
+pub struct EnvOverrideConfig { /* ... */ }
+```
+
+Configuration knobs for the env-override system: prefix, separator, case sensitivity.
+
+| Builder method                  | Effect                                                        |
+|---------------------------------|---------------------------------------------------------------|
+| `EnvOverrideConfig::new()`      | Empty config (no prefix, default separator)                   |
+| `.with_prefix(prefix)`          | E.g. `"MYAPP_"` — only env vars with this prefix are considered |
+| `.with_separator(sep)`          | E.g. `"_"` for `MYAPP_DATABASE_HOST` → `database.host`         |
+| `.case_insensitive()`           | `MYAPP_database_HOST` works too                                |
+
+<h2 id="envoverridesystem"><code>EnvOverrideSystem</code></h2>
+
+```rust
+pub struct EnvOverrideSystem { /* ... */ }
+```
+
+Stateful override resolver with internal caching. Construct once per process; reuse across multiple `apply_overrides` calls.
+
+<h2 id="apply_env_overrides"><code>apply_env_overrides</code> / <code>apply_env_overrides_default</code></h2>
+
+```rust
+pub fn apply_env_overrides(value: Value, config: EnvOverrideConfig) -> Result<Value>;
+pub fn apply_env_overrides_default(value: Value) -> Result<Value>;
+```
+
+Returns a new `Value` with environment-variable overrides applied. `apply_env_overrides_default` uses sensible defaults (no prefix; underscore separator).
+
+**Example:**
+
+```rust
+# #[cfg(feature = "env-override")]
 # {
-use config_lib::Config;
+use config_lib::{parse, env_override::{apply_env_overrides, EnvOverrideConfig}};
 
-async fn setup_async_hot_reload() -> Result<(), config_lib::Error> {
-    let config = Config::from_file_with_hot_reload_async(
-        "app.conf",
-        |new_config| async move {
-            println!("Async configuration reload completed");
-            // Perform async operations on configuration change
-            notify_services_of_config_change(new_config).await;
-        }
-    ).await?;
-    
-    Ok(())
-}
+let value = parse("port = 8080", Some("conf"))?;
 
-async fn notify_services_of_config_change(config: &Config) {
-    // Implementation would notify other services
-    println!("Notifying services of configuration change");
-}
+// At this point, if MYAPP_PORT=9090 is in the environment:
+let value = apply_env_overrides(
+    value,
+    EnvOverrideConfig::new().with_prefix("MYAPP_").with_separator("_"),
+)?;
+// `value.get("port").unwrap().as_integer()?` would be 9090 (env) or 8080 (no env)
 # }
-
 # Ok::<(), config_lib::Error>(())
 ```
 
-<hr>
-<a href="#top">&uarr; <b>TOP</b></a>
-<br>
-<br>
+---
 
+# Parser Submodules (`parsers::*`)
 
+The `parsers` module is `pub` so advanced users can call format-specific parsers directly (bypassing format detection). The top-level [`parse`](#parse) and [`parse_file`](#parse_file) functions are usually what you want.
 
-<!-- FOOT COPYRIGHT
-################################################# -->
-<div align="center">
-  <h2></h2>
-  <sup>COPYRIGHT <small>&copy;</small> 2025 <strong>JAMES GOBER.</strong></sup>
-</div>
+<h2 id="parsers-top-level">Top-Level Dispatch</h2>
+
+```rust
+pub fn parse_string(source: &str, format: Option<&str>) -> Result<Value>;
+pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Value>;
+pub fn detect_format(content: &str) -> &'static str;
+pub fn detect_format_from_path(path: &Path) -> Option<&'static str>;
+```
+
+Same dispatch logic used by `crate::parse` and `crate::parse_file`. Exposed for callers who want the format-detection helpers directly.
+
+<h2 id="parsers-per-format">Per-Format Parsers</h2>
+
+Each submodule exposes a `parse(source: &str) -> Result<Value>` and (in most cases) one additional named variant:
+
+| Module                                | Function(s)                                          | Feature   |
+|---------------------------------------|------------------------------------------------------|-----------|
+| `parsers::conf`                       | `parse`                                              | `conf` (default) |
+| `parsers::ini_parser`                 | `parse`, `parse_ini`                                 | always    |
+| `parsers::properties_parser`          | `parse`, `PropertiesParser` struct                   | always    |
+| `parsers::json_parser`                | `parse`, `serialize`, `from_json_value`, `to_json_value` | `json`  |
+| `parsers::xml_parser`                 | `parse`, `parse_xml`, `XmlParser`                    | `xml`     |
+| `parsers::hcl_parser`                 | `parse`, `parse_hcl`, `HclParser`                    | `hcl`     |
+| `parsers::noml_parser`                | `parse`, `parse_with_preservation`                   | `noml`    |
+| `parsers::toml_parser`                | `parse`, `parse_with_preservation`                   | `toml`    |
+
+When the corresponding Cargo feature is disabled, the module's `parse` function still exists but returns `Err(Error::feature_not_enabled(...))`.
+
+**Example — bypass detection, call the JSON parser directly:**
+
+```rust
+# #[cfg(feature = "json")]
+# {
+use config_lib::parsers::json_parser;
+
+let value = json_parser::parse(r#"{"port": 8080}"#)?;
+assert_eq!(value.get("port").unwrap().as_integer()?, 8080);
+# }
+# Ok::<(), config_lib::Error>(())
+```
+
+**Format preservation (NOML/TOML only):**
+
+```rust
+# #[cfg(feature = "noml")]
+# {
+use config_lib::parsers::noml_parser;
+
+let source = r#"
+# This comment is preserved
+port = 8080
+"#;
+
+let (value, document) = noml_parser::parse_with_preservation(source)?;
+// `value` is the runtime `Value` tree.
+// `document` is the upstream `noml::Document` with format-preservation
+// information, suitable for round-trip editing.
+let _ = (value, document);
+# }
+# Ok::<(), config_lib::Error>(())
+```
+
+For full format details, see [`FORMATS.md`](./FORMATS.md).
+
+---
+
+# Deprecated APIs
+
+These items continue to compile and work through the v1.x line per the deprecation policy in [`STABILITY-1.0.md`](./STABILITY-1.0.md) §7. Removal is scheduled for v2.0.
+
+<h2 id="enterpriseconfig-deprecated"><code>EnterpriseConfig</code> (deprecated since v0.9.4)</h2>
+
+The pre-v0.9.4 cached-and-thread-safe configuration type. **Every operation it exposed is now on the unified [`Config`](#config):**
+
+| Old (`EnterpriseConfig`)           | New (`Config`)                                  |
+|------------------------------------|-------------------------------------------------|
+| `EnterpriseConfig::new()`          | `Config::new()`                                 |
+| `EnterpriseConfig::from_string`    | `Config::from_string`                           |
+| `EnterpriseConfig::from_file`      | `Config::from_file`                             |
+| `cfg.get(k)` *(owned)*             | `cfg.get_arc(k)`                                |
+| `cfg.set(k, v)`                    | `cfg.set(k, v)`                                 |
+| `cfg.exists(k)`                    | `cfg.contains_key(k)`                           |
+| `cfg.set_default(k, v)`            | `cfg.set_default(k, v)`                         |
+| `cfg.get_or_default(k)`            | `cfg.get_or_default(k)`                         |
+| `cfg.cache_stats()`                | `cfg.cache_stats()`                             |
+| `cfg.make_read_only()`             | `cfg.make_read_only()`                          |
+| `cfg.clear()`                      | `cfg.clear_cache()`                             |
+
+See [`examples/enterprise_demo.rs`](../examples/enterprise_demo.rs) for a runnable side-by-side migration table.
+
+<h2 id="enterprise-direct-deprecated"><code>enterprise::direct::*</code> (deprecated since v0.9.4)</h2>
+
+`enterprise::direct::parse_string` and `enterprise::direct::parse_file` are thin wrappers around the top-level [`parse`](#parse) and [`parse_file`](#parse_file). They exist for v0.9.x source compatibility. New code should call the top-level functions.
+
+<h2 id="with-change-notifications-deprecated"><code>HotReloadConfig::with_change_notifications</code> (deprecated since v1.0.0)</h2>
+
+The pre-v1.0.0 channel-based notification API. Returns `(HotReloadConfig, Receiver<ConfigChangeEvent>)`. Internally bridges to [`on_change`](#hotreloadconfig) — same dispatch path, plus one `mpsc::send` per event. See [`Subscription`](#subscription) for the recommended replacement.
+
+---
+
+# See Also
+
+- [`README.md`](../README.md) — overview, quick start, feature highlights
+- [`STABILITY-1.0.md`](./STABILITY-1.0.md) — v1.0 SemVer contract
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — internal design, decision logs
+- [`PERFORMANCE.md`](./PERFORMANCE.md) — performance contract + benchmark methodology
+- [`PLATFORM-NOTES.md`](./PLATFORM-NOTES.md) — Linux / macOS / Windows behavior
+- [`SECURITY.md`](./SECURITY.md) — threat model, fuzz methodology, disclosure
+- [`FORMATS.md`](./FORMATS.md) — per-format specifications
+- [`GUIDELINES.md`](./GUIDELINES.md) — contributor / development standards
+- rustdoc on [docs.rs](https://docs.rs/config-lib) — auto-generated, machine-readable
+
+---
+
+<sub>Last reviewed: 2026-05-19 (v1.0.0).</sub>

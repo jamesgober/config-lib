@@ -1,6 +1,7 @@
-use config_lib::hot_reload::HotReloadConfig;
+use config_lib::hot_reload::{ConfigChangeEvent, HotReloadConfig};
 use std::fs::File;
 use std::io::Write;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -18,22 +19,35 @@ fn main() -> config_lib::Result<()> {
 
     println!("1. Created initial config file: {config_path}");
 
-    // Create hot-reloadable configuration
-    let (hot_config, event_receiver) = HotReloadConfig::from_file(config_path)?
+    // Create hot-reloadable configuration.
+    let hot_config = HotReloadConfig::from_file(config_path)?
         .with_poll_interval(Duration::from_millis(500)) // Check every 500ms
-        .with_change_notifications();
+        .with_debounce(Duration::from_millis(50));
+
+    // Capture events from the lock-free `on_change` handler into a
+    // shared queue, so the main thread can print them in sequence
+    // between config-modification beats. (Real apps would typically
+    // act on the event directly inside the closure rather than
+    // queuing — this queueing is just for demo readability.)
+    let events: Arc<Mutex<Vec<ConfigChangeEvent>>> = Arc::new(Mutex::new(Vec::new()));
+    let events_for_handler = Arc::clone(&events);
+    let _subscription = hot_config.on_change(move |event| {
+        if let Ok(mut q) = events_for_handler.lock() {
+            q.push(event.clone());
+        }
+    });
 
     let config_ref = hot_config.config();
 
-    // Start automatic watching
+    // Start automatic watching.
     let _handle = hot_config.start_watching();
 
-    println!("2. Started hot reload monitoring (500ms polling)");
+    println!("2. Started hot reload monitoring");
 
     // Display initial values
     {
         let config = config_ref.read().unwrap();
-        println!("\n📊 Initial Configuration:");
+        println!("\nInitial Configuration:");
         println!(
             "   Server Port: {}",
             config.get("server_port").unwrap().as_integer().unwrap()
@@ -62,14 +76,14 @@ fn main() -> config_lib::Result<()> {
         file.flush()?;
         drop(file);
 
-        println!("   📝 Updated config file (iteration {i})");
+        println!("   Updated config file (iteration {i})");
 
         // Wait for reload and display new values
-        thread::sleep(Duration::from_millis(600)); // Wait for polling + reload
+        thread::sleep(Duration::from_millis(600));
 
         {
             let config = config_ref.read().unwrap();
-            println!("   📊 New Configuration:");
+            println!("   New Configuration:");
             println!(
                 "      Server Port: {}",
                 config.get("server_port").unwrap().as_integer().unwrap()
@@ -84,33 +98,27 @@ fn main() -> config_lib::Result<()> {
             );
         }
 
-        // Check for events
-        while let Ok(event) = event_receiver.try_recv() {
+        // Drain events the handler queued since the last iteration.
+        let drained: Vec<_> = events.lock().unwrap().drain(..).collect();
+        for event in drained {
             match event {
-                config_lib::hot_reload::ConfigChangeEvent::FileModified { path, .. } => {
-                    println!("   🔔 Event: File modified - {}", path.display());
+                ConfigChangeEvent::FileModified { path, .. } => {
+                    println!("   Event: File modified - {}", path.display());
                 }
-                config_lib::hot_reload::ConfigChangeEvent::Reloaded { path, .. } => {
+                ConfigChangeEvent::Reloaded { path, .. } => {
                     println!(
-                        "   ✅ Event: Configuration reloaded successfully - {}",
+                        "   Event: Configuration reloaded successfully - {}",
                         path.display()
                     );
                 }
-                config_lib::hot_reload::ConfigChangeEvent::ReloadFailed { path, error, .. } => {
-                    println!(
-                        "   ❌ Event: Reload failed for {} - {}",
-                        path.display(),
-                        error
-                    );
+                ConfigChangeEvent::ReloadFailed { path, error, .. } => {
+                    println!("   Event: Reload failed for {} - {}", path.display(), error);
                 }
-                config_lib::hot_reload::ConfigChangeEvent::FileDeleted { path, .. } => {
-                    println!("   🗑️  Event: File deleted - {}", path.display());
+                ConfigChangeEvent::FileDeleted { path, .. } => {
+                    println!("   Event: File deleted - {}", path.display());
                 }
-                // `ConfigChangeEvent` is `#[non_exhaustive]` as of v0.9.5 so the
-                // v1.x SemVer contract can add new event variants (e.g. file
-                // rename, permission-denied) in MINOR releases. Apps that want
-                // to handle every event explicitly should treat any new variant
-                // as an informational "unhandled" until they upgrade.
+                // `ConfigChangeEvent` is `#[non_exhaustive]` so the v1.x SemVer
+                // contract can add new event variants in MINOR releases.
                 _ => {}
             }
         }
@@ -128,14 +136,11 @@ fn main() -> config_lib::Result<()> {
     println!("   📝 Created invalid config file");
     thread::sleep(Duration::from_millis(600));
 
-    // Check for error events
-    while let Ok(event) = event_receiver.try_recv() {
-        if let config_lib::hot_reload::ConfigChangeEvent::ReloadFailed { path, error, .. } = event {
-            println!(
-                "   ✅ Properly caught error: {} - {}",
-                path.display(),
-                error
-            );
+    // Check for error events captured by the handler
+    let drained: Vec<_> = events.lock().unwrap().drain(..).collect();
+    for event in drained {
+        if let ConfigChangeEvent::ReloadFailed { path, error, .. } = event {
+            println!("   Properly caught error: {} - {}", path.display(), error);
         }
     }
 

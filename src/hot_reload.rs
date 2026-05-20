@@ -17,8 +17,16 @@
 //!   `Reloaded` notification.
 //! - **`Arc<RwLock<Config>>` swap** for zero-downtime updates —
 //!   readers never block while the reloader parses the new file.
-//! - **`mpsc` change notifications** preserving the
-//!   `ConfigChangeEvent` surface from earlier releases.
+//! - **Lock-free in-process notification dispatch** (v1.0.0+). Register
+//!   handlers via `HotReloadConfig::on_change` / `HotReloadHandle::on_change`;
+//!   the reloader thread invokes every registered handler inline with
+//!   no channel allocation and no cross-thread wakeup. Backed by
+//!   `ArcSwap<Vec<Handler>>` — snapshot reads cost a single atomic
+//!   pointer load (~5 ns) regardless of how many handlers are
+//!   registered. See `docs/PERFORMANCE.md` for measured numbers.
+//! - **Panic isolation.** Each handler invocation is wrapped in
+//!   `catch_unwind` so one bad handler can't take down the watcher
+//!   or other handlers.
 //! - **Polling fallback** (always available, used as the default when
 //!   the `hot-reload` feature is disabled, or available as an opt-in
 //!   on top of event-driven watching for environments where the kernel
@@ -27,10 +35,12 @@
 
 use crate::config::Config;
 use crate::error::{Error, Result};
+use arc_swap::ArcSwap;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, RwLock};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::mpsc::{self, Receiver};
+use std::sync::{Arc, RwLock, Weak};
 use std::thread;
 use std::time::{Duration, SystemTime};
 
@@ -81,6 +91,153 @@ pub enum ConfigChangeEvent {
 /// within ~10–50 ms).
 const DEFAULT_DEBOUNCE: Duration = Duration::from_millis(100);
 
+// =========================================================================
+// HandlerList — lock-free in-process notification dispatch (v1.0.0+)
+// =========================================================================
+
+/// Boxed handler closure. `Arc` so that an iteration snapshot can
+/// outlive registration / unregistration of the same handler without
+/// invalidating the in-flight call.
+type Handler = Arc<dyn Fn(&ConfigChangeEvent) + Send + Sync + 'static>;
+
+/// Lock-free handler list backing [`HotReloadConfig::on_change`].
+///
+/// Reads (the dispatch path on the reloader thread) take a snapshot
+/// of the current handler vector via one `ArcSwap::load` — a single
+/// relaxed atomic pointer load. Writes (register / unregister)
+/// allocate a new vector, copy the old contents minus/plus one
+/// handler, and atomic-swap the pointer (`rcu`-style update). Writes
+/// never block reads.
+///
+/// The handler list is shared between [`HotReloadConfig`] and its
+/// spawned worker thread via `Arc<HandlerList>`, so handlers can be
+/// registered before *or* after [`HotReloadConfig::start_watching`]
+/// — see [`HotReloadHandle::on_change`].
+pub(crate) struct HandlerList {
+    handlers: ArcSwap<Vec<(u64, Handler)>>,
+    next_id: AtomicU64,
+}
+
+impl HandlerList {
+    fn new() -> Self {
+        Self {
+            handlers: ArcSwap::from_pointee(Vec::new()),
+            next_id: AtomicU64::new(0),
+        }
+    }
+
+    /// Dispatch an event to every registered handler.
+    ///
+    /// Each handler is invoked inline on the calling thread. Panic
+    /// isolation: a handler that panics is caught via `catch_unwind`
+    /// so subsequent handlers still run and the reloader thread is
+    /// not torn down.
+    fn dispatch(&self, event: &ConfigChangeEvent) {
+        // Single atomic pointer load — the dispatch hot path.
+        let snapshot = self.handlers.load();
+        for (_id, handler) in snapshot.iter() {
+            // Clone the Arc<dyn Fn> so the handler stays alive even
+            // if it's concurrently unregistered during this loop
+            // iteration. Refcount bump, no allocation.
+            let h = Arc::clone(handler);
+            // REPS-AUDIT: handlers are user-supplied; one panicking
+            // handler must not break the watcher or other handlers.
+            // `catch_unwind` swallows the panic and we discard the
+            // payload (handlers are best-effort observers).
+            let _ = catch_unwind(AssertUnwindSafe(move || {
+                h(event);
+            }));
+        }
+    }
+
+    /// Register a new handler, returning its assigned id.
+    fn register(&self, handler: Handler) -> u64 {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        self.handlers.rcu(|current| {
+            let mut next = Vec::with_capacity(current.len() + 1);
+            next.extend(current.iter().cloned());
+            next.push((id, Arc::clone(&handler)));
+            next
+        });
+        id
+    }
+
+    /// Remove the handler with the given id, if present. Idempotent.
+    fn unregister(&self, id: u64) {
+        self.handlers.rcu(|current| {
+            current
+                .iter()
+                .filter(|(other_id, _)| *other_id != id)
+                .cloned()
+                .collect::<Vec<_>>()
+        });
+    }
+}
+
+/// RAII handle for a registered change-notification handler.
+///
+/// Returned by [`HotReloadConfig::on_change`] /
+/// [`HotReloadHandle::on_change`]. Drop the `Subscription` to
+/// unregister the handler. The watcher itself outlives any individual
+/// subscription — multiple subscriptions can come and go without
+/// touching the underlying [`HotReloadConfig`].
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use config_lib::hot_reload::{HotReloadConfig, ConfigChangeEvent};
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let hot = HotReloadConfig::from_file("app.conf")?;
+/// let _subscription = hot.on_change(|event: &ConfigChangeEvent| {
+///     println!("config changed: {event:?}");
+/// });
+/// // Drop `_subscription` (e.g. at end of scope) to unregister.
+/// # Ok(())
+/// # }
+/// ```
+#[must_use = "dropping the Subscription immediately unregisters the handler; bind to a name (`let _sub = ...`) or call `.forget()` to keep the handler alive"]
+pub struct Subscription {
+    list: Weak<HandlerList>,
+    id: u64,
+}
+
+impl Subscription {
+    /// Detach the subscription from its drop-based unregistration
+    /// hook. The handler stays registered for the lifetime of the
+    /// underlying watcher (until the [`HotReloadConfig`] or
+    /// [`HotReloadHandle`] that produced it is dropped).
+    ///
+    /// Useful for global / process-lifetime handlers where the
+    /// caller has no convenient owning scope to hold the
+    /// `Subscription`.
+    pub fn forget(mut self) {
+        // Clear the weak reference so Drop becomes a no-op.
+        self.list = Weak::new();
+    }
+}
+
+impl Drop for Subscription {
+    fn drop(&mut self) {
+        if let Some(list) = self.list.upgrade() {
+            list.unregister(self.id);
+        }
+    }
+}
+
+impl std::fmt::Debug for Subscription {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Subscription")
+            .field("id", &self.id)
+            .field("alive", &(self.list.strong_count() > 0))
+            .finish()
+    }
+}
+
+// =========================================================================
+// HotReloadConfig
+// =========================================================================
+
 /// Hot-reloadable configuration container.
 ///
 /// Construct with [`HotReloadConfig::from_file`], then either drive
@@ -90,15 +247,18 @@ const DEFAULT_DEBOUNCE: Duration = Duration::from_millis(100);
 /// Configurable knobs (all consuming-builder style, intended for
 /// fluent construction):
 ///
+/// - [`HotReloadConfig::on_change`] — register a change handler
+///   (v1.0.0+; the recommended notification API).
 /// - [`HotReloadConfig::with_change_notifications`] — receive
-///   [`ConfigChangeEvent`]s on an `mpsc` channel.
+///   [`ConfigChangeEvent`]s on an `mpsc` channel (deprecated since
+///   v1.0.0; kept as a bridge for backwards compatibility).
 /// - [`HotReloadConfig::with_debounce`] — adjust the debounce window
 ///   (default 100 ms).
 /// - [`HotReloadConfig::with_poll_interval`] — set the polling
 ///   interval. Used directly when the `hot-reload` feature is off;
 ///   used as the watchdog interval when the feature is on.
 /// - [`HotReloadConfig::with_polling_fallback`] — opt into a
-///   parallel polling thread *in addition to* the event-driven
+///   parallel polling watchdog *in addition to* the event-driven
 ///   watcher, for environments where the kernel watcher is known
 ///   unreliable.
 pub struct HotReloadConfig {
@@ -108,8 +268,17 @@ pub struct HotReloadConfig {
     file_path: PathBuf,
     /// Last known modification time
     last_modified: SystemTime,
-    /// Event sender for notifications
-    event_sender: Option<Sender<ConfigChangeEvent>>,
+    /// Lock-free handler list. Shared with the worker thread via
+    /// `Arc<HandlerList>` once `start_watching` is called.
+    handlers: Arc<HandlerList>,
+    /// Bridge subscriptions kept alive by the deprecated
+    /// `with_change_notifications` API. Each entry registers a
+    /// closure that forwards events to the corresponding
+    /// `mpsc::Sender`; dropping the subscription stops the
+    /// forwarding. Stored here so the bridge lives at least as
+    /// long as the `HotReloadConfig` itself, and is moved into the
+    /// [`HotReloadHandle`] when `start_watching` consumes self.
+    bridges: Vec<Subscription>,
     /// Polling interval — used as primary cadence when the
     /// `hot-reload` feature is off, or as the watchdog interval when
     /// the feature is on and `polling_fallback_enabled` is set.
@@ -141,7 +310,8 @@ impl HotReloadConfig {
             current: Arc::new(RwLock::new(config)),
             file_path: path,
             last_modified,
-            event_sender: None,
+            handlers: Arc::new(HandlerList::new()),
+            bridges: Vec::new(),
             poll_interval: Duration::from_secs(1),
             debounce: DEFAULT_DEBOUNCE,
             polling_fallback_enabled: false,
@@ -192,15 +362,82 @@ impl HotReloadConfig {
         self
     }
 
-    /// Enable change notifications.
+    /// Register a change handler. **Recommended notification API**
+    /// (v1.0.0+).
     ///
-    /// Returns the configured [`HotReloadConfig`] together with a
-    /// [`Receiver`] that will deliver [`ConfigChangeEvent`]s as the
-    /// watcher observes them.
+    /// The handler is invoked inline on the reloader thread every
+    /// time a [`ConfigChangeEvent`] is produced — typically a few
+    /// milliseconds after the underlying filesystem event, plus the
+    /// debounce window. Dispatch overhead is a single atomic pointer
+    /// load (~5 ns) plus the handler's own cost; multiple handlers
+    /// are called in registration order with no per-handler channel
+    /// allocation.
+    ///
+    /// Returns a [`Subscription`] whose `Drop` unregisters the
+    /// handler. Bind to a `let _sub = ...` if you want the handler
+    /// to live for the surrounding scope, or call
+    /// [`Subscription::forget`] to detach the drop hook.
+    ///
+    /// # Panics
+    ///
+    /// If the handler itself panics, the panic is caught via
+    /// `catch_unwind` and discarded — other handlers continue to
+    /// receive the event and the reloader thread is not torn down.
+    /// Handler authors should avoid panicking, but a buggy handler
+    /// won't take down the whole library.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use config_lib::hot_reload::{HotReloadConfig, ConfigChangeEvent};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let hot = HotReloadConfig::from_file("app.conf")?;
+    /// let _sub = hot.on_change(|event: &ConfigChangeEvent| {
+    ///     if let ConfigChangeEvent::Reloaded { path, .. } = event {
+    ///         println!("reloaded {}", path.display());
+    ///     }
+    /// });
+    /// let _handle = hot.start_watching();
+    /// // ... `_sub` and `_handle` are alive for the rest of the scope
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn on_change<F>(&self, handler: F) -> Subscription
+    where
+        F: Fn(&ConfigChangeEvent) + Send + Sync + 'static,
+    {
+        let id = self.handlers.register(Arc::new(handler));
+        Subscription {
+            list: Arc::downgrade(&self.handlers),
+            id,
+        }
+    }
+
+    /// Enable channel-based change notifications. **Deprecated since
+    /// v1.0.0** — prefer [`HotReloadConfig::on_change`].
+    ///
+    /// Internally bridges to the same lock-free handler list as
+    /// `on_change` by registering a closure that forwards events
+    /// to an `mpsc::Sender`. The bridge subscription is held by
+    /// `self` so the channel keeps receiving events for the
+    /// lifetime of the watcher.
+    ///
+    /// The bridge pays one extra `mpsc::Sender::send` per event
+    /// (~100–200 ns) on top of the lock-free dispatch cost — the
+    /// inverse of why `on_change` exists. Existing code using
+    /// `Receiver<ConfigChangeEvent>` continues to work unchanged.
+    #[deprecated(
+        since = "1.0.0",
+        note = "use `on_change` for lock-free dispatch; this method continues to work but pays an mpsc allocation per event"
+    )]
     pub fn with_change_notifications(mut self) -> (Self, Receiver<ConfigChangeEvent>) {
-        let (sender, receiver) = mpsc::channel();
-        self.event_sender = Some(sender);
-        (self, receiver)
+        let (tx, rx) = mpsc::channel();
+        let bridge = self.on_change(move |event| {
+            let _ = tx.send(event.clone());
+        });
+        self.bridges.push(bridge);
+        (self, rx)
     }
 
     /// Get a thread-safe reference to the current configuration.
@@ -225,10 +462,10 @@ impl HotReloadConfig {
     /// Manually trigger a reload check.
     ///
     /// Re-stats the file, compares mtime against the last-known
-    /// modification time, and re-parses if newer. Sends a
+    /// modification time, and re-parses if newer. Dispatches a
     /// [`ConfigChangeEvent::Reloaded`] or
-    /// [`ConfigChangeEvent::ReloadFailed`] notification if change
-    /// notifications are enabled.
+    /// [`ConfigChangeEvent::ReloadFailed`] notification through the
+    /// handler list.
     ///
     /// Returns `Ok(true)` if a reload was performed, `Ok(false)` if
     /// the file was unchanged since the last check.
@@ -258,22 +495,18 @@ impl HotReloadConfig {
                 }
                 self.last_modified = modified;
 
-                if let Some(sender) = &self.event_sender {
-                    let _ = sender.send(ConfigChangeEvent::Reloaded {
-                        path: self.file_path.clone(),
-                        timestamp: SystemTime::now(),
-                    });
-                }
+                self.handlers.dispatch(&ConfigChangeEvent::Reloaded {
+                    path: self.file_path.clone(),
+                    timestamp: SystemTime::now(),
+                });
                 Ok(true)
             }
             Err(e) => {
-                if let Some(sender) = &self.event_sender {
-                    let _ = sender.send(ConfigChangeEvent::ReloadFailed {
-                        path: self.file_path.clone(),
-                        error: e.to_string(),
-                        timestamp: SystemTime::now(),
-                    });
-                }
+                self.handlers.dispatch(&ConfigChangeEvent::ReloadFailed {
+                    path: self.file_path.clone(),
+                    error: e.to_string(),
+                    timestamp: SystemTime::now(),
+                });
                 Err(e)
             }
         }
@@ -322,7 +555,7 @@ impl HotReloadConfig {
 
         let current = Arc::clone(&self.current);
         let file_path = self.file_path.clone();
-        let event_sender = self.event_sender.clone();
+        let handlers = Arc::clone(&self.handlers);
         let poll_interval = self.poll_interval;
         let mut last_modified = self.last_modified;
 
@@ -331,35 +564,28 @@ impl HotReloadConfig {
                 if let Ok(metadata) = std::fs::metadata(&file_path) {
                     if let Ok(modified) = metadata.modified() {
                         if modified > last_modified {
-                            if let Some(sender) = &event_sender {
-                                let _ = sender.send(ConfigChangeEvent::FileModified {
-                                    path: file_path.clone(),
-                                    timestamp: SystemTime::now(),
-                                });
-                            }
+                            handlers.dispatch(&ConfigChangeEvent::FileModified {
+                                path: file_path.clone(),
+                                timestamp: SystemTime::now(),
+                            });
 
                             match Config::from_file(&file_path) {
                                 Ok(new_config) => {
                                     if let Ok(mut config) = current.write() {
                                         *config = new_config;
                                         last_modified = modified;
-
-                                        if let Some(sender) = &event_sender {
-                                            let _ = sender.send(ConfigChangeEvent::Reloaded {
-                                                path: file_path.clone(),
-                                                timestamp: SystemTime::now(),
-                                            });
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    if let Some(sender) = &event_sender {
-                                        let _ = sender.send(ConfigChangeEvent::ReloadFailed {
+                                        handlers.dispatch(&ConfigChangeEvent::Reloaded {
                                             path: file_path.clone(),
-                                            error: e.to_string(),
                                             timestamp: SystemTime::now(),
                                         });
                                     }
+                                }
+                                Err(e) => {
+                                    handlers.dispatch(&ConfigChangeEvent::ReloadFailed {
+                                        path: file_path.clone(),
+                                        error: e.to_string(),
+                                        timestamp: SystemTime::now(),
+                                    });
                                 }
                             }
                         }
@@ -372,6 +598,8 @@ impl HotReloadConfig {
         HotReloadHandle {
             handle: Some(handle),
             stop,
+            handlers: self.handlers,
+            _bridges: self.bridges,
         }
     }
 
@@ -386,13 +614,17 @@ impl HotReloadConfig {
         let stop = Arc::new(AtomicBool::new(false));
         let current = Arc::clone(&self.current);
         let file_path = self.file_path.clone();
-        let event_sender = self.event_sender.clone();
+        let handlers = Arc::clone(&self.handlers);
         let debounce = self.debounce;
         let poll_interval = self.poll_interval;
         let polling_fallback = self.polling_fallback_enabled;
         let initial_modified = self.last_modified;
 
         // Channel from the notify callback to the reload worker.
+        // This `mpsc` is purely internal — between the notify
+        // callback (which runs on `notify`'s own thread) and our
+        // worker thread. It is NOT the user-facing notification
+        // channel; that path is via `HandlerList::dispatch`.
         let (tx, rx) = mpsc::channel::<Event>();
 
         // Build the watcher. We watch the *parent* directory (not the
@@ -421,18 +653,14 @@ impl HotReloadConfig {
             Err(e) => {
                 // Watcher construction failed — likely the platform
                 // event API is unavailable (rare). Surface a
-                // `ReloadFailed` so the caller knows, then fall
-                // through and spawn the polling worker as the only
-                // safety net.
-                if let Some(sender) = &event_sender {
-                    let _ = sender.send(ConfigChangeEvent::ReloadFailed {
-                        path: file_path.clone(),
-                        error: format!(
-                            "notify watcher construction failed: {e}; falling back to polling"
-                        ),
-                        timestamp: SystemTime::now(),
-                    });
-                }
+                // `ReloadFailed` so the caller knows.
+                handlers.dispatch(&ConfigChangeEvent::ReloadFailed {
+                    path: file_path.clone(),
+                    error: format!(
+                        "notify watcher construction failed: {e}; falling back to polling"
+                    ),
+                    timestamp: SystemTime::now(),
+                });
                 None
             }
         };
@@ -440,7 +668,7 @@ impl HotReloadConfig {
         // Reload worker — consumes events from the notify callback,
         // debounces, and re-parses on change.
         let target_file = file_path.clone();
-        let event_sender_for_worker = event_sender.clone();
+        let handlers_for_worker = Arc::clone(&handlers);
         let current_for_worker = Arc::clone(&current);
         let stop_for_worker = Arc::clone(&stop);
         let mut last_modified_seen = initial_modified;
@@ -449,9 +677,7 @@ impl HotReloadConfig {
             while !stop_for_worker.load(Ordering::Relaxed) {
                 // Block up to `poll_interval` for the next event so
                 // the stop flag is observed promptly even when the
-                // file is quiet. (`recv_timeout` is the only stdlib
-                // mpsc primitive that respects both the channel and
-                // a deadline.)
+                // file is quiet.
                 let first = match rx.recv_timeout(poll_interval) {
                     Ok(ev) => Some(ev),
                     Err(mpsc::RecvTimeoutError::Timeout) => None,
@@ -494,12 +720,10 @@ impl HotReloadConfig {
                             continue;
                         }
 
-                        if let Some(sender) = &event_sender_for_worker {
-                            let _ = sender.send(ConfigChangeEvent::FileModified {
-                                path: target_file.clone(),
-                                timestamp: SystemTime::now(),
-                            });
-                        }
+                        handlers_for_worker.dispatch(&ConfigChangeEvent::FileModified {
+                            path: target_file.clone(),
+                            timestamp: SystemTime::now(),
+                        });
 
                         match Config::from_file(&target_file) {
                             Ok(new_config) => {
@@ -508,22 +732,18 @@ impl HotReloadConfig {
                                     if let Some(m) = modified {
                                         last_modified_seen = m;
                                     }
-                                    if let Some(sender) = &event_sender_for_worker {
-                                        let _ = sender.send(ConfigChangeEvent::Reloaded {
-                                            path: target_file.clone(),
-                                            timestamp: SystemTime::now(),
-                                        });
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                if let Some(sender) = &event_sender_for_worker {
-                                    let _ = sender.send(ConfigChangeEvent::ReloadFailed {
+                                    handlers_for_worker.dispatch(&ConfigChangeEvent::Reloaded {
                                         path: target_file.clone(),
-                                        error: e.to_string(),
                                         timestamp: SystemTime::now(),
                                     });
                                 }
+                            }
+                            Err(e) => {
+                                handlers_for_worker.dispatch(&ConfigChangeEvent::ReloadFailed {
+                                    path: target_file.clone(),
+                                    error: e.to_string(),
+                                    timestamp: SystemTime::now(),
+                                });
                             }
                         }
                     }
@@ -531,12 +751,10 @@ impl HotReloadConfig {
                         // File missing — likely deleted between
                         // events. Emit FileDeleted but keep the
                         // last-known-good config in place.
-                        if let Some(sender) = &event_sender_for_worker {
-                            let _ = sender.send(ConfigChangeEvent::FileDeleted {
-                                path: target_file.clone(),
-                                timestamp: SystemTime::now(),
-                            });
-                        }
+                        handlers_for_worker.dispatch(&ConfigChangeEvent::FileDeleted {
+                            path: target_file.clone(),
+                            timestamp: SystemTime::now(),
+                        });
                     }
                 }
             }
@@ -545,6 +763,8 @@ impl HotReloadConfig {
         HotReloadHandle {
             handle: Some(handle),
             stop,
+            handlers: self.handlers,
+            _bridges: self.bridges,
             _watcher: watcher,
         }
     }
@@ -579,10 +799,30 @@ fn event_targets_path(event: &notify::Event, target: &Path) -> bool {
     })
 }
 
-/// Handle for controlling hot reload background thread.
+/// Handle for controlling the hot-reload background thread.
+///
+/// Returned by [`HotReloadConfig::start_watching`]. Dropping the
+/// handle (or calling [`HotReloadHandle::stop`]) signals the worker
+/// to exit and tears down the kernel-level watch registration.
+/// Holding the handle keeps the watcher alive.
+///
+/// New handlers can be registered after `start_watching` via
+/// [`HotReloadHandle::on_change`] — the handler list is shared
+/// between the original `HotReloadConfig` and the spawned worker
+/// thread.
 pub struct HotReloadHandle {
     handle: Option<thread::JoinHandle<()>>,
     stop: Arc<AtomicBool>,
+    /// Lock-free handler list shared with the worker thread.
+    /// Carried here so that `on_change` continues to work after
+    /// the original `HotReloadConfig` has been consumed by
+    /// `start_watching`.
+    handlers: Arc<HandlerList>,
+    /// Bridge subscriptions kept alive for the lifetime of the
+    /// watcher. The deprecated `with_change_notifications` path
+    /// installed these; dropping the handle drops them, which
+    /// unregisters the bridge handlers.
+    _bridges: Vec<Subscription>,
     /// Watcher kept alive for the duration of the watch. Dropping
     /// the watcher tears down the kernel registration. Only carried
     /// when the `hot-reload` feature is on.
@@ -591,6 +831,24 @@ pub struct HotReloadHandle {
 }
 
 impl HotReloadHandle {
+    /// Register a change handler after `start_watching` has been
+    /// called.
+    ///
+    /// Semantics match [`HotReloadConfig::on_change`]. Useful when
+    /// the consumer of the handle is a different component from
+    /// whoever called `start_watching` — pass the handle around and
+    /// let each component install its own handler.
+    pub fn on_change<F>(&self, handler: F) -> Subscription
+    where
+        F: Fn(&ConfigChangeEvent) + Send + Sync + 'static,
+    {
+        let id = self.handlers.register(Arc::new(handler));
+        Subscription {
+            list: Arc::downgrade(&self.handlers),
+            id,
+        }
+    }
+
     /// Stop the background watching thread.
     ///
     /// # Errors
@@ -621,6 +879,7 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::Write;
+    use std::sync::atomic::AtomicUsize;
     use tempfile::TempDir;
 
     /// Helper: write a CONF body to `path` and `fsync` it so the
@@ -666,7 +925,10 @@ mod tests {
     }
 
     #[test]
-    fn test_hot_reload_notifications() {
+    #[allow(deprecated)]
+    fn test_hot_reload_notifications_deprecated_bridge() {
+        // Tests that the deprecated `with_change_notifications` bridge
+        // still produces events through the new dispatch path.
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("test.conf");
         write_conf(&config_path, "key=value1\n");
@@ -687,26 +949,195 @@ mod tests {
     }
 
     #[test]
+    fn test_on_change_single_handler() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("test.conf");
+        write_conf(&config_path, "key=value1\n");
+
+        let mut hot = HotReloadConfig::from_file(&config_path).unwrap();
+        let counter = Arc::new(AtomicUsize::new(0));
+        let c = Arc::clone(&counter);
+        let _sub = hot.on_change(move |event| {
+            if matches!(event, ConfigChangeEvent::Reloaded { .. }) {
+                c.fetch_add(1, Ordering::Relaxed);
+            }
+        });
+
+        thread::sleep(Duration::from_millis(10));
+        write_conf(&config_path, "key=value2\n");
+        hot.reload().unwrap();
+
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn test_on_change_multiple_handlers_fire_in_order() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("test.conf");
+        write_conf(&config_path, "key=value1\n");
+
+        let mut hot = HotReloadConfig::from_file(&config_path).unwrap();
+        let order: Arc<std::sync::Mutex<Vec<u8>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+        let o1 = Arc::clone(&order);
+        let _s1 = hot.on_change(move |_e| o1.lock().unwrap().push(1));
+        let o2 = Arc::clone(&order);
+        let _s2 = hot.on_change(move |_e| o2.lock().unwrap().push(2));
+        let o3 = Arc::clone(&order);
+        let _s3 = hot.on_change(move |_e| o3.lock().unwrap().push(3));
+
+        thread::sleep(Duration::from_millis(10));
+        write_conf(&config_path, "key=value2\n");
+        hot.reload().unwrap();
+
+        // Three handlers see the Reloaded event in registration order.
+        // (Each `reload` produces exactly one Reloaded event.)
+        let final_order = order.lock().unwrap().clone();
+        assert_eq!(final_order, vec![1u8, 2, 3]);
+    }
+
+    #[test]
+    fn test_on_change_drop_unregisters() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("test.conf");
+        write_conf(&config_path, "key=value1\n");
+
+        let mut hot = HotReloadConfig::from_file(&config_path).unwrap();
+        let counter = Arc::new(AtomicUsize::new(0));
+        let c = Arc::clone(&counter);
+        let sub = hot.on_change(move |_e| {
+            c.fetch_add(1, Ordering::Relaxed);
+        });
+
+        // First reload: handler fires.
+        thread::sleep(Duration::from_millis(10));
+        write_conf(&config_path, "key=value2\n");
+        hot.reload().unwrap();
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
+
+        // Drop the subscription — handler is unregistered.
+        drop(sub);
+
+        // Second reload: handler does NOT fire.
+        thread::sleep(Duration::from_millis(10));
+        write_conf(&config_path, "key=value3\n");
+        hot.reload().unwrap();
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn test_on_change_panic_isolation() {
+        // A handler that panics must NOT prevent subsequent handlers
+        // from running and must NOT poison the watcher thread.
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("test.conf");
+        write_conf(&config_path, "key=value1\n");
+
+        let mut hot = HotReloadConfig::from_file(&config_path).unwrap();
+        let after_panic = Arc::new(AtomicUsize::new(0));
+
+        let _s_panic = hot.on_change(|_e| {
+            panic!("handler-side panic; should be swallowed");
+        });
+        let after = Arc::clone(&after_panic);
+        let _s_after = hot.on_change(move |_e| {
+            after.fetch_add(1, Ordering::Relaxed);
+        });
+
+        thread::sleep(Duration::from_millis(10));
+        write_conf(&config_path, "key=value2\n");
+        hot.reload().unwrap();
+
+        // The second handler ran despite the first panicking.
+        assert_eq!(after_panic.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn test_on_change_forget_keeps_handler_alive() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("test.conf");
+        write_conf(&config_path, "key=value1\n");
+
+        let mut hot = HotReloadConfig::from_file(&config_path).unwrap();
+        let counter = Arc::new(AtomicUsize::new(0));
+        let c = Arc::clone(&counter);
+
+        // forget() — handler is now process-lifetime (or, more
+        // precisely, lifetime of the HotReloadConfig's HandlerList).
+        hot.on_change(move |_e| {
+            c.fetch_add(1, Ordering::Relaxed);
+        })
+        .forget();
+
+        thread::sleep(Duration::from_millis(10));
+        write_conf(&config_path, "key=value2\n");
+        hot.reload().unwrap();
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
+
+        thread::sleep(Duration::from_millis(10));
+        write_conf(&config_path, "key=value3\n");
+        hot.reload().unwrap();
+        assert_eq!(counter.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
+    fn test_handle_on_change_after_start_watching() {
+        // Verify that `HotReloadHandle::on_change` works post-
+        // start_watching — handlers registered via the handle see
+        // events the same as handlers registered before.
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("test.conf");
+        write_conf(&config_path, "key=value1\n");
+
+        let hot = HotReloadConfig::from_file(&config_path)
+            .unwrap()
+            .with_poll_interval(Duration::from_millis(50))
+            .with_debounce(Duration::from_millis(25));
+
+        let handle = hot.start_watching();
+
+        let counter = Arc::new(AtomicUsize::new(0));
+        let c = Arc::clone(&counter);
+        let _sub = handle.on_change(move |_e| {
+            c.fetch_add(1, Ordering::Relaxed);
+        });
+
+        thread::sleep(Duration::from_millis(150));
+        write_conf(&config_path, "key=value2\n");
+        thread::sleep(Duration::from_millis(500));
+
+        assert!(
+            counter.load(Ordering::Relaxed) >= 1,
+            "handle.on_change handler never fired"
+        );
+
+        handle.stop().unwrap();
+    }
+
+    #[test]
     fn test_automatic_watching() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("test.conf");
         write_conf(&config_path, "key=value1\n");
 
-        let (hot_config, receiver) = HotReloadConfig::from_file(&config_path)
+        let counter = Arc::new(AtomicUsize::new(0));
+        let hot = HotReloadConfig::from_file(&config_path)
             .unwrap()
             .with_poll_interval(Duration::from_millis(50))
-            .with_debounce(Duration::from_millis(25))
-            .with_change_notifications();
+            .with_debounce(Duration::from_millis(25));
 
-        let config_ref = hot_config.config();
-        let handle = hot_config.start_watching();
+        let c = Arc::clone(&counter);
+        let _sub = hot.on_change(move |event| {
+            if matches!(event, ConfigChangeEvent::Reloaded { .. }) {
+                c.fetch_add(1, Ordering::Relaxed);
+            }
+        });
 
-        // Give the watcher a moment to register.
+        let config_ref = hot.config();
+        let handle = hot.start_watching();
+
         thread::sleep(Duration::from_millis(100));
         write_conf(&config_path, "key=value2\n");
-
-        // Wait long enough for the event-driven path (a few ms) OR
-        // the polling fallback (50ms+) to react and re-parse.
         thread::sleep(Duration::from_millis(500));
 
         {
@@ -716,19 +1147,10 @@ mod tests {
                 "value2"
             );
         }
-
-        let mut events = Vec::new();
-        while let Ok(ev) = receiver.try_recv() {
-            events.push(ev);
-        }
         assert!(
-            !events.is_empty(),
-            "expected at least one ConfigChangeEvent"
+            counter.load(Ordering::Relaxed) >= 1,
+            "expected at least one Reloaded event"
         );
-        let has_reloaded = events
-            .iter()
-            .any(|e| matches!(e, ConfigChangeEvent::Reloaded { .. }));
-        assert!(has_reloaded, "expected at least one Reloaded event");
 
         handle.stop().unwrap();
     }

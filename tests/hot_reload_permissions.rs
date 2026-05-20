@@ -8,6 +8,10 @@
 //! See `docs/PLATFORM-NOTES.md`.
 
 #![cfg(all(feature = "hot-reload", unix))]
+// REPS-AUDIT: deliberately uses the v1.0.0-deprecated
+// `with_change_notifications` API to verify the deprecated mpsc
+// bridge routes through the new lock-free dispatch correctly.
+#![allow(deprecated)]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use config_lib::hot_reload::{ConfigChangeEvent, HotReloadConfig};

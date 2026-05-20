@@ -23,6 +23,11 @@ see [`docs/ARCHITECTURE.md`](ARCHITECTURE.md).
 | Typed accessor (`as_string` / `as_integer` etc.) | <10 ns  | `benches/value_accessors.rs`               |
 | `Config::set` cached write (incl. invalidation) | <500 ns | `benches/cache_warm.rs::set_cached`        |
 | Hot reload detection latency                    | <100 ms | `tests/hot_reload_modified.rs`             |
+| `on_change` dispatch — empty handler list       | <10 ns  | `benches/notification.rs::dispatch_n_handlers/0` |
+| `on_change` dispatch — single handler           | <50 ns  | `benches/notification.rs::dispatch_n_handlers/1` |
+| `on_change` dispatch — ten handlers             | <500 ns | `benches/notification.rs::dispatch_n_handlers/10` |
+| `on_change` dispatch — hundred handlers         | <5 µs   | `benches/notification.rs::dispatch_n_handlers/100` |
+| Handler registration cost (incl. RCU update)    | <1 µs   | `benches/notification.rs::register_handler` |
 | Cold parse — small CONF (~200 B)                | <1 µs   | `benches/parse_throughput.rs::parse_small_conf` |
 | Cold parse — 1 KiB CONF                         | <10 µs  | `benches/parse_throughput.rs::parse_1kib_conf` |
 | Cold parse — 100 KiB JSON                       | <500 µs | `benches/parse_throughput.rs::parse_100kib_json` |
@@ -123,6 +128,30 @@ Typed accessor cost in isolation. `Value::as_integer`,
 called in a tight loop on a pre-constructed `Value`. The
 single-digit-nanosecond target is for the accessor itself, not the
 preceding `Config::get` call.
+
+### `benches/notification.rs`
+
+Lock-free notification dispatch (v1.0.0+). The
+`dispatch_n_handlers` parametric benchmark exercises
+`HandlerList::dispatch` for `n ∈ {0, 1, 10, 100}` registered
+handlers. The empty-list case isolates the irreducible per-event
+overhead (one `ArcSwap::load` + zero-length iteration). The non-
+empty cases add `n × (Arc::clone + catch_unwind + closure call)`
+where each closure increments an `AtomicUsize` — the smallest
+meaningful body.
+
+The `register_handler` benchmark measures `HandlerList::register`
++ `Subscription::drop` round trip — useful as an upper bound on
+"how expensive is it to come and go from the handler list", e.g.
+in short-lived RAII guards.
+
+These numbers are the v1.0.0 headline perf wins: where v0.9.x
+notified subscribers via `mpsc::Sender::send` (queue node
+allocation + atomic CAS + cross-thread wake = ~150–250 ns per
+send), v1.0.0 dispatches inline for ~5 ns + per-handler cost.
+The savings compound with subscriber count: ten handlers via
+mpsc fan-out costs ~1.6 µs; ten handlers via `on_change` costs
+~50–100 ns plus closure work.
 
 ### `benches/parse_throughput.rs`
 

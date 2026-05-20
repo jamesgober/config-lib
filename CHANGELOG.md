@@ -15,6 +15,73 @@
 <br>
 
 
+## [1.0.0] - 2026-05-19 — Stable release
+
+**`config-lib` is now stable.** The v1.x SemVer contract takes effect: every `pub` item is part of the contract, `#[non_exhaustive]` enums can grow in MINOR releases, MSRV stays within the last-12-stable-Rust-versions window. Full text in [`docs/STABILITY-1.0.md`](docs/STABILITY-1.0.md).
+
+The headline of v1.0.0 is **lock-free in-process notification dispatch**: the old `mpsc::channel<ConfigChangeEvent>` notification subsystem has been replaced by an `ArcSwap<Vec<Handler>>`-backed handler list built in-tree. `HotReloadConfig::on_change(closure) → Subscription` is the new API. The reloader thread invokes every registered handler inline through one atomic pointer load + per-handler closure call, with no channel allocation, no cross-thread wakeup, and no fan-out tax for multi-subscriber workloads.
+
+### Added
+- **`HotReloadConfig::on_change(closure) → Subscription`** — register a change handler that fires inline from the reloader thread when the watched config changes. Returns an RAII `Subscription` guard; dropping it unregisters the handler atomically via an `ArcSwap` RCU update. The new headline notification API.
+- **`HotReloadHandle::on_change(closure) → Subscription`** — same semantics, accessible after `start_watching` has consumed the original `HotReloadConfig`. Multiple components downstream of the watcher can each install their own handler.
+- **`Subscription::forget()`** — detach the drop-based unregister hook for process-lifetime handlers where the caller has no convenient owning scope.
+- **`HandlerList` (private) + `ArcSwap<Vec<(u64, Handler)>>`** backing — one `load()` per dispatch (~5 ns relaxed atomic ptr load), copy-on-write `rcu` updates on register / unregister, panic isolation via `catch_unwind` around each handler call.
+- **`arc-swap = "1.7"`** as a regular (non-optional) dependency. ~700 LOC, MSRV 1.46, the load-bearing primitive for the new dispatch path.
+- **`examples/on_change_demo.rs`** — runnable demo of the new API: three independent handlers register, one gets dropped mid-demo to show immediate unregistration.
+- **`benches/notification.rs`** — criterion harness for the dispatch path. Parametric over handler count {0, 1, 10, 100}; targets the v1.0 Performance Contract numbers in `docs/PERFORMANCE.md`.
+
+### Changed
+- **`HotReloadConfig` internals refactored** from `Option<mpsc::Sender<ConfigChangeEvent>>` to `Arc<HandlerList>` + `Vec<Subscription>` (the latter holds bridge subscriptions installed by the deprecated `with_change_notifications` API). All four "sender.send(...)" sites in the reload paths (manual `reload`, polling worker, event-driven worker) now call `handlers.dispatch(&event)` instead.
+- **`HotReloadHandle`** carries the `Arc<HandlerList>` so `on_change` works post-`start_watching`. Bridge subscriptions move with the handle so deprecated-API receivers continue to work for the lifetime of the watcher.
+- **`examples/hot_reload_demo.rs`** rewritten to use the new `on_change` API.
+- **README**: `Enterprise Performance` section updated to call out the lock-free notification dispatch; `Version Compatibility` rewritten for v1.x (MSRV 1.75 default / 1.82 with noml; edition 2021; v1.x API frozen); `EnterpriseConfig` deprecation banners simplified to drop the v0.9.x event timeline; install snippets bumped from `"0.9"` to `"1.0"`.
+- **`docs/ARCHITECTURE.md`** gained section §3a "Notification dispatch (v1.0.0+)" with the `ArcSwap` backend description, register/unregister/dispatch flow, subscription lifecycle, and the "why not registry-io" decision log.
+- **`docs/PERFORMANCE.md`** gained five new Performance Contract rows for the notification dispatch targets (empty list / 1 handler / 10 handlers / 100 handlers / handler registration cost) and a description of the `benches/notification.rs` harness.
+
+### Deprecated
+- **`HotReloadConfig::with_change_notifications` — `#[deprecated(since = "1.0.0")]`**. The method continues to work via an internal bridge: a closure registered through `on_change` forwards events to an `mpsc::Sender`. Existing user code on this API keeps compiling and receiving events. The deprecation note steers new code toward `on_change` for the lock-free fast path. The bridge will continue to work through the v1.x line per the deprecation policy in `docs/STABILITY-1.0.md` §7.
+
+### Migration
+
+For most users this is a **no-action release** — v0.9.9 callers compile and run unchanged. For users who actively consume the `Receiver<ConfigChangeEvent>` returned by `with_change_notifications`, the suggested migration:
+
+```rust
+// Was (v0.9.x, still works in v1.x with deprecation warning):
+let (hot, rx) = HotReloadConfig::from_file(p)?.with_change_notifications();
+let handle = hot.start_watching();
+while let Ok(event) = rx.recv_timeout(Duration::from_millis(100)) {
+    handle_event(event);
+}
+
+// Use (v1.0.0+):
+let hot = HotReloadConfig::from_file(p)?;
+let _sub = hot.on_change(|event: &ConfigChangeEvent| {
+    handle_event(event); // <-- inline on the reloader thread
+});
+let handle = hot.start_watching();
+// `_sub` stays alive for the surrounding scope; drop to unregister
+```
+
+The closure-based pattern avoids the channel allocation per event AND the consumer-side polling thread that fan-out to multiple subscribers previously required.
+
+### Why not `registry-io`?
+
+An early v1.0.0 proposal pulled in the `registry-io` crate for the same `ArcSwap`-backed dispatch shape. We rejected it: identical performance characteristics (it's the same primitive), but it added a new crate boundary, the wrapper-type shape didn't match our existing `Receiver`-flavored API, and the integration would have been ~3-4 days of refactoring for zero perf gain over the in-tree version. We took the load-bearing primitive (`arc-swap`) and built the dispatch surface in-tree. See `docs/ARCHITECTURE.md` §3a for the full decision log.
+
+### Internal
+- 108 tests pass (69 unit + 4 hot_reload integration on Windows / 5 on Unix + 14 integration + 1 parser_corpus + 11 validation + 10 doc).
+- `cargo clippy --all-targets --all-features -- -D warnings` clean.
+- `cargo doc --no-deps --all-features` clean with `RUSTDOCFLAGS="-D warnings"`.
+- `cargo audit` clean.
+- `cargo deny check` clean.
+- `cargo +1.75 check` passes on the default feature set.
+- New dependency: `arc-swap = "1.7"`.
+
+
+
+<br>
+
+
 ## [0.9.9] - 2026-05-19 — Final pre-1.0 release
 
 > **Scope.** v0.9.9 closes out the 0.9.x line. It absorbs the implementation halves of Phase 0.9.5 (lock-free caching + data-model merger), Phase 0.9.6 (cross-platform hot-reload integration tests), Phase 0.9.8 (parser-corpus regression infrastructure), plus the original Phase 0.9.9 polish work (`docs/ARCHITECTURE.md`, `docs/PERFORMANCE.md`). The next release is `v1.0.0` directly — see *Looking ahead* below for the new `registry-io` scope landing there.
@@ -673,7 +740,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v0.9.9...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/jamesgober/config-lib/compare/v0.9.9...v1.0.0
 [0.9.9]: https://github.com/jamesgober/config-lib/compare/v0.9.8...v0.9.9
 [0.9.8]: https://github.com/jamesgober/config-lib/compare/v0.9.7...v0.9.8
 [0.9.7]: https://github.com/jamesgober/config-lib/compare/v0.9.6...v0.9.7

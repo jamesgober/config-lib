@@ -1,11 +1,7 @@
 <h1 align="center">
     <img width="99" alt="Rust logo" src="https://raw.githubusercontent.com/jamesgober/rust-collection/72baabd71f00e14aa9184efcb16fa3deddda3a0a/assets/rust-logo.svg">
-    <br>
-    <b>config-lib</b>
-    <br>
-    <sub>
-        <sup>RUST CONFIGURATION LIBRARY</sup>
-    </sub>
+    <br><b>config-lib</b>
+    <br><sub><sup>RUST CONFIGURATION LIBRARY</sup></sub>
 </h1>
 
 <p align="center">
@@ -22,8 +18,6 @@
     <i>High-performance configuration management with advanced caching, validation, and format preservation</i>
 </p>
 
-<br>
-
 <p>
     <strong>config-lib</strong> is a high-performance, enterprise-grade Rust configuration library that provides unified access to 8 different configuration formats through a single, consistent API. Built from the ground up for production environments, it offers advanced features like sub-50ns cached access, hot reloading, audit logging, and comprehensive type safety.
 </p>
@@ -36,11 +30,7 @@
     With its enterprise-focused architecture, <b>config-lib</b> delivers production-grade features including comprehensive error handling with zero unsafe code, multi-tier caching with lock-free read paths, environment variable overrides with smart prefix matching, and built-in audit logging for compliance requirements. The library is designed for high-throughput applications, targeting sub-50ns cached access times on hot paths and supporting <b>hot reloading</b> without service interruption.
 </p>
 
-<hr>
-
-
 ## Features
-
 ### **Multi-Format Support**
 - **CONF** - Built-in parser for standard .conf files (default)
 - **INI** - Full INI file parsing with sections, comments, and data type detection  
@@ -51,18 +41,17 @@
 - **NOML** - Advanced configuration with dynamic features (feature: `noml`)
 - **TOML** - TOML format with format preservation (feature: `toml`)
 
-### **Enterprise Performance**
+### Enterprise Performance
 - **Sub-50ns Cache Access Target** - Multi-tier caching designed for sub-50ns reads on hot paths
+- **Lock-Free Notification Dispatch** - `on_change` handlers fire inline from the reloader thread via `ArcSwap<Vec<Handler>>`; one atomic load + N closure calls, no channel allocation
 - **Zero-Copy Parsing** - Minimized allocations and string operations where possible
 - **Lock-Free Read Paths** - Poison-resistant locking with graceful failure recovery
 - **Hot Value Cache** - Ultra-fast access for frequently used values
 - **Cache Hit Ratio Tracking** - Built-in performance statistics and monitoring
 
-> **Note on benchmark numbers:** detailed criterion-backed benchmark numbers will land with **v1.0.0**. Until then, performance claims should be treated as targets, not guarantees.
+> Performance numbers, methodology, and tuning guidance live in [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md). The committed criterion harnesses in [`benches/`](benches/) produce the measured baselines.
 
-<br>
-
-### **Production Features** 
+### Production Features
 - **Configuration Hot Reloading** - File watching with thread-safe Arc swapping
 - **Audit Logging System** - Structured event logging with multiple sinks and severity filtering
 - **Environment Variable Overrides** - Smart caching with prefix matching and type conversion
@@ -70,37 +59,32 @@
 - **Format Preservation** - Maintains comments, whitespace, and original formatting
 - **Async Native** - Full async/await support throughout the API
 
-### **Reliability & Safety**
+### Reliability & Safety
 - **Zero Unsafe Code** - All `unwrap()` calls eliminated, comprehensive error handling
 - **Type Safety** - Rich type system with automatic conversions and validation
 - **Enterprise Error Handling** - Production-ready error messages with context preservation
 - **Comprehensive Testing** - Extensive unit, integration, and doc test coverage
 
----
+<hr>
 
-<br>
+## Why Choose config-lib?
 
-## **Why Choose config-lib?**
-
-### **Unified Multi-Format Support**
+### Unified Multi-Format Support
 Unlike single-format libraries, **config-lib** provides seamless access to 8 configuration formats through one consistent API. No need to learn different libraries for `TOML`, `JSON`, `XML`, and `HCL` - one API handles them all with automatic format detection.
 
-### **Enterprise-Grade Performance**
+### Enterprise-Grade Performance
 Multi-tier caching with lock-free read paths is designed to deliver sub-50ns cached access on hot paths. Built for high-throughput applications with minimal performance overhead.
 
-### **Production-Ready Reliability**
+### Production-Ready Reliability
 Zero unsafe code, comprehensive error handling, and poison-resistant locking ensure your configuration system won't crash your application. Extensive testing coverage validates edge cases and error conditions.
 
-### **Developer Experience First**
+### Developer Experience First
 Rich type system with automatic conversions, format preservation for round-trip editing, and detailed error messages with source location context. No more cryptic parsing errors or manual type casting.
 
-### **Advanced Enterprise Features**
+### Advanced Enterprise Features
 Hot reloading without service interruption, structured audit logging for compliance, environment variable overrides with smart caching, and schema validation with custom rules - features typically requiring multiple libraries.
 
----
-
-<br>
-
+<hr>
 
 ## Installation
 
@@ -108,10 +92,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-config-lib = "0.9"
+config-lib = "1.0"
 
 # For enhanced functionality, enable optional features:
-config-lib = { version = "0.9", features = [
+config-lib = { version = "1.0", features = [
     "json",           # JSON format support with serialization
     "xml",            # XML format support with quick-xml backend  
     "hcl",            # HashiCorp Configuration Language support
@@ -131,9 +115,7 @@ config-lib = { version = "0.9", features = [
 - **Enterprise Systems**: Add `"xml"`, `"validation"`, `"audit"`, `"env-override"`
 - **Full Featured**: Include all features for maximum flexibility
 
----
-
-<br>
+<hr>
 
 ## Quick Start
 
@@ -164,7 +146,7 @@ config.set("app.version", "1.0.0")?;
 println!("Connecting to {}:{}", host, port);
 ```
 
-### **Multi-Format Support**
+### Multi-Format Support
 
 ```rust
 use config_lib::Config;
@@ -191,13 +173,13 @@ if config.contains_key("server.ssl") {
 }
 ```
 
-### **Read-only mode and forward-compatible options**
+### Read-only mode and forward-compatible options
 
 `ConfigOptions` is the structured place to express the small set of
 behaviors that should not be enabled by default — making a `Config`
-read-only, sizing the cache (v0.9.5), etc. The struct is
-`#[non_exhaustive]` so v0.9.x can add new knobs without breaking
-SemVer; callers go through the consuming builder methods.
+read-only, sizing the cache, etc. The struct is `#[non_exhaustive]`
+so v1.x MINOR releases can add new knobs without breaking SemVer;
+callers go through the consuming builder methods.
 
 ```rust
 use config_lib::{Config, ConfigOptions};
@@ -211,22 +193,11 @@ let mut locked = Config::with_options(opts);
 assert!(locked.set("foo", "bar").is_err());   // rejected
 ```
 
-> **Deprecated in v0.9.4.** `EnterpriseConfig` and the multi-tier
-> `cache_stats()` / `make_read_only()` API are deprecated as of
-> v0.9.4. They continue to compile and work through the v0.9.x line
-> and the v1.x deprecation window, but new code should use
-> [`Config`](#-multi-format-detection-and-loading) + `ConfigOptions`
-> directly. The lock-free caching that made `EnterpriseConfig`
-> distinct lands on the unified `Config` in v0.9.5. See
-> [`.dev/ROADMAP.md`](.dev/ROADMAP.md) for the full timeline and
-> [`examples/enterprise_demo.rs`](examples/enterprise_demo.rs) for
-> a side-by-side migration table.
-
-### **Default Configuration Settings**
+### Default Configuration Settings
 
 **config-lib** provides multiple powerful methods for setting default/preset values that serve as fallbacks when keys are missing from configuration files. This ensures your application always has sensible defaults while allowing configuration files to override specific values.
 
-#### **Method 1: ConfigBuilder with Presets (Recommended)**
+#### Method 1: ConfigBuilder with Presets (Recommended)
 
 ```rust
 use config_lib::{ConfigBuilder, Value};
@@ -268,7 +239,7 @@ let pool_size = config.get("database.pool_size")?.as_integer()?; // File value o
 let log_level = config.get("logging.level")?.as_string()?;      // File value or "info"
 ```
 
-#### **Method 2: Inline defaults at the access site**
+#### Method 2: Inline defaults at the access site
 
 The simplest pattern when defaults are only needed at the call site —
 no parallel defaults table to maintain, no `unwrap` on a key that may
@@ -296,14 +267,15 @@ let workers: i64 = config
     .unwrap_or(4);
 ```
 
-> **Migrated from `EnterpriseConfig::set_default` / `get_or_default`
-> (deprecated v0.9.4).** The richer separate-defaults-table API
-> returns in v0.9.5 once `ConfigOptions` gains a `defaults` field
-> alongside the caching layer. See
-> [`examples/enterprise_demo.rs`](examples/enterprise_demo.rs)
-> for the side-by-side migration table.
+> The richer separate-defaults-table pattern is also available on
+> `Config` directly — call `cfg.set_default(key, value)?` to populate
+> the defaults table, then `cfg.get_or_default(key)` to resolve
+> against the main value tree with the defaults as a fallback. The
+> deprecated `EnterpriseConfig::set_default` / `get_or_default`
+> behavior is fully preserved on `Config`; see
+> [`examples/enterprise_demo.rs`](examples/enterprise_demo.rs).
 
-#### **Method 3: Inline Defaults with get_or()**
+#### Method 3: Inline Defaults with get_or()
 
 ```rust
 use config_lib::Config;
@@ -330,7 +302,7 @@ let app_config = AppConfig {
 };
 ```
 
-#### **Best Practices for Default Configuration**
+#### Best Practices for Default Configuration
 
 1. **Use Sensible Defaults**: Choose defaults that work for most use cases
 2. **Document Defaults**: Keep defaults in sync with documentation
@@ -366,7 +338,7 @@ let config = ConfigBuilder::new()
     .build()?;
 ```
 
-### **Environment Variable Integration**
+### Environment Variable Integration
 
 ```rust
 use config_lib::{Config, env_override::EnvOverride};
@@ -389,7 +361,7 @@ let host = config.get("database.host")?.as_string()?;  // From env or file
 let port = config.get("server.port")?.as_integer()?;   // From env or file
 ```
 
-### **Configuration Validation & Type Safety**
+### Configuration Validation & Type Safety
 
 ```rust
 use config_lib::{Config, validation::{Validator, ValidationRule}};
@@ -411,7 +383,7 @@ let port = config.get("server.port")?.as_integer()?;  // Guaranteed valid range
 let log_level = config.get("logging.level")?.as_string()?;  // Guaranteed valid value
 ```
 
-### **Hot Reloading & Audit Logging**
+### Hot Reloading & Audit Logging
 
 ```rust
 use config_lib::{Config, audit};
@@ -428,7 +400,7 @@ let config = Config::from_file_with_hot_reload("app.conf", move |new_config| {
 })?;
 ```
 
-### **Advanced Multi-File Configuration**
+### Advanced Multi-File Configuration
 
 ```rust
 use config_lib::{ConfigBuilder, ConfigMergeStrategy};
@@ -447,109 +419,46 @@ let app_name = config.get("app.name")?.as_string()?;          // From default.co
 let debug_mode = config.get("debug")?.as_bool()?;             // From environment.json
 ```
 
----
+## Documentation & Resources
 
-<br>
-
-## **Status: Late Beta — On the Path to v1.0.0**
-
-**Current Version:** `0.9.x` — late beta, API stabilizing, structurally mature.
-**Target:** `1.0.0` stable, scheduled per the roadmap in `.dev/ROADMAP.md`.
-
-**What's complete**:
-- **Universal Format Support** - All 8 configuration formats with consistent API (CONF, INI, JSON, XML, HCL, Properties, NOML, TOML)
-- **Multi-Tier Caching** - Designed for sub-50ns cached reads on hot paths
-- **Production Safety** - Zero unsafe code, comprehensive error handling, poison-resistant locking
-- **Advanced Features** - Hot reloading, audit logging, environment overrides, schema validation
-- **Developer Experience** - Rich type system, format preservation (NOML/TOML), automatic type conversion
-- **Quality Assurance** - Comprehensive test suite, zero clippy warnings
-
-**What's planned for v1.0.0**:
-- Unified `Config` API (consolidation underway — `EnterpriseConfig` deprecated in v0.9.4, data-model merger lands with caching in v0.9.5)
-- Lock-free cached reads with verified sub-50ns benchmarks
-- Event-driven hot reload via `notify` (inotify / FSEvents / ReadDirectoryChangesW)
-- Fuzz-tested parsers for every format
-- Stability contract: API frozen for the lifetime of v1.x
-
-**Performance targets** (to be verified by committed benchmarks before v1.0.0):
-- **<50ns** cached value access on hot paths
-- **<500ns** cached write
-- **<100ms** hot-reload detection latency (event-driven)
-- **Zero-allocation** hot-path reads
-
-**Note on API stability**: The public API is **not yet frozen**. Expect refinements through `0.9.x` releases. The `v1.0.0` release will lock down the stability contract documented in `docs/STABILITY-1.0.md`.
-
----
-
-<br>
-
-## **Documentation & Resources**
-
-### **Documentation**
+### Documentation
 - **[Documentation Index](docs/README.md)** - Complete documentation hub and navigation
 - **[API Reference](docs/API.md)** - Comprehensive API documentation with examples
 - **[Valid Formats](docs/FORMATS.md)** - Detailed format specifications and examples
 - **[Code Guidelines](docs/GUIDELINES.md)** - Development standards and best practices
 
-### **External Resources**
+### External Resources
 - **[API Documentation](https://docs.rs/config-lib)** - Complete API reference with examples
 - **[Crate Registry](https://crates.io/crates/config-lib)** - Official crate distribution
 - **[Examples Directory](examples/)** - 20+ comprehensive examples covering all features
 - **[Performance Benchmarks](benches/)** - Detailed performance analysis and comparisons
 - **[NOML Language](https://github.com/noml-lang/noml)** - NOML language specification and usage.
 
-### **Getting Started Guides**
+### Getting Started Guides
 - **[Quick Start Guide](examples/basic.rs)** - Basic configuration loading and access
 - **[Multi-Format Demo](examples/multi_format.rs)** - Working with different configuration formats
 - **[Enterprise Features](examples/enterprise_demo.rs)** - Advanced caching and performance
 - **[Hot Reloading](examples/hot_reload_demo.rs)** - Dynamic configuration updates
 - **[Validation System](examples/validation_demo.rs)** - Schema validation and type checking
 
-### **Common Use Cases**
+### Common Use Cases
 - **Web Applications**: Environment overrides, JSON/TOML configs
 - **DevOps Tools**: [HCL integration](examples/hcl_demo.rs), audit logging, hot reloading
 - **Enterprise Systems**: [XML support](examples/xml_demo.rs), validation, caching
 - **Microservices**: Multi-format support, environment-based configuration
 
-<br>
+<hr>
 
----
-
-### **Troubleshooting**
-
-<details>
-  <summary><b>"Parser not found" error when using TOML, NOML,or JSON?</b></summary>
-    <p>✅ Enable the corresponding feature flag in your <b>Cargo.toml</b>: <code>features = ["toml", "noml", "json"]</code>.</p>
-</details>
-
-<details>
-  <summary><b>Poor performance with large configuration files?</b></summary>
-    <p>✅ <code>Config</code> already keeps the parsed tree in memory, so repeated <code>get()</code> calls do not re-parse. The lock-free cached-read path with verified sub-50ns access targets ships with <strong>v0.9.5</strong> on the unified <code>Config</code> API. (The deprecated <code>EnterpriseConfig</code> exposes today's multi-tier cache; new code should not adopt it.)</p>
-</details>
-
-<details>
-  <summary><b>Configuration changes not reflected in running application?</b></summary>
-    <p>✅ Use <code>Config::from_file_with_hot_reload()</code> for automatic configuration updates without restart.</p>
-</details>
-
-<details>
-  <summary><b>Type conversion errors during value access?</b></summary>
-    <p>✅ Use the safe accessor methods like <code>as_string_or("default")</code> or enable validation with custom rules.</p>
-</details>
-
----
-
-<br>
-
-### **Version Compatibility**
-- **Rust**: 1.82+ (currently); MSRV will be lowered to **1.75** in `v1.0.0` per portfolio standard
-- **Edition**: 2021 (currently); will move to **2024** in `v1.0.0`
-- **MSRV Policy**: Once `v1.0.0` ships, MSRV is guaranteed within the last 12 stable Rust releases
-- **API Stability**: Pre-1.0 — expect refinements. `v1.0.0` will freeze the public API.
+### Version Compatibility
+- **Rust**: `1.75+` for the default feature set; `1.82+` when the `noml` or `toml` features are enabled (upstream `noml = "=0.9.0"` declares 1.82)
+- **Edition**: `2021`
+- **MSRV Policy**: MINOR releases may bump MSRV within the last-12-stable-Rust-versions window; PATCH releases never bump MSRV
+- **API Stability**: v1.x public API is frozen per [`docs/STABILITY-1.0.md`](docs/STABILITY-1.0.md). Growth-likely enums (`Error`, `ConfigChangeEvent`, etc.) are `#[non_exhaustive]`; new variants land in MINOR releases without breaking SemVer
 - **Feature Flags**: All optional features maintain independent compatibility
 
+<br>
 
-### **Development Setup**
+### Development Setup
 ```bash
 git clone https://github.com/jamesgober/config-lib.git
 cd config-lib
@@ -558,11 +467,11 @@ cargo bench               # Performance benchmarks
 cargo clippy              # Lint checks (should show zero warnings)
 ```
 
+<br>
 
-## **Contributing**
+## Contributing
 We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for details.
 
-<hr>
 <br>
 
 <!-- LICENSE
@@ -580,8 +489,6 @@ We welcome contributions! See our [Contributing Guide](CONTRIBUTING.md) for deta
     <p>Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in <b>config-lib</b> by you, as defined in the <b>Apache-2.0 license</b>, shall be <b>dual-licensed</b> as above, without any additional terms or conditions.</p>
     <p>Unless required by applicable law or agreed to in writing, software distributed under the Licenses is distributed on an <b>"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND</b>, either express or implied.</p>
 </div>
-
-<br>
 
 <!-- FOOT COPYRIGHT
 ################################################# -->
