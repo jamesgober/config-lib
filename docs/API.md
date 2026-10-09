@@ -107,23 +107,23 @@
 
 ```toml
 [dependencies]
-config-lib = "1.0"
+config-lib = "1.1"
 
 # Common feature additions:
-config-lib = { version = "1.0", features = ["json", "validation", "env-override"] }
+config-lib = { version = "1.1", features = ["json", "validation", "env-override"] }
 
 # Everything on:
-config-lib = { version = "1.0", features = [
+config-lib = { version = "1.1", features = [
     "json", "xml", "hcl", "noml", "toml",
     "validation", "schema", "async", "chrono",
     "env-override",
 ] }
 
 # Slim build (CONF only, no hot reload, no extras):
-config-lib = { version = "1.0", default-features = false, features = ["conf"] }
+config-lib = { version = "1.1", default-features = false, features = ["conf"] }
 ```
 
-**MSRV:** Rust `1.75+` for the default feature set; Rust `1.82+` if `noml` or `toml` features are enabled (upstream `noml = "=0.9.0"` declares 1.82).
+**MSRV:** Rust `1.75+` for the default feature set; Rust `1.79+` with the `xml` feature (`quick-xml` 0.41); Rust `1.82+` with the `noml` or `toml` features (`noml = "=0.9.2"`).
 
 <h2 id="feature-flags">Feature Flags</h2>
 
@@ -132,9 +132,9 @@ config-lib = { version = "1.0", default-features = false, features = ["conf"] }
 | `conf`         | yes      | Built-in CONF format parser                                                            |
 | `hot-reload`   | yes      | Event-driven file watching via `notify` (inotify/FSEvents/RDCW)                        |
 | `json`         | no       | JSON parsing via `serde_json`                                                          |
-| `xml`          | no       | XML parsing via `quick-xml`                                                            |
+| `xml`          | no       | XML parsing via `quick-xml` 0.41 (MSRV 1.79)                                           |
 | `hcl`          | no       | HashiCorp Configuration Language (built-in parser)                                     |
-| `noml`         | no       | NOML parsing via the upstream `noml` crate (pinned `=0.9.0`)                           |
+| `noml`         | no       | NOML parsing via the upstream `noml` crate (pinned `=0.9.2`)                           |
 | `toml`         | no       | TOML parsing via the `noml` crate for format preservation                              |
 | `validation`   | no       | Rule-based validation framework (`regex`-backed)                                       |
 | `schema`       | no       | Schema validation framework                                                            |

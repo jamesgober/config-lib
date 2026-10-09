@@ -114,14 +114,23 @@ by CI on every commit.
 
 ### 3.2 Feature-flag MSRV asymmetry
 
-The **`noml` and `toml` features have a higher MSRV — Rust 1.82.**
+Some opt-in features need a newer toolchain than the 1.75 baseline
+because their upstream dependency declares a higher `rust-version`:
 
-This is because the upstream `noml = "=0.9.0"` crate itself declares
-`rust-version = "1.82"`. Users enabling either feature must be on
-Rust 1.82 or newer; the rest of `config-lib` remains MSRV-1.75. The
-mismatch resolves naturally when an upstream `noml` release lowers
-its own MSRV; until then, the asymmetry is documented here as a
-known constraint.
+| Feature          | MSRV | Reason                                                   |
+|------------------|------|----------------------------------------------------------|
+| `xml`            | 1.79 | `quick-xml` 0.41 declares `rust-version = "1.79"` (since v1.1.0) |
+| `noml`, `toml`   | 1.82 | `noml = "=0.9.2"` declares `rust-version = "1.82"`        |
+
+Every other feature, and the default build, stays on 1.75. CI checks
+each row of this table on exactly the listed version (the
+`msrv-features` job), alongside the 1.75 baseline check.
+
+`xml` moved from 1.75 to 1.79 in v1.1.0, because `quick-xml` 0.31
+is affected by RUSTSEC-2026-0194 and RUSTSEC-2026-0195 and the fixed
+releases (0.41 and later) require Rust 1.79. The requirement is
+`quick-xml = "0.41"`, so a `cargo update` cannot pull in 0.42, which
+needs Rust 1.86.
 
 ### 3.3 MSRV bumps within v1.x
 
@@ -176,8 +185,8 @@ way, is a MAJOR-release event.
 ### 4.3 NOML / TOML pre-1.0 dependency caveat
 
 The `noml` and `toml` features depend on the `noml` crate, which is
-itself pre-1.0 (`0.9.x`). config-lib pins to `noml = "=0.9.0"`
-exactly — a `noml 0.9.1` release does **not** automatically reach
+itself pre-1.0 (`0.9.x`). config-lib pins to `noml = "=0.9.2"`
+exactly (since v1.1.0; v1.0.x pinned `=0.9.0`), so a later `noml` release does **not** automatically reach
 config-lib users via `cargo update`; the maintainer makes a
 deliberate pin bump after validating the new noml release.
 

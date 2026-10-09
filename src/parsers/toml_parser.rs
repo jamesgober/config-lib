@@ -7,48 +7,60 @@ use crate::error::Result;
 use crate::value::Value;
 use std::collections::BTreeMap;
 
-/// Parse TOML format configuration
-#[cfg(feature = "noml")]
-pub fn parse(source: &str) -> Result<Value> {
-    // Use NOML's TOML parsing capability for format preservation
-    let noml_value = noml::parse(source)?;
-    convert_noml_value(noml_value)
-}
+// This module is compiled only with the `toml` feature, which always brings in
+// the `noml` crate, so it does not depend on the separate `noml` feature.
 
-/// Parse TOML format configuration (fallback when NOML is not available)
-#[cfg(not(feature = "noml"))]
-pub fn parse(_source: &str) -> Result<Value> {
-    Err(Error::general(
-        "TOML parsing requires either the 'noml' feature or a dedicated TOML parser",
-    ))
+/// Parse TOML format configuration
+pub fn parse(source: &str) -> Result<Value> {
+    let document = noml::parse_raw(source)?;
+    resolve_as_toml(&document)
 }
 
 /// Parse TOML with format preservation for round-trip editing
-#[cfg(feature = "noml")]
 pub fn parse_with_preservation(source: &str) -> Result<(Value, noml::Document)> {
     // Parse to get the AST document for format preservation
     let document = noml::parse_string(source, None)?;
-
-    // Resolve to get the actual values
-    let mut resolver = noml::Resolver::new();
-    let resolved = resolver.resolve(&document)?;
-
-    // Convert to config-lib Value
-    let value = convert_noml_value(resolved)?;
-
+    let value = resolve_as_toml(&document)?;
     Ok((value, document))
 }
 
-/// Parse TOML with format preservation (fallback when NOML is not available)
-#[cfg(not(feature = "noml"))]
-pub fn parse_with_preservation(_source: &str) -> Result<(Value, ())> {
-    Err(Error::general(
-        "TOML format preservation requires the 'noml' feature",
-    ))
+/// Resolve a parsed document with TOML semantics.
+///
+/// TOML strings are plain text, but NOML expands `${...}` in double-quoted
+/// strings. A TOML file such as `password = "${DB_PASSWORD}"` must keep
+/// that text, so `${` is escaped as `$${` before resolving.
+fn resolve_as_toml(document: &noml::Document) -> Result<Value> {
+    let mut literal = document.clone();
+    escape_templates(&mut literal.root);
+    let resolved = noml::Resolver::new().resolve(&literal)?;
+    convert_noml_value(resolved)
+}
+
+/// Escape `${` in every double-quoted string so NOML keeps it as text
+fn escape_templates(node: &mut noml::AstNode) {
+    use noml::parser::ast::{AstValue, StringStyle};
+    match &mut node.value {
+        AstValue::String { value, style, .. } => {
+            if matches!(style, StringStyle::Double | StringStyle::TripleDouble)
+                && value.contains("${")
+            {
+                *value = value.replace("${", "$${");
+            }
+        }
+        AstValue::Array { elements, .. } => elements.iter_mut().for_each(escape_templates),
+        AstValue::Table { entries, .. } => {
+            for entry in entries {
+                escape_templates(&mut entry.value);
+            }
+        }
+        AstValue::FunctionCall { args, .. } | AstValue::Native { args, .. } => {
+            args.iter_mut().for_each(escape_templates);
+        }
+        _ => {}
+    }
 }
 
 /// Convert NOML Value to config-lib Value
-#[cfg(feature = "noml")]
 fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
     match noml_value {
         noml::Value::Null => Ok(Value::Null),
@@ -119,5 +131,17 @@ mod tests {
 
         let ports = config.get("ports").unwrap().as_array().unwrap();
         assert_eq!(ports[0].as_integer().unwrap(), 8001);
+    }
+
+    #[test]
+    fn toml_strings_keep_dollar_braces() {
+        let value =
+            parse("password = \"${DB_PASSWORD}\"\nliteral = '${x}'\nescaped = \"$${y}\"").unwrap();
+        assert_eq!(
+            value.get("password"),
+            Some(&Value::string("${DB_PASSWORD}"))
+        );
+        assert_eq!(value.get("literal"), Some(&Value::string("${x}")));
+        assert_eq!(value.get("escaped"), Some(&Value::string("$${y}")));
     }
 }

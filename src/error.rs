@@ -114,8 +114,8 @@ pub enum Error {
         message: String,
     },
 
-    /// NOML library errors (when using NOML format)
-    #[cfg(feature = "noml")]
+    /// NOML library errors (when using the NOML or TOML format)
+    #[cfg(any(feature = "noml", feature = "toml"))]
     #[error("NOML error: {source}")]
     Noml {
         /// The underlying NOML error

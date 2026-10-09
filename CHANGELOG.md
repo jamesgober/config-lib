@@ -15,6 +15,39 @@
 <br>
 
 
+## [1.1.0] - 2026-10-09
+
+A security release for the `xml` feature, plus fixes in the XML, TOML and NOML paths. The default feature set is unchanged and keeps MSRV 1.75.
+
+### Security
+- **`quick-xml` 0.31 to 0.41** (`xml` feature): fixes RUSTSEC-2026-0194 and RUSTSEC-2026-0195. `quick-xml` 0.41 requires Rust 1.79, so the `xml` feature's MSRV moves from 1.75 to 1.79. The rest of the crate stays on 1.75.
+- **Cargo.lock refreshed**: `h2` 0.3.27 (RUSTSEC-2026-0258) and the unmaintained `rustls-pemfile` 1.0.4 (RUSTSEC-2025-0134) are gone, and `crossbeam-epoch` moves to 0.9.21 (RUSTSEC-2026-0204, via the `criterion` dev-dependency).
+
+### Changed
+- **`From<quick_xml::Error> for Error`** now converts the `quick_xml::Error` type of 0.41. Code that names `quick_xml::Error` from 0.31 to use this impl must move to 0.41 as well.
+- **`noml` pin `=0.9.0` to `=0.9.2`** (`noml` and `toml` features). noml 0.9.2 makes `${...}` interpolation work in NOML files, rejects duplicate keys, merges tables defined in several places, and writes valid NOML when serializing. See the noml 0.9.2 changelog for details.
+- **XML: repeated elements become arrays.** `<host>a</host><host>b</host>` used to keep only the last element; it now yields an array of both, in document order.
+- **XML: entity references, character references and CDATA** are now resolved into the text (`&amp;` becomes `&`, `<![CDATA[a < b]]>` becomes `a < b`). Before, CDATA content was dropped and attribute values kept their raw `&amp;` form.
+
+### Fixed
+- **Saving a modified TOML or NOML config lost the changes.** `Config::serialize` (and `save`, `save_to_file`) returned the original preserved text even after `set`, `remove` or `merge`. The preserved text is now used only while the config is unmodified; after a change the current values are written. With the `toml` feature alone, serializing TOML used to fail with "not implemented"; it now works.
+- **The `toml` feature did not compile on its own** (`--no-default-features --features toml`); it only built together with `noml`.
+- **TOML strings containing `${`**, such as `password = "${DB_PASSWORD}"`, failed to load because the noml crate treats `${...}` as interpolation. TOML is now read with strings taken literally.
+- **Malformed XML that ended with open elements** (`<a><b>1</b>`) returned a partial result. It is now an error, as are unknown entity references.
+- **Deeply nested XML** overflowed the stack and aborted the process. Nesting beyond 128 elements is now an error.
+
+### CI
+- The MSRV job checks the 1.75 baseline without `xml`, and a new `msrv-features` job checks `xml` on 1.79 and `noml` + `toml` on 1.82, matching `docs/STABILITY-1.0.md` §3.2.
+- The feature matrix now also tests `noml` and `toml` on their own.
+
+### Docs
+- `docs/STABILITY-1.0.md`, `docs/API.md` and the README list the per-feature MSRVs and the new `noml` pin.
+- `docs/FORMATS.md`: the NOML examples used a `${VAR:default}` syntax and an `@datetime` type that NOML does not have; they now use `env()` and `${path}` references and parse as written. TOML examples quote date-time values, with a note that the noml-backed TOML parser does not read TOML date-time literals yet. Fixed a mismatched closing tag in an XML example.
+
+
+<br>
+
+
 ## [1.0.0] - 2026-05-19 — Stable release
 
 **`config-lib` is now stable.** The v1.x SemVer contract takes effect: every `pub` item is part of the contract, `#[non_exhaustive]` enums can grow in MINOR releases, MSRV stays within the last-12-stable-Rust-versions window. Full text in [`docs/STABILITY-1.0.md`](docs/STABILITY-1.0.md).
@@ -740,7 +773,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/jamesgober/config-lib/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/jamesgober/config-lib/compare/v0.9.9...v1.0.0
 [0.9.9]: https://github.com/jamesgober/config-lib/compare/v0.9.8...v0.9.9
 [0.9.8]: https://github.com/jamesgober/config-lib/compare/v0.9.7...v0.9.8

@@ -818,9 +818,10 @@ logging.appender.file.max-history=50
 
 **Key Features:**
 - TOML-compatible base syntax
-- Environment variable interpolation with `${VAR}`
-- File inclusion with `include "path"`
-- Native type extensions: `@duration()`, `@size()`, `@url()`
+- Environment variables with `env("VAR", default)`
+- References to other values with `${path}`, e.g. `"${app.name}-${app.version}"`
+- File inclusion with `key = include "path"`
+- Native type extensions: `@duration()`, `@size()`, `@url()`, `@ip()`, `@semver()`
 - Dynamic resolution and validation
 - Nested object support
 - Comments and documentation
@@ -833,249 +834,146 @@ logging.appender.file.max-history=50
 [app]
 name = "MyApplication"
 version = "1.0.0"
-debug = ${DEBUG:false}
-environment = ${ENVIRONMENT:"development"}
-build_time = @datetime("2025-09-29T10:30:00Z")
+debug = env("DEBUG", false)
+environment = env("ENVIRONMENT", "development")
+banner = "${app.name} v${app.version} (${app.environment})"
 
 [server]
-host = ${SERVER_HOST:"localhost"}
-port = ${PORT:8080}
+host = env("SERVER_HOST", "localhost")
+port = env("PORT", 8080)
 timeout = @duration("30s")
 max_request_size = @size("10MB")
-ssl_enabled = ${SSL_ENABLED:false}
+ssl_enabled = env("SSL_ENABLED", false)
 
 [database]
-host = ${DB_HOST:"localhost"}
-port = ${DB_PORT:5432}
-name = ${DB_NAME:"myapp"}
-username = ${DB_USER:"postgres"}
-password = ${DB_PASSWORD}
-pool_size = ${DB_POOL_SIZE:10}
+host = env("DB_HOST", "localhost")
+port = env("DB_PORT", 5432)
+name = env("DB_NAME", "myapp")
+username = env("DB_USER", "postgres")
+password = env("DB_PASSWORD", "")
+pool_size = env("DB_POOL_SIZE", 10)
 connection_timeout = @duration("30s")
-ssl_mode = ${DB_SSL_MODE:"prefer"}
+ssl_mode = env("DB_SSL_MODE", "prefer")
+url = "postgres://${database.username}@${database.host}:${database.port}/${database.name}"
 
 [logging]
-level = ${LOG_LEVEL:"info"}
-file = ${LOG_FILE:"/var/log/app.log"}
+level = env("LOG_LEVEL", "info")
+file = env("LOG_FILE", "/var/log/app.log")
 max_size = @size("100MB")
-rotate = ${LOG_ROTATE:true}
+rotate = env("LOG_ROTATE", true)
 retention = @duration("30d")
-
-# Include external configuration
-include "logging.noml"
-include "features.noml"
 ```
+
+`env()` values are strings unless the default is used; config-lib's accessors
+convert them (`"8080"` reads as an integer). `${path}` refers to another value by
+its dotted path from the top of the file.
 
 **Advanced NOML with Dynamic Features:**
 ```noml
 # Enterprise NOML Configuration
-# Demonstrates advanced features and dynamic resolution
 
 [metadata]
 name = "Enterprise Payment System"
 version = "3.2.1"
-created = @datetime("now")
-environment = ${DEPLOYMENT_ENV:"production"}
-datacenter = ${DATACENTER:"us-east-1"}
-instance_id = ${HOSTNAME:"unknown"}
+environment = env("DEPLOYMENT_ENV", "production")
+datacenter = env("DATACENTER", "us-east-1")
+instance_id = env("HOSTNAME", "unknown")
 
-# Server configuration with environment-specific values
 [server]
-bind_address = ${BIND_ADDRESS:"0.0.0.0"}
-port = ${SERVER_PORT:8443}
+bind_address = env("BIND_ADDRESS", "0.0.0.0")
+port = env("SERVER_PORT", 8443)
 context_path = "/api/v1"
-request_timeout = @duration("${REQUEST_TIMEOUT:60s}")
-max_connections = ${MAX_CONNECTIONS:1000}
-worker_threads = ${WORKER_THREADS:4}
+request_timeout = @duration("60s")
+max_connections = env("MAX_CONNECTIONS", 1000)
+worker_threads = env("WORKER_THREADS", 4)
 
 [server.ssl]
-enabled = ${SSL_ENABLED:true}
-certificate = ${SSL_CERT_PATH:"/etc/ssl/certs/server.crt"}
-private_key = ${SSL_KEY_PATH:"/etc/ssl/private/server.key"}
+enabled = env("SSL_ENABLED", true)
+certificate = env("SSL_CERT_PATH", "/etc/ssl/certs/server.crt")
+private_key = env("SSL_KEY_PATH", "/etc/ssl/private/server.key")
 protocols = ["TLSv1.2", "TLSv1.3"]
-cipher_suites = include "ssl-ciphers.noml"
 
-# Database cluster configuration
 [database.primary]
-url = @url("${DB_PRIMARY_URL}")
+url = env("DB_PRIMARY_URL", "postgres://db-primary:5432/payments")
 driver = "postgresql"
-max_pool_size = ${DB_PRIMARY_POOL:25}
-min_idle = ${DB_PRIMARY_MIN_IDLE:5}
+max_pool_size = env("DB_PRIMARY_POOL", 25)
 connection_timeout = @duration("30s")
-query_timeout = @duration("60s")
 idle_timeout = @duration("5m")
-max_lifetime = @duration("20m")
 
 [database.replica]
-url = @url("${DB_REPLICA_URL}")
+url = env("DB_REPLICA_URL", "postgres://db-replica:5432/payments")
 driver = "postgresql"
-max_pool_size = ${DB_REPLICA_POOL:15}
-min_idle = ${DB_REPLICA_MIN_IDLE:3}
+max_pool_size = env("DB_REPLICA_POOL", 15)
 read_only = true
-connection_timeout = @duration("30s")
+connection_timeout = ${database.primary.connection_timeout}
 
-# Cache configuration with dynamic sizing
 [cache]
-engine = ${CACHE_ENGINE:"redis"}
+engine = env("CACHE_ENGINE", "redis")
+port = 6379
 cluster_nodes = [
-  @url("redis://${REDIS_HOST1:cache1.example.com}:${REDIS_PORT:6379}"),
-  @url("redis://${REDIS_HOST2:cache2.example.com}:${REDIS_PORT:6379}"),
-  @url("redis://${REDIS_HOST3:cache3.example.com}:${REDIS_PORT:6379}")
+  "redis://cache1.example.com:${cache.port}",
+  "redis://cache2.example.com:${cache.port}",
+  "redis://cache3.example.com:${cache.port}",
 ]
-password = ${REDIS_PASSWORD}
-database = ${REDIS_DB:0}
 default_ttl = @duration("1h")
-max_memory = @size("${REDIS_MAX_MEMORY:512MB}")
+max_memory = @size("512MB")
 eviction_policy = "allkeys-lru"
 
-# API configuration with rate limiting
 [api]
 version = "v1"
-base_path = "/api/v1"
-rate_limit = {
-  requests_per_minute = ${API_RATE_LIMIT:1000},
-  burst_limit = ${API_BURST_LIMIT:100},
-  window = @duration("1m")
-}
-cors = {
-  allowed_origins = [${CORS_ORIGINS:"*"}],
-  allowed_methods = ["GET", "POST", "PUT", "DELETE"],
-  allowed_headers = ["Content-Type", "Authorization"],
-  credentials = ${CORS_CREDENTIALS:true},
-  max_age = @duration("1h")
-}
-
-# Monitoring and observability
-[monitoring]
-metrics_enabled = ${METRICS_ENABLED:true}
-metrics_port = ${METRICS_PORT:9090}
-tracing_enabled = ${TRACING_ENABLED:true}
-tracing_sample_rate = ${TRACING_SAMPLE_RATE:0.1}
+base_path = "${server.context_path}"
+rate_limit = { requests_per_minute = 1000, burst_limit = 100, window = @duration("1m") }
 
 [monitoring.jaeger]
-endpoint = @url("${JAEGER_ENDPOINT:http://jaeger:14268}")
+endpoint = @url("http://jaeger:14268")
 service_name = "payment-api"
-tags = {
-  version = "3.2.1",
-  environment = ${DEPLOYMENT_ENV:"production"},
-  datacenter = ${DATACENTER:"us-east-1"}
-}
+tags = { version = "${metadata.version}", environment = "${metadata.environment}" }
 
-# Feature flags with environment overrides
 [features]
-payment_processing = ${FEATURE_PAYMENTS:true}
-user_analytics = ${FEATURE_ANALYTICS:true}
-advanced_reporting = ${FEATURE_REPORTING:false}
-debug_mode = ${DEBUG_MODE:false}
-maintenance_mode = ${MAINTENANCE_MODE:false}
+payment_processing = env("FEATURE_PAYMENTS", true)
+maintenance_mode = env("MAINTENANCE_MODE", false)
 
-# External service integrations
-[integrations.email]
-provider = "sendgrid"
-api_key = ${SENDGRID_API_KEY}
-from_address = ${EMAIL_FROM:"noreply@example.com"}
-timeout = @duration("30s")
-retry_attempts = ${EMAIL_RETRY_ATTEMPTS:3}
-
-[integrations.payment_gateway]
-base_url = @url("${PAYMENT_GATEWAY_URL}")
-api_key = ${PAYMENT_GATEWAY_KEY}
-timeout = @duration("${PAYMENT_TIMEOUT:30s}")
-retry_attempts = ${PAYMENT_RETRY_ATTEMPTS:3}
-webhook_secret = ${PAYMENT_WEBHOOK_SECRET}
-
-# Logging configuration
 [logging]
-level = ${LOG_LEVEL:"info"}
-format = ${LOG_FORMAT:"json"}
-output = ${LOG_OUTPUT:"file"}
-file = ${LOG_FILE:"/var/log/payment-api.log"}
-max_size = @size("${LOG_MAX_SIZE:200MB}")
-max_files = ${LOG_MAX_FILES:10}
-compress = ${LOG_COMPRESS:true}
-
-# Include environment-specific overrides
-include "environments/${DEPLOYMENT_ENV:production}.noml"
-include "secrets.noml"
+level = env("LOG_LEVEL", "info")
+file = "/var/log/${monitoring.jaeger.service_name}.log"
+max_size = @size("200MB")
 ```
 
 **NOML with Includes and Modular Configuration:**
 ```noml
 # Main configuration file (app.noml)
-# Demonstrates modular configuration with includes
 
 [app]
 name = "Modular Application"
 version = "2.0.0"
-environment = ${ENVIRONMENT:"development"}
+environment = env("ENVIRONMENT", "development")
 
-# Include base configurations
-include "configs/database.noml"
-include "configs/server.noml"
-include "configs/logging.noml"
+# Each include becomes the value of its key; paths are relative to this file
+[modules]
+database = include "configs/database.noml"
+server = include "configs/server.noml"
+logging = include "configs/logging.noml"
 
-# Include environment-specific configuration
-include "environments/${ENVIRONMENT}.noml"
-
-# Include optional local overrides
-include "local.noml"  # This file may not exist
-
-# Feature toggles
-[features]
-api_v2 = ${ENABLE_API_V2:false}
-metrics = ${ENABLE_METRICS:true}
-tracing = ${ENABLE_TRACING:false}
-
-# Security configuration
 [security]
-jwt_secret = ${JWT_SECRET}
-jwt_expiry = @duration("${JWT_EXPIRY:24h}")
-password_min_length = ${PASSWORD_MIN_LENGTH:12}
-rate_limiting = {
-  enabled = ${RATE_LIMITING:true},
-  window = @duration("1m"),
-  max_requests = ${RATE_LIMIT_REQUESTS:100}
-}
-
-# File: configs/database.noml
-[database]
-driver = "postgresql"
-host = ${DB_HOST:"localhost"}
-port = ${DB_PORT:5432}
-name = ${DB_NAME:"myapp"}
-username = ${DB_USER:"postgres"}
-password = ${DB_PASSWORD}
-ssl_mode = ${DB_SSL_MODE:"prefer"}
-
-[database.pool]
-max_size = ${DB_POOL_MAX:20}
-min_idle = ${DB_POOL_MIN:5}
-connection_timeout = @duration("30s")
-idle_timeout = @duration("10m")
-max_lifetime = @duration("30m")
-
-# File: environments/production.noml
-[app]
-debug = false
-
-[server]
-host = "0.0.0.0"
-port = 8443
-ssl_enabled = true
-
-[database]
-ssl_mode = "require"
-pool.max_size = 50
-
-[logging]
-level = "warn"
-format = "json"
-
-[features]
-metrics = true
-tracing = true
-api_v2 = true
+jwt_secret = env("JWT_SECRET", "")
+jwt_expiry = @duration("24h")
+password_min_length = 12
+# Values from an included file are referenced like any other value
+db_host = ${modules.database.host}
 ```
+
+```noml
+# configs/database.noml
+driver = "postgresql"
+host = env("DB_HOST", "localhost")
+port = env("DB_PORT", 5432)
+name = env("DB_NAME", "myapp")
+
+[pool]
+max_size = 20
+connection_timeout = @duration("30s")
+```
+
 
 <hr>
 <a href="#top">&uarr; <b>TOP</b></a>
@@ -1092,9 +990,14 @@ api_v2 = true
 - Strong typing (strings, integers, floats, booleans, dates)
 - Nested tables and arrays
 - Comments with `#` prefix
-- Date and time support
+- Date and time support (see the note below)
 - Multi-line strings
 - Array of tables for complex structures
+
+> **Note:** config-lib reads TOML through the `noml` crate, which does not
+> support TOML date and time literals yet. Write dates and times as quoted
+> strings (`created = "2025-09-29T10:30:00Z"`) and parse them in your
+> application, or with the `chrono` feature.
 
 **Basic TOML Configuration:**
 ```toml
@@ -1106,7 +1009,7 @@ app_name = "MyApplication"
 version = "1.0.0"
 debug = true
 environment = "development"
-created = 2025-09-29T10:30:00Z
+created = "2025-09-29T10:30:00Z"
 
 # Server configuration
 [server]
@@ -1165,8 +1068,8 @@ Supports multiple payment providers.
 [metadata]
 owner = "Platform Team"
 email = "platform@example.com"
-created = 2025-09-29T10:30:00Z
-last_updated = 2025-09-29T15:45:00Z
+created = "2025-09-29T10:30:00Z"
+last_updated = "2025-09-29T15:45:00Z"
 tags = ["production", "payment", "enterprise"]
 
 # Server configuration with nested tables
@@ -1357,37 +1260,37 @@ maintenance_mode = false
 api_v2_enabled = false
 ```
 
-**TOML with Time and Date Examples:**
+**TOML with Dates and Times (as strings):**
 ```toml
-# TOML Date and Time Examples
-# Demonstrates TOML's native date/time support
+# Date and time values, quoted because config-lib's TOML parser
+# does not read TOML date-time literals yet
 
 [application]
 name = "DateTime Demo"
 version = "1.0.0"
 
 # Various date and time formats
-released = 2025-09-29  # Date only
-launched = 10:30:00    # Time only
-created = 2025-09-29T10:30:00Z  # RFC 3339 UTC
-updated = 2025-09-29T10:30:00+02:00  # RFC 3339 with timezone
-last_backup = 2025-09-29T10:30:00.123Z  # With milliseconds
+released = "2025-09-29"  # Date only
+launched = "10:30:00"    # Time only
+created = "2025-09-29T10:30:00Z"  # RFC 3339 UTC
+updated = "2025-09-29T10:30:00+02:00"  # RFC 3339 with timezone
+last_backup = "2025-09-29T10:30:00.123Z"  # With milliseconds
 
 [schedule]
 # Scheduled tasks with specific times
-daily_backup = 02:00:00
-weekly_report = 2025-10-06T09:00:00Z
-monthly_maintenance = 2025-11-01T01:00:00Z
+daily_backup = "02:00:00"
+weekly_report = "2025-10-06T09:00:00Z"
+monthly_maintenance = "2025-11-01T01:00:00Z"
 
 # Maintenance windows
 [[maintenance_windows]]
-start = 2025-10-15T02:00:00Z
-end = 2025-10-15T04:00:00Z
+start = "2025-10-15T02:00:00Z"
+end = "2025-10-15T04:00:00Z"
 description = "Database maintenance"
 
 [[maintenance_windows]]
-start = 2025-11-01T01:00:00Z
-end = 2025-11-01T03:00:00Z
+start = "2025-11-01T01:00:00Z"
+end = "2025-11-01T03:00:00Z"
 description = "System updates"
 
 [timeouts]
@@ -1516,7 +1419,7 @@ backup_retention = 2592000  # seconds (30 days)
       <config:network>
         <config:host>0.0.0.0</config:host>
         <config:port>8443</config:port>
-        <config:context_path>/api/v1</config:path>
+        <config:context_path>/api/v1</config:context_path>
       </config:network>
       
       <security:ssl enabled="true">

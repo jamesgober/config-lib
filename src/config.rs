@@ -344,13 +344,15 @@ impl Config {
             "toml" => {
                 #[cfg(feature = "toml")]
                 {
-                    // Use NOML's serializer for format preservation
+                    // The preserved document keeps comments and formatting,
+                    // but only matches the values until they are changed
                     #[cfg(feature = "noml")]
-                    if let Some(ref document) = self.noml_document {
-                        return Ok(noml::serialize_document(document)?);
+                    if !self.modified {
+                        if let Some(ref document) = self.noml_document {
+                            return Ok(noml::serialize_document(document)?);
+                        }
                     }
-                    // Fallback to basic serialization
-                    self.serialize_as_toml()
+                    self.serialize_as_toml(false)
                 }
                 #[cfg(not(feature = "toml"))]
                 return Err(Error::feature_not_enabled("toml"));
@@ -358,11 +360,12 @@ impl Config {
             "noml" => {
                 #[cfg(feature = "noml")]
                 {
-                    if let Some(ref document) = self.noml_document {
-                        Ok(noml::serialize_document(document)?)
-                    } else {
-                        Err(Error::internal("NOML document not preserved"))
+                    if !self.modified {
+                        if let Some(ref document) = self.noml_document {
+                            return Ok(noml::serialize_document(document)?);
+                        }
                     }
+                    self.serialize_as_toml(true)
                 }
                 #[cfg(not(feature = "noml"))]
                 return Err(Error::feature_not_enabled("noml"));
@@ -443,14 +446,19 @@ impl Config {
         }
     }
 
-    /// Serialize as TOML format (basic implementation)
-    #[cfg(feature = "toml")]
-    fn serialize_as_toml(&self) -> Result<String> {
-        // This is a simplified TOML serializer
-        // In practice, you'd use the NOML library for proper TOML serialization
-        Err(Error::internal(
-            "Basic TOML serialization not implemented - use NOML library",
-        ))
+    /// Serialize the values as TOML text.
+    ///
+    /// Writes the current values as TOML. With `noml` set, a literal `${` in
+    /// a string is written as `$${` so NOML does not treat it as
+    /// interpolation when the file is read back. TOML has no null, so a null
+    /// value is an error unless writing NOML.
+    #[cfg(any(feature = "toml", feature = "noml"))]
+    fn serialize_as_toml(&self, noml: bool) -> Result<String> {
+        let mut out = String::new();
+        if let Value::Table(table) = &self.values {
+            toml_writer::write_table(&mut out, table, &mut Vec::new(), noml)?;
+        }
+        Ok(out)
     }
 
     /// Validate the configuration against a schema
@@ -1067,6 +1075,165 @@ impl From<Value> for Config {
     }
 }
 
+/// TOML text output for TOML and modified NOML configurations
+#[cfg(any(feature = "toml", feature = "noml"))]
+mod toml_writer {
+    use crate::error::{Error, Result};
+    use crate::value::Value;
+    use std::collections::BTreeMap;
+    use std::fmt::Write;
+
+    fn is_table_array(value: &Value) -> bool {
+        matches!(value, Value::Array(items)
+            if !items.is_empty() && items.iter().all(|v| matches!(v, Value::Table(_))))
+    }
+
+    /// Write plain keys first, then `[table]` and `[[array]]` sections
+    pub(super) fn write_table(
+        out: &mut String,
+        table: &BTreeMap<String, Value>,
+        path: &mut Vec<String>,
+        noml: bool,
+    ) -> Result<()> {
+        for (key, value) in table {
+            if !matches!(value, Value::Table(_)) && !is_table_array(value) {
+                write_key(out, key);
+                out.push_str(" = ");
+                write_value(out, value, path, key, noml)?;
+                out.push('\n');
+            }
+        }
+        for (key, value) in table {
+            path.push(key.clone());
+            match value {
+                Value::Table(inner) => {
+                    header(out, path, false);
+                    write_table(out, inner, path, noml)?;
+                }
+                Value::Array(items) if is_table_array(value) => {
+                    for item in items {
+                        header(out, path, true);
+                        if let Value::Table(inner) = item {
+                            write_table(out, inner, path, noml)?;
+                        }
+                    }
+                }
+                _ => {}
+            }
+            path.pop();
+        }
+        Ok(())
+    }
+
+    fn header(out: &mut String, path: &[String], array: bool) {
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(if array { "[[" } else { "[" });
+        for (i, key) in path.iter().enumerate() {
+            if i > 0 {
+                out.push('.');
+            }
+            write_key(out, key);
+        }
+        out.push_str(if array { "]]\n" } else { "]\n" });
+    }
+
+    fn write_key(out: &mut String, key: &str) {
+        let bare = key.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+            && key
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-');
+        if bare {
+            out.push_str(key);
+        } else {
+            write_string(out, key, false);
+        }
+    }
+
+    fn write_string(out: &mut String, s: &str, noml: bool) {
+        out.push('"');
+        let mut chars = s.chars().peekable();
+        while let Some(c) = chars.next() {
+            match c {
+                '"' => out.push_str("\\\""),
+                '\\' => out.push_str("\\\\"),
+                '\n' => out.push_str("\\n"),
+                '\t' => out.push_str("\\t"),
+                '\r' => out.push_str("\\r"),
+                '$' if noml && chars.peek() == Some(&'{') => out.push_str("$$"),
+                c if c.is_control() => {
+                    let _ = write!(out, "\\u{:04X}", c as u32);
+                }
+                c => out.push(c),
+            }
+        }
+        out.push('"');
+    }
+
+    fn write_value(
+        out: &mut String,
+        value: &Value,
+        path: &[String],
+        key: &str,
+        noml: bool,
+    ) -> Result<()> {
+        match value {
+            Value::Null if noml => out.push_str("null"),
+            Value::Null => {
+                let mut full = path.join(".");
+                if !full.is_empty() {
+                    full.push('.');
+                }
+                full.push_str(key);
+                return Err(Error::serialize(format!(
+                    "TOML has no null value; cannot write '{full}'"
+                )));
+            }
+            Value::Bool(b) => {
+                let _ = write!(out, "{b}");
+            }
+            Value::Integer(i) => {
+                let _ = write!(out, "{i}");
+            }
+            Value::Float(f) => {
+                if f.is_nan() {
+                    out.push_str("nan");
+                } else if f.is_infinite() {
+                    out.push_str(if *f > 0.0 { "inf" } else { "-inf" });
+                } else {
+                    // Debug always keeps a '.' or exponent, so it reads back as a float
+                    let _ = write!(out, "{f:?}");
+                }
+            }
+            Value::String(s) => write_string(out, s, noml),
+            Value::Array(items) => {
+                out.push('[');
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    write_value(out, item, path, key, noml)?;
+                }
+                out.push(']');
+            }
+            Value::Table(table) => {
+                out.push('{');
+                for (i, (k, v)) in table.iter().enumerate() {
+                    out.push_str(if i > 0 { ", " } else { " " });
+                    write_key(out, k);
+                    out.push_str(" = ");
+                    write_value(out, v, path, key, noml)?;
+                }
+                out.push_str(if table.is_empty() { "}" } else { " }" });
+            }
+            #[cfg(feature = "chrono")]
+            Value::DateTime(dt) => write_string(out, &dt.to_rfc3339(), noml),
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1114,5 +1281,42 @@ mod tests {
         assert_eq!(config1.get("b.x").unwrap().as_integer().unwrap(), 2);
         assert_eq!(config1.get("b.y").unwrap().as_integer().unwrap(), 3);
         assert_eq!(config1.get("c").unwrap().as_integer().unwrap(), 4);
+    }
+
+    #[cfg(feature = "toml")]
+    #[test]
+    fn modified_toml_serializes_current_values() {
+        let source = "# comment\nname = \"app\"\n\n[server]\nport = 80\n";
+        let mut config = Config::from_string(source, Some("toml")).unwrap();
+
+        // Unchanged: the original text is kept when the document is preserved
+        #[cfg(feature = "noml")]
+        assert_eq!(config.serialize().unwrap(), source);
+
+        config.set("server.port", 8080).unwrap();
+        config.set("path", "C:\\dir \"q\"").unwrap();
+        let text = config.serialize().unwrap();
+        let reloaded = Config::from_string(&text, Some("toml")).unwrap();
+        assert_eq!(reloaded.as_value(), config.as_value(), "{text}");
+
+        config.set("nothing", Value::Null).unwrap();
+        assert!(config.serialize().is_err(), "TOML has no null");
+    }
+
+    #[cfg(feature = "noml")]
+    #[test]
+    fn modified_noml_serializes_current_values() {
+        let source = "name = \"app\"\nlog = \"/var/log/${name}.log\"\n";
+        let mut config = Config::from_string(source, Some("noml")).unwrap();
+        assert_eq!(
+            config.get("log").unwrap().as_string().unwrap(),
+            "/var/log/app.log"
+        );
+
+        config.set("template", "${not_a_reference}").unwrap();
+        config.set("nothing", Value::Null).unwrap();
+        let text = config.serialize().unwrap();
+        let reloaded = Config::from_string(&text, Some("noml")).unwrap();
+        assert_eq!(reloaded.as_value(), config.as_value(), "{text}");
     }
 }

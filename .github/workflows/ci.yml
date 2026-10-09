@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable, 1.75]  # MSRV is 1.75 for default features (1.82 if noml/toml enabled)
+        rust: [stable, 1.75]  # MSRV is 1.75 (xml needs 1.79, noml/toml need 1.82; see msrv-features)
         include:
           - os: ubuntu-latest
             rust: beta
@@ -48,9 +48,11 @@ jobs:
     # default-feature library compiling on the declared MSRV — not to
     # the dev-dependency tree (criterion / rayon-core / etc.) having
     # the same MSRV. `cargo check` deliberately skips dev-deps.
+    # The `xml`, `noml` and `toml` features have higher MSRVs
+    # (§3.2) and are checked in the `msrv-features` job.
     - name: Check MSRV (library only)
       if: matrix.rust == '1.75'
-      run: cargo check --features "json,chrono,validation,xml,hcl,env-override,async"
+      run: cargo check --features "json,chrono,validation,hcl,env-override,async"
 
     # The remaining heavy steps run on stable + beta only. They build
     # the test harness, examples, and benches — all of which depend on
@@ -71,6 +73,40 @@ jobs:
     - name: Test documentation
       if: matrix.rust == 'stable'
       run: cargo test --doc --features "json,chrono,validation,xml,hcl,env-override,async"
+
+  # Features whose MSRV is above the crate's 1.75 baseline
+  # (docs/STABILITY-1.0.md §3.2): each is checked on exactly the version
+  # the docs promise.
+  msrv-features:
+    name: MSRV ${{ matrix.rust }} (${{ matrix.label }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rust: "1.79"
+            label: xml
+            features: "json,chrono,validation,xml,hcl,env-override,async"
+          - rust: "1.82"
+            label: noml + toml
+            features: "noml,toml,json,chrono,validation,xml,hcl,env-override,async"
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+      with:
+        key: msrv-${{ matrix.rust }}
+
+    - name: Check MSRV (library only)
+      run: cargo check --features "${{ matrix.features }}"
 
   # Documentation and examples
   docs:
@@ -150,6 +186,8 @@ jobs:
         cargo test --no-default-features --features env-override
         cargo test --no-default-features --features chrono
         cargo test --no-default-features --features async
+        cargo test --no-default-features --features noml
+        cargo test --no-default-features --features toml
 
     - name: Run security audit
       run: |

@@ -388,7 +388,7 @@ mod tests {
         config.insert("age".to_string(), Value::integer(25));
 
         let errors = validator.validate_config(&config);
-        assert!(errors.is_empty());
+        assert_eq!(errors, [] as [ValidationError; 0]);
 
         let mut incomplete_config = std::collections::BTreeMap::new();
         incomplete_config.insert("name".to_string(), Value::string("test"));
@@ -406,7 +406,7 @@ mod tests {
 
         let valid_value = Value::integer(50);
         let errors = rule_set.validate("test", &valid_value);
-        assert!(errors.is_empty());
+        assert_eq!(errors, [] as [ValidationError; 0]);
 
         let invalid_value = Value::integer(150);
         let errors = rule_set.validate("test", &invalid_value);
