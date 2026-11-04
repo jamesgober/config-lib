@@ -24,7 +24,7 @@
 //! number (a fraction, an exponent, an integer beyond `i64`, and `-0`)
 //! becomes [`Value::Float`]. A number too large for `f64` is a parse error.
 //!
-//! [`from_json_value`] and [`to_json_value`] convert to and from
+//! `from_json_value` and `to_json_value` convert to and from
 //! `serde_json::Value` and exist only with the `json` feature.
 
 use crate::error::Result;
@@ -284,7 +284,7 @@ mod jsonx_backend {
                     }
                 }
                 // UTF-8 continuation bytes are part of the character before.
-                b if b & 0xC0 == 0x80 => {}
+                b if b & 0xc0 == 0x80 => {}
                 _ => column += 1,
             }
             i += 1;

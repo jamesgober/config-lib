@@ -11,7 +11,6 @@ pub mod properties_parser;
 /// INI format parser
 pub mod ini_parser;
 
-/// JSON format parser (feature `jsonx` on jsonx-lib, or `json` on serde_json)
 #[cfg(any(feature = "json", feature = "jsonx"))]
 pub mod json_parser;
 
