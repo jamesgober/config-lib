@@ -36,7 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // 2. JSON Format (if feature enabled)
-    #[cfg(feature = "json")]
+    #[cfg(any(feature = "json", feature = "jsonx"))]
     {
         println!("\n📄 JSON Format Example:");
         let json_content = r#"
@@ -220,7 +220,7 @@ mod tests {
         assert_eq!(config.format(), "conf");
     }
 
-    #[cfg(feature = "json")]
+    #[cfg(any(feature = "json", feature = "jsonx"))]
     #[test]
     fn test_json_format() {
         let json = r#"{"name": "test", "port": 8080}"#;

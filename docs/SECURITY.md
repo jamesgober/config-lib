@@ -53,6 +53,48 @@ guarantees.
 
 ---
 
+## Strict JSON (feature `jsonx`)
+
+With the `jsonx` feature (since v1.2.0), JSON is read and written by
+[`jsonx-lib`](https://docs.rs/jsonx-lib), and it fails closed:
+
+- **Duplicate keys are refused.** `{"role": "user", "role": "admin"}`
+  is a parse error. Readers that disagree about repeated keys are a
+  known way to show a validator one value and the program another;
+  refusing the document removes the question. This is the one
+  behaviour difference from the `json` feature (serde_json), which
+  keeps the last value. Keys are compared after unescaping, so
+  `"ab"` and `"ab"` are the same key.
+- **Budgets, checked before allocation.** jsonx-lib's defaults:
+  nesting depth 128, input 64 MiB, one string or key 16 MiB, one
+  number 1 KiB, 1 Mi values, and 64 MiB of memory for the parsed tree.
+  A document over any of them is refused before the memory it would
+  take is allocated.
+- **No recursion on nesting depth.** jsonx-lib parses with an explicit
+  stack, and config-lib converts its tree and writes JSON the same
+  way, so a million levels of `[` is a parse error on a 256 KiB stack
+  (tested), not a stack overflow.
+- **Errors do not quote the input.** A parse error is `Error::Parse`
+  with the line and column (from 1) of the mistake. The message names
+  the kind of mistake and its byte offset and contains no text from
+  the document, because configuration values can be secrets.
+- **Strict grammar.** RFC 8259 only: no comments, no trailing commas,
+  no byte-order mark, no lone surrogate escapes, no numbers outside
+  the grammar or too large for `f64`.
+
+The `jsonx` writer escapes U+2028 and U+2029 inside strings, which
+JavaScript before ES2019 treats as line ends; serde_json writes them
+raw. Both read back as the same string.
+
+Cost: duplicate keys are found when each object closes, with a
+64-bit filter for objects of up to 16 keys and a sort past that
+(`O(n log n)` in the object's key count); jsonx-lib's own benchmarks
+put `parse` at about 220 MiB/s on a 1 MiB document. For configuration
+files of a few KiB that is well under a millisecond (an estimate, not
+a config-lib measurement).
+
+---
+
 ## Lint-enforced defenses
 
 The REPS lint configuration (`src/lib.rs`, hardened in v0.9.3)
@@ -180,8 +222,10 @@ exit clean on both:
 The default feature set has **zero pre-1.0 dependencies** as of
 v0.9.7. Pre-1.0 transitive deps reach the build only when the user
 opts into the `noml` or `toml` features (which depend on the
-upstream `noml` crate, itself pinned to `=0.9.0` exactly to prevent
-silent transitive bumps).
+upstream `noml` crate, itself pinned to `=0.9.2` exactly to prevent
+silent transitive bumps), or the `jsonx` feature (`jsonx-lib`,
+pinned to `=0.5.0` exactly for the same reason; it has no
+dependencies of its own and is `#![forbid(unsafe_code)]`).
 
 ---
 

@@ -40,12 +40,11 @@ fn resolve_as_toml(document: &noml::Document) -> Result<Value> {
 fn escape_templates(node: &mut noml::AstNode) {
     use noml::parser::ast::{AstValue, StringStyle};
     match &mut node.value {
-        AstValue::String { value, style, .. } => {
+        AstValue::String { value, style, .. }
             if matches!(style, StringStyle::Double | StringStyle::TripleDouble)
-                && value.contains("${")
-            {
-                *value = value.replace("${", "$${");
-            }
+                && value.contains("${") =>
+        {
+            *value = value.replace("${", "$${");
         }
         AstValue::Array { elements, .. } => elements.iter_mut().for_each(escape_templates),
         AstValue::Table { entries, .. } => {

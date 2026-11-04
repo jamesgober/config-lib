@@ -121,6 +121,7 @@ because their upstream dependency declares a higher `rust-version`:
 |------------------|------|----------------------------------------------------------|
 | `xml`            | 1.79 | `quick-xml` 0.41 declares `rust-version = "1.79"` (since v1.1.0) |
 | `noml`, `toml`   | 1.82 | `noml = "=0.9.2"` declares `rust-version = "1.82"`        |
+| `jsonx`          | 1.85 | `jsonx-lib = "=0.5.0"` declares `rust-version = "1.85"` (since v1.2.0) |
 
 Every other feature, and the default build, stays on 1.75. CI checks
 each row of this table on exactly the listed version (the
@@ -131,6 +132,12 @@ is affected by RUSTSEC-2026-0194 and RUSTSEC-2026-0195 and the fixed
 releases (0.41 and later) require Rust 1.79. The requirement is
 `quick-xml = "0.41"`, so a `cargo update` cannot pull in 0.42, which
 needs Rust 1.86.
+
+`jsonx` is new in v1.2.0 and needs Rust 1.85, because `jsonx-lib`
+0.5.0 declares `rust-version = "1.85"` (edition 2024). It is opt-in:
+the default build, and the `json` feature on serde_json, stay on
+1.75, and having `jsonx-lib` in `Cargo.lock` does not change that,
+because Cargo only builds it when the feature is on.
 
 ### 3.3 MSRV bumps within v1.x
 
@@ -163,6 +170,10 @@ change between releases.
 
 #### Opt-in format features
 - **`json`** — JSON parsing via `serde_json`.
+- **`jsonx`**: JSON parsing via `jsonx-lib` (since v1.2.0; see §4.4).
+  When both `json` and `jsonx` are on, `jsonx` reads and writes the
+  `json` format; `json` still provides `from_json_value` and
+  `to_json_value`, which take and return `serde_json` types.
 - **`xml`** — XML parsing via `quick-xml`.
 - **`hcl`** — HashiCorp Configuration Language parsing (built-in).
 - **`noml`** — NOML parsing via the upstream `noml` crate (see §4.3).
@@ -194,6 +205,20 @@ When `noml 1.0.0` ships upstream, config-lib's NOML/TOML features
 will be revisited and the pin loosened to `noml = "1.x"`. Until
 then, the features remain opt-in and the maintainer reserves the
 right to change `noml`-only behavior with each pin bump.
+
+### 4.4 `jsonx` pre-1.0 dependency caveat
+
+The `jsonx` feature depends on `jsonx-lib`, which is pre-1.0
+(`0.5.x`). config-lib pins it to `jsonx-lib = "=0.5.0"` exactly, for
+the same reason as `noml`: a later `jsonx-lib` release reaches users
+only through a deliberate pin bump in a config-lib release.
+
+What `jsonx` promises across v1.x: the same functions as `json`, the
+same `Value` for the same document, duplicate object keys refused
+with `Error::Parse`, and parse errors that carry a line and column and
+never quote the input. The exact budgets are jsonx-lib's defaults and
+may change with a pin bump; such a change is noted in the release
+notes.
 
 ---
 

@@ -336,9 +336,9 @@ impl Config {
     pub fn serialize(&self) -> Result<String> {
         match self.format.as_str() {
             "json" => {
-                #[cfg(feature = "json")]
+                #[cfg(any(feature = "json", feature = "jsonx"))]
                 return crate::parsers::json_parser::serialize(&self.values);
-                #[cfg(not(feature = "json"))]
+                #[cfg(not(any(feature = "json", feature = "jsonx")))]
                 return Err(Error::feature_not_enabled("json"));
             }
             "toml" => {

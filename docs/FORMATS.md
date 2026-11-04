@@ -549,6 +549,39 @@ logging.appender.file.max-history=50
 - Strict syntax validation
 - Excellent tooling and editor support
 
+**Backends.** Two features read and write JSON, with the same functions and
+the same results:
+
+| Feature | Backend | Rust | Notes |
+|---------|---------|------|-------|
+| `jsonx` | `jsonx-lib` 0.5 (no dependencies, no unsafe code) | 1.85+ | Wins when both features are on. Strict RFC 8259. A repeated object key is refused. |
+| `json`  | `serde_json` 1.x | 1.75+ | A repeated object key keeps its last value. |
+
+The one difference in what is accepted is the repeated key: `{"a": 1, "a": 2}`
+is a parse error with `jsonx` and `{"a": 2}` with `json`. A configuration
+reader that silently takes one of two values lets a second value hide behind
+the first, so `jsonx` fails closed. Everything else is the same, and tested to
+be the same with both features on:
+
+- Any JSON value is accepted at the top level (an object is the usual case).
+- An integer that fits `i64` is `Value::Integer`. Every other number (a
+  fraction, an exponent such as `1e2`, an integer beyond `i64`, and `-0`) is
+  `Value::Float`. A number too large for `f64` (`1e400`) is a parse error.
+- Writing uses the pretty layout: two spaces per level, `": "` after keys,
+  members in key order, no trailing newline. Floats are written as the
+  shortest text that reads back as the same `f64` (`1.0`, `0.1`, `1e+16`).
+  NaN and the infinities are refused. A `DateTime` (feature `chrono`) is
+  written as its RFC 3339 string.
+- The `jsonx` writer escapes U+2028 and U+2029 inside strings, which
+  `serde_json` writes raw. Both read back as the same string.
+
+With `jsonx`, jsonx-lib's default budgets apply: nesting depth 128, input
+64 MiB, one string or key 16 MiB, one number 1 KiB, 1 Mi values, and 64 MiB
+for the parsed tree. A document over a budget is refused before the memory is
+allocated, and no nesting depth can overflow the stack. A parse error is
+`Error::Parse` with the line and column (from 1) of the mistake; the message
+names the kind of mistake and its byte offset and never quotes the input.
+
 **Basic JSON Configuration:**
 ```json
 {

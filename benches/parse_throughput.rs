@@ -33,7 +33,7 @@ fn bench_parse_1kib_conf(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "json")]
+#[cfg(any(feature = "json", feature = "jsonx"))]
 fn bench_parse_100kib_json(c: &mut Criterion) {
     // Synthesize a ~100 KiB JSON body: 1000 entries × ~100 B each.
     let mut body = String::from("{\n");
@@ -55,7 +55,7 @@ fn bench_parse_100kib_json(c: &mut Criterion) {
     });
 }
 
-#[cfg(feature = "json")]
+#[cfg(any(feature = "json", feature = "jsonx"))]
 criterion_group!(
     parse_throughput,
     bench_parse_small_conf,
@@ -63,7 +63,7 @@ criterion_group!(
     bench_parse_100kib_json,
 );
 
-#[cfg(not(feature = "json"))]
+#[cfg(not(any(feature = "json", feature = "jsonx")))]
 criterion_group!(
     parse_throughput,
     bench_parse_small_conf,

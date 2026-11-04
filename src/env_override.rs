@@ -206,16 +206,12 @@ impl EnvOverrideSystem {
             return Value::array(items);
         }
 
-        // Handle objects (JSON-like) - simplified for now without serde_json
-        if (value.trim_start().starts_with('{') || value.trim_start().starts_with('['))
-            && cfg!(feature = "json")
-        {
-            // Try to parse as JSON only if JSON feature is enabled
-            #[cfg(feature = "json")]
-            {
-                if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(value) {
-                    return self.convert_json_value(json_value);
-                }
+        // Handle objects (JSON-like), when a JSON backend is enabled. A value
+        // that does not parse as JSON falls through to a scalar.
+        #[cfg(any(feature = "json", feature = "jsonx"))]
+        if value.trim_start().starts_with('{') || value.trim_start().starts_with('[') {
+            if let Ok(json_value) = crate::parsers::json_parser::parse(value) {
+                return json_value;
             }
         }
 
@@ -244,40 +240,6 @@ impl EnvOverrideSystem {
 
         // Default to string
         Value::string(value)
-    }
-
-    /// Convert JSON value to our Value type
-    #[cfg(feature = "json")]
-    #[allow(clippy::only_used_in_recursion)]
-    fn convert_json_value(&self, json_val: serde_json::Value) -> Value {
-        match json_val {
-            serde_json::Value::Null => Value::null(),
-            serde_json::Value::Bool(b) => Value::bool(b),
-            serde_json::Value::Number(n) => {
-                if let Some(i) = n.as_i64() {
-                    Value::integer(i)
-                } else if let Some(f) = n.as_f64() {
-                    Value::float(f)
-                } else {
-                    Value::string(n.to_string())
-                }
-            }
-            serde_json::Value::String(s) => Value::string(s),
-            serde_json::Value::Array(arr) => {
-                let values: Vec<Value> = arr
-                    .into_iter()
-                    .map(|v| self.convert_json_value(v))
-                    .collect();
-                Value::array(values)
-            }
-            serde_json::Value::Object(obj) => {
-                let mut map = std::collections::BTreeMap::new();
-                for (k, v) in obj {
-                    map.insert(k, self.convert_json_value(v));
-                }
-                Value::table(map)
-            }
-        }
     }
 
     /// Clear the environment variable cache
@@ -371,6 +333,35 @@ mod tests {
         } else {
             panic!("Expected array");
         }
+    }
+
+    #[cfg(any(feature = "json", feature = "jsonx"))]
+    #[test]
+    fn test_json_values() {
+        let system = EnvOverrideSystem::with_defaults();
+
+        // Values with a comma are split as a list before JSON is tried, so
+        // only comma-free documents reach the JSON backend.
+        let mut inner = std::collections::BTreeMap::new();
+        inner.insert("on".to_string(), Value::bool(true));
+        let mut outer = std::collections::BTreeMap::new();
+        outer.insert("flags".to_string(), Value::table(inner));
+        assert_eq!(
+            system.parse_env_value(r#" {"flags": {"on": true}}"#),
+            Value::table(outer)
+        );
+        assert_eq!(
+            system.parse_env_value("[9223372036854775808]"),
+            Value::array(vec![Value::float(9_223_372_036_854_775_808.0)])
+        );
+        assert_eq!(
+            system.parse_env_value(r#"["café"]"#),
+            Value::array(vec![Value::string("caf\u{e9}")])
+        );
+
+        // Not JSON: kept as the scalar it reads as.
+        assert_eq!(system.parse_env_value("{oops"), Value::string("{oops"));
+        assert_eq!(system.parse_env_value("[1e400]"), Value::string("[1e400]"));
     }
 
     #[test]

@@ -62,7 +62,7 @@ fn test_conf_parsing() {
 }
 
 /// Test JSON parsing (if enabled)
-#[cfg(feature = "json")]
+#[cfg(any(feature = "json", feature = "jsonx"))]
 #[test]
 fn test_json_parsing() {
     let content = r#"
@@ -149,7 +149,7 @@ fn test_noml_parsing() {
 #[test]
 fn test_format_detection() {
     // JSON detection (test that json feature is working)
-    #[cfg(feature = "json")]
+    #[cfg(any(feature = "json", feature = "jsonx"))]
     {
         let json = r#"{"key": "value"}"#;
         let config = Config::from_string(json, None).unwrap();

@@ -173,12 +173,13 @@ checksum = "0e78417baa3b3114dc0e95e7357389a249c4da97c3c2b540700079db6171bfd7"
 
 [[package]]
 name = "config-lib"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "arc-swap",
  "chrono",
  "criterion",
  "dashmap",
+ "jsonx-lib",
  "noml",
  "notify",
  "quick-xml",
@@ -862,6 +863,12 @@ dependencies = [
  "once_cell",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "jsonx-lib"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d4639b36ce9ebb7384ab7866d86be6e61a7dc3218d1959e5e5ca824c062db80"
 
 [[package]]
 name = "kqueue"

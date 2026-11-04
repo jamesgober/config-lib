@@ -1,7 +1,7 @@
 <h1 id="top" align="center">
     <img width="99" alt="Rust logo" src="https://raw.githubusercontent.com/jamesgober/rust-collection/72baabd71f00e14aa9184efcb16fa3deddda3a0a/assets/rust-logo.svg">
     <br><b>config-lib</b><br>
-    <sub><sup>API REFERENCE — v1.0.0</sup></sub>
+    <sub><sup>API REFERENCE - v1.2.0</sup></sub>
 </h1>
 <div align="center">
     <sup>
@@ -29,7 +29,7 @@
 
 <br>
 
-> Canonical API reference for `config-lib v1.0.0`. Every public type and free function is documented here with description, key methods, parameter notes, and at least one runnable code example. The full v1.x stability contract for these items is in [`STABILITY-1.0.md`](./STABILITY-1.0.md).
+> Canonical API reference for `config-lib v1.2.0`. Every public type and free function is documented here with description, key methods, parameter notes, and at least one runnable code example. The full v1.x stability contract for these items is in [`STABILITY-1.0.md`](./STABILITY-1.0.md).
 
 ---
 
@@ -107,23 +107,23 @@
 
 ```toml
 [dependencies]
-config-lib = "1.1"
+config-lib = "1.2"
 
 # Common feature additions:
-config-lib = { version = "1.1", features = ["json", "validation", "env-override"] }
+config-lib = { version = "1.2", features = ["jsonx", "validation", "env-override"] }
 
 # Everything on:
-config-lib = { version = "1.1", features = [
-    "json", "xml", "hcl", "noml", "toml",
+config-lib = { version = "1.2", features = [
+    "jsonx", "json", "xml", "hcl", "noml", "toml",
     "validation", "schema", "async", "chrono",
     "env-override",
 ] }
 
 # Slim build (CONF only, no hot reload, no extras):
-config-lib = { version = "1.1", default-features = false, features = ["conf"] }
+config-lib = { version = "1.2", default-features = false, features = ["conf"] }
 ```
 
-**MSRV:** Rust `1.75+` for the default feature set; Rust `1.79+` with the `xml` feature (`quick-xml` 0.41); Rust `1.82+` with the `noml` or `toml` features (`noml = "=0.9.2"`).
+**MSRV:** Rust `1.75+` for the default feature set; Rust `1.79+` with the `xml` feature (`quick-xml` 0.41); Rust `1.82+` with the `noml` or `toml` features (`noml = "=0.9.2"`); Rust `1.85+` with the `jsonx` feature (`jsonx-lib = "=0.5.0"`).
 
 <h2 id="feature-flags">Feature Flags</h2>
 
@@ -131,7 +131,8 @@ config-lib = { version = "1.1", default-features = false, features = ["conf"] }
 |----------------|----------|----------------------------------------------------------------------------------------|
 | `conf`         | yes      | Built-in CONF format parser                                                            |
 | `hot-reload`   | yes      | Event-driven file watching via `notify` (inotify/FSEvents/RDCW)                        |
-| `json`         | no       | JSON parsing via `serde_json`                                                          |
+| `json`         | no       | JSON parsing via `serde_json` (used when `jsonx` is off)                               |
+| `jsonx`        | no       | JSON parsing via `jsonx-lib` (pinned `=0.5.0`, MSRV 1.85); wins over `json` when both are on |
 | `xml`          | no       | XML parsing via `quick-xml` 0.41 (MSRV 1.79)                                           |
 | `hcl`          | no       | HashiCorp Configuration Language (built-in parser)                                     |
 | `noml`         | no       | NOML parsing via the upstream `noml` crate (pinned `=0.9.2`)                           |
@@ -1468,7 +1469,7 @@ Each submodule exposes a `parse(source: &str) -> Result<Value>` and (in most cas
 | `parsers::conf`                       | `parse`                                              | `conf` (default) |
 | `parsers::ini_parser`                 | `parse`, `parse_ini`                                 | always    |
 | `parsers::properties_parser`          | `parse`, `PropertiesParser` struct                   | always    |
-| `parsers::json_parser`                | `parse`, `serialize`, `from_json_value`, `to_json_value` | `json`  |
+| `parsers::json_parser`                | `parse`, `serialize`; `from_json_value`, `to_json_value` with `json` only | `jsonx` or `json` |
 | `parsers::xml_parser`                 | `parse`, `parse_xml`, `XmlParser`                    | `xml`     |
 | `parsers::hcl_parser`                 | `parse`, `parse_hcl`, `HclParser`                    | `hcl`     |
 | `parsers::noml_parser`                | `parse`, `parse_with_preservation`                   | `noml`    |
@@ -1476,10 +1477,22 @@ Each submodule exposes a `parse(source: &str) -> Result<Value>` and (in most cas
 
 When the corresponding Cargo feature is disabled, the module's `parse` function still exists but returns `Err(Error::feature_not_enabled(...))`.
 
+**JSON backends.** `parsers::json_parser` has the same `parse` and `serialize`
+on either JSON feature. With `jsonx` (it wins when both are on) the backend is
+`jsonx-lib`: strict RFC 8259, a repeated object key is refused with a parse
+error (serde_json keeps the last value), and jsonx-lib's default budgets apply
+(depth 128, input 64 MiB, one string 16 MiB, one number 1 KiB, 1 Mi values,
+64 MiB of tree). A parse error is `Error::Parse` with the line and column of
+the mistake, and its message never quotes the input. Otherwise both backends
+give the same `Value` and write the same text; the `jsonx` writer also escapes
+U+2028 and U+2029 in strings. `from_json_value` and `to_json_value` take and
+return `serde_json` types, so they exist only with the `json` feature. See
+[`FORMATS.md`](./FORMATS.md#json) for the number rules.
+
 **Example — bypass detection, call the JSON parser directly:**
 
 ```rust
-# #[cfg(feature = "json")]
+# #[cfg(any(feature = "json", feature = "jsonx"))]
 # {
 use config_lib::parsers::json_parser;
 

@@ -486,12 +486,8 @@ impl EnterpriseConfig {
                 // Use the regular conf parser for now
                 crate::parsers::conf::parse(content)
             }
-            #[cfg(feature = "json")]
-            "json" => {
-                let parsed: serde_json::Value = serde_json::from_str(content)
-                    .map_err(|e| Error::general(format!("JSON parse error: {e}")))?;
-                crate::parsers::json_parser::from_json_value(parsed)
-            }
+            #[cfg(any(feature = "json", feature = "jsonx"))]
+            "json" => crate::parsers::json_parser::parse_enterprise(content),
             #[cfg(feature = "toml")]
             "toml" => crate::parsers::toml_parser::parse(content),
             #[cfg(feature = "noml")]
@@ -566,12 +562,9 @@ impl EnterpriseConfig {
                 }
                 Ok(output)
             }
-            #[cfg(feature = "json")]
+            #[cfg(any(feature = "json", feature = "jsonx"))]
             "json" => {
-                let json_value =
-                    crate::parsers::json_parser::to_json_value(&Value::table(table.clone()))?;
-                serde_json::to_string_pretty(&json_value)
-                    .map_err(|e| Error::general(format!("JSON serialize error: {e}")))
+                crate::parsers::json_parser::serialize_enterprise(&Value::table(table.clone()))
             }
             _ => Err(Error::general(format!(
                 "Serialization not supported for format: {format}"
