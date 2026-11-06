@@ -451,7 +451,7 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 <hr>
 
 ### Version Compatibility
-- **Rust**: `1.75+` for the default feature set; `1.79+` with the `xml` feature (`quick-xml` 0.41); `1.82+` with the `noml` or `toml` features (`noml = "=0.9.2"`); `1.85+` with the `jsonx` feature (`jsonx-lib = "=0.5.0"`)
+- **Rust**: `1.75+` for the default feature set; `1.79+` with the `xml` feature (`quick-xml` 0.41); `1.82+` with the `noml` or `toml` features (`noml = "=0.9.2"`); `1.85+` with the `jsonx` feature (`jsonx-lib = "=0.5.1"`)
 - **Edition**: `2021`
 - **MSRV Policy**: MINOR releases may bump MSRV within the last-12-stable-Rust-versions window; PATCH releases never bump MSRV
 - **API Stability**: v1.x public API is frozen per [`docs/STABILITY-1.0.md`](docs/STABILITY-1.0.md). Growth-likely enums (`Error`, `ConfigChangeEvent`, etc.) are `#[non_exhaustive]`; new variants land in MINOR releases without breaking SemVer

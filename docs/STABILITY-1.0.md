@@ -121,7 +121,7 @@ because their upstream dependency declares a higher `rust-version`:
 |------------------|------|----------------------------------------------------------|
 | `xml`            | 1.79 | `quick-xml` 0.41 declares `rust-version = "1.79"` (since v1.1.0) |
 | `noml`, `toml`   | 1.82 | `noml = "=0.9.2"` declares `rust-version = "1.82"`        |
-| `jsonx`          | 1.85 | `jsonx-lib = "=0.5.0"` declares `rust-version = "1.85"` (since v1.2.0) |
+| `jsonx`          | 1.85 | `jsonx-lib = "=0.5.1"` declares `rust-version = "1.85"` (since v1.2.0) |
 
 Every other feature, and the default build, stays on 1.75. CI checks
 each row of this table on exactly the listed version (the
@@ -134,7 +134,7 @@ releases (0.41 and later) require Rust 1.79. The requirement is
 needs Rust 1.86.
 
 `jsonx` is new in v1.2.0 and needs Rust 1.85, because `jsonx-lib`
-0.5.0 declares `rust-version = "1.85"` (edition 2024). It is opt-in:
+0.5.1 declares `rust-version = "1.85"` (edition 2024). It is opt-in:
 the default build, and the `json` feature on serde_json, stay on
 1.75, and having `jsonx-lib` in `Cargo.lock` does not change that,
 because Cargo only builds it when the feature is on.
@@ -209,7 +209,7 @@ right to change `noml`-only behavior with each pin bump.
 ### 4.4 `jsonx` pre-1.0 dependency caveat
 
 The `jsonx` feature depends on `jsonx-lib`, which is pre-1.0
-(`0.5.x`). config-lib pins it to `jsonx-lib = "=0.5.0"` exactly, for
+(`0.5.x`). config-lib pins it to `jsonx-lib = "=0.5.1"` exactly, for
 the same reason as `noml`: a later `jsonx-lib` release reaches users
 only through a deliberate pin bump in a config-lib release.
 

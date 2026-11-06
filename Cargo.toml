@@ -164,12 +164,12 @@ noml = { version = "=0.9.2", optional = true, features = [] }
 # The `jsonx` feature's JSON backend: no dependencies, no unsafe code,
 # duplicate keys refused, and depth, size and memory budgets checked
 # before allocation. Pinned EXACTLY for the same reason as `noml`:
-# `jsonx-lib` is pre-1.0, so a `0.5.1` could change behaviour this
+# `jsonx-lib` is pre-1.0, so a `0.5.2` could change behaviour this
 # crate has not validated. Declares `rust-version = "1.85"`, so the
 # `jsonx` feature needs Rust 1.85 (the rest of the crate stays on
 # 1.75). Documented in `docs/STABILITY-1.0.md`.
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
-jsonx-lib = { version = "=0.5.0", optional = true }
+jsonx-lib = { version = "=0.5.1", optional = true }
 
 
 

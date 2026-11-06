@@ -224,7 +224,7 @@ v0.9.7. Pre-1.0 transitive deps reach the build only when the user
 opts into the `noml` or `toml` features (which depend on the
 upstream `noml` crate, itself pinned to `=0.9.2` exactly to prevent
 silent transitive bumps), or the `jsonx` feature (`jsonx-lib`,
-pinned to `=0.5.0` exactly for the same reason; it has no
+pinned to `=0.5.1` exactly for the same reason; it has no
 dependencies of its own and is `#![forbid(unsafe_code)]`).
 
 ---

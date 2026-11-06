@@ -20,7 +20,7 @@
 A second JSON backend: the new `jsonx` feature reads and writes the `json` format with `jsonx-lib`, which has no dependencies and refuses duplicate keys. The `json` feature and its serde_json backend are unchanged. The default feature set is unchanged and keeps MSRV 1.75.
 
 ### Added
-- **`jsonx` feature** (`jsonx-lib = "=0.5.0"`, Rust 1.85+). `parsers::json_parser::parse` and `serialize`, `Config` load, save and format detection, `EnterpriseConfig` load and save, and JSON-looking environment override values all work with either `json` or `jsonx`; `jsonx` wins when both are on. Same functions, same signatures, the same `Value` and the same written text as the serde_json backend, checked by parity tests that run with both features on.
+- **`jsonx` feature** (`jsonx-lib = "=0.5.1"`, Rust 1.85+). `parsers::json_parser::parse` and `serialize`, `Config` load, save and format detection, `EnterpriseConfig` load and save, and JSON-looking environment override values all work with either `json` or `jsonx`; `jsonx` wins when both are on. Same functions, same signatures, the same `Value` and the same written text as the serde_json backend, checked by parity tests that run with both features on.
 - **Strict JSON with `jsonx`**: RFC 8259 grammar, jsonx-lib's budgets (depth 128, input 64 MiB, one string 16 MiB, one number 1 KiB, 1 Mi values, 64 MiB of tree) checked before allocation, and no recursion on nesting depth while parsing, converting or writing.
 - **Parse errors with a position**: with `jsonx`, a bad document is `Error::Parse` with the line and column (from 1) of the mistake. The message names the kind of mistake and its byte offset and never quotes the input.
 
