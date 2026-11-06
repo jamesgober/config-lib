@@ -558,12 +558,19 @@ impl HotReloadConfig {
         let handlers = Arc::clone(&self.handlers);
         let poll_interval = self.poll_interval;
         let mut last_modified = self.last_modified;
+        // The size is compared too: a file read while it was being written
+        // (truncated, then filled) can keep the same modification time when
+        // the rest of the write lands within the file system's time
+        // resolution, and comparing only the time would then keep the
+        // half-written configuration until the next edit.
+        let mut last_len = std::fs::metadata(&file_path).map(|m| m.len()).ok();
 
         let handle = thread::spawn(move || {
             while !stop_clone.load(Ordering::Relaxed) {
                 if let Ok(metadata) = std::fs::metadata(&file_path) {
                     if let Ok(modified) = metadata.modified() {
-                        if modified > last_modified {
+                        let len = Some(metadata.len());
+                        if modified > last_modified || len != last_len {
                             handlers.dispatch(&ConfigChangeEvent::FileModified {
                                 path: file_path.clone(),
                                 timestamp: SystemTime::now(),
@@ -574,6 +581,7 @@ impl HotReloadConfig {
                                     if let Ok(mut config) = current.write() {
                                         *config = new_config;
                                         last_modified = modified;
+                                        last_len = len;
                                         handlers.dispatch(&ConfigChangeEvent::Reloaded {
                                             path: file_path.clone(),
                                             timestamp: SystemTime::now(),

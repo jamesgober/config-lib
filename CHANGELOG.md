@@ -30,6 +30,7 @@ A second JSON backend: the new `jsonx` feature reads and writes the `json` forma
 - `parsers::json_parser` is compiled with either JSON feature. `from_json_value` and `to_json_value` take and return serde_json types and exist only with `json`, as before.
 
 ### Fixed
+- Hot reload without the `hot-reload` feature (the polling watcher) could keep a half-written file: it compared only modification times, so a file read while being written (truncated, then filled) whose final write landed within the file system's time resolution was never read again. The watcher now compares the size too.
 - A `collapsible_match` lint from Rust 1.95's clippy in the TOML parser (no behaviour change).
 
 ### CI
