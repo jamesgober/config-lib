@@ -11,7 +11,7 @@ pub mod properties_parser;
 /// INI format parser
 pub mod ini_parser;
 
-#[cfg(feature = "json")]
+#[cfg(any(feature = "json", feature = "jsonx"))]
 pub mod json_parser;
 
 /// XML format parser (enterprise feature)
@@ -42,7 +42,7 @@ pub fn parse_string(source: &str, format: Option<&str>) -> Result<Value> {
         "conf" => conf::parse(source),
         "properties" => properties_parser::parse(source),
         "ini" => ini_parser::parse(source),
-        #[cfg(feature = "json")]
+        #[cfg(any(feature = "json", feature = "jsonx"))]
         "json" => json_parser::parse(source),
         #[cfg(feature = "xml")]
         "xml" => xml_parser::parse(source),
@@ -53,7 +53,7 @@ pub fn parse_string(source: &str, format: Option<&str>) -> Result<Value> {
         #[cfg(feature = "toml")]
         "toml" => toml_parser::parse(source),
         _ => {
-            #[cfg(not(feature = "json"))]
+            #[cfg(not(any(feature = "json", feature = "jsonx")))]
             if detected_format == "json" {
                 return Err(Error::feature_not_enabled("json"));
             }

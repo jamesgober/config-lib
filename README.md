@@ -34,7 +34,7 @@
 ### **Multi-Format Support**
 - **CONF** - Built-in parser for standard .conf files (default)
 - **INI** - Full INI file parsing with sections, comments, and data type detection  
-- **JSON** - JSON format with edit capabilities and serialization
+- **JSON** - JSON format with edit capabilities and serialization (feature: `jsonx` on jsonx-lib, strict and dependency-free; or `json` on serde_json)
 - **XML** - Zero-copy XML parsing with quick-xml for Java/.NET environments
 - **HCL** - HashiCorp Configuration Language for DevOps workflows
 - **Properties** - Complete Java .properties file parsing with Unicode and escaping
@@ -92,11 +92,12 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-config-lib = "1.1"
+config-lib = "1.2"
 
 # For enhanced functionality, enable optional features:
-config-lib = { version = "1.1", features = [
-    "json",           # JSON format support with serialization
+config-lib = { version = "1.2", features = [
+    "jsonx",          # JSON format support on jsonx-lib (strict, no dependencies; Rust 1.85+)
+    "json",           # JSON format support on serde_json (used when `jsonx` is off)
     "xml",            # XML format support with quick-xml backend  
     "hcl",            # HashiCorp Configuration Language support
     "toml",           # TOML format support with preservation
@@ -110,7 +111,7 @@ config-lib = { version = "1.1", features = [
 
 **Feature Recommendations**:
 - **Minimal**: Use default features for CONF/INI/Properties support
-- **Web Applications**: Add `"json"`, `"env-override"`, `"validation"`
+- **Web Applications**: Add `"jsonx"` (or `"json"`), `"env-override"`, `"validation"`
 - **DevOps Tools**: Add `"hcl"`, `"toml"`, `"async"`, `"audit"`
 - **Enterprise Systems**: Add `"xml"`, `"validation"`, `"audit"`, `"env-override"`
 - **Full Featured**: Include all features for maximum flexibility
@@ -450,7 +451,7 @@ let debug_mode = config.get("debug")?.as_bool()?;             // From environmen
 <hr>
 
 ### Version Compatibility
-- **Rust**: `1.75+` for the default feature set; `1.79+` with the `xml` feature (`quick-xml` 0.41); `1.82+` with the `noml` or `toml` features (`noml = "=0.9.2"`)
+- **Rust**: `1.75+` for the default feature set; `1.79+` with the `xml` feature (`quick-xml` 0.41); `1.82+` with the `noml` or `toml` features (`noml = "=0.9.2"`); `1.85+` with the `jsonx` feature (`jsonx-lib = "=0.5.0"`)
 - **Edition**: `2021`
 - **MSRV Policy**: MINOR releases may bump MSRV within the last-12-stable-Rust-versions window; PATCH releases never bump MSRV
 - **API Stability**: v1.x public API is frozen per [`docs/STABILITY-1.0.md`](docs/STABILITY-1.0.md). Growth-likely enums (`Error`, `ConfigChangeEvent`, etc.) are `#[non_exhaustive]`; new variants land in MINOR releases without breaking SemVer

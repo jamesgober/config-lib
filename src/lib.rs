@@ -36,7 +36,9 @@
 //! - **CONF** - Built-in parser for standard .conf files (default)
 //! - **NOML** - Advanced configuration with dynamic features (feature: `noml`)
 //! - **TOML** - Standard TOML format with format preservation (feature: `toml`)
-//! - **JSON** - JSON format with edit capabilities (feature: `json`)
+//! - **JSON** - JSON format with edit capabilities (feature: `jsonx`, strict
+//!   RFC 8259 on jsonx-lib with duplicate keys refused, Rust 1.85+; or `json`,
+//!   on serde_json)
 //!
 //! ## Features
 //!

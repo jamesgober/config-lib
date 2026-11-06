@@ -15,6 +15,34 @@
 <br>
 
 
+## [1.2.0] - 2026-11-04
+
+A second JSON backend: the new `jsonx` feature reads and writes the `json` format with `jsonx-lib`, which has no dependencies and refuses duplicate keys. The `json` feature and its serde_json backend are unchanged. The default feature set is unchanged and keeps MSRV 1.75.
+
+### Added
+- **`jsonx` feature** (`jsonx-lib = "=0.5.0"`, Rust 1.85+). `parsers::json_parser::parse` and `serialize`, `Config` load, save and format detection, `EnterpriseConfig` load and save, and JSON-looking environment override values all work with either `json` or `jsonx`; `jsonx` wins when both are on. Same functions, same signatures, the same `Value` and the same written text as the serde_json backend, checked by parity tests that run with both features on.
+- **Strict JSON with `jsonx`**: RFC 8259 grammar, jsonx-lib's budgets (depth 128, input 64 MiB, one string 16 MiB, one number 1 KiB, 1 Mi values, 64 MiB of tree) checked before allocation, and no recursion on nesting depth while parsing, converting or writing.
+- **Parse errors with a position**: with `jsonx`, a bad document is `Error::Parse` with the line and column (from 1) of the mistake. The message names the kind of mistake and its byte offset and never quotes the input.
+
+### Changed
+- **Duplicate keys are refused with `jsonx`.** `{"a": 1, "a": 2}` is a parse error on the `jsonx` backend; the serde_json backend keeps the last value, as before. This is the one difference in what the two backends accept.
+- With `jsonx`, strings are written with U+2028 and U+2029 escaped (` `, ` `); serde_json writes them raw. Both read back as the same string.
+- `parsers::json_parser` is compiled with either JSON feature. `from_json_value` and `to_json_value` take and return serde_json types and exist only with `json`, as before.
+
+### Fixed
+- Hot reload without the `hot-reload` feature (the polling watcher) could keep a half-written file: it compared only modification times, so a file read while being written (truncated, then filled) whose final write landed within the file system's time resolution was never read again. The watcher now compares the size too.
+- A `collapsible_match` lint from Rust 1.95's clippy in the TOML parser (no behaviour change).
+
+### CI
+- The `msrv-features` job checks `jsonx` on Rust 1.85. The stable test, clippy, docs and examples steps run with `jsonx` and `json` both on, so the parity tests run; the feature matrix tests `jsonx` on its own.
+
+### Docs
+- `docs/FORMATS.md` (JSON backends, number rules, budgets), `docs/SECURITY.md` (strict JSON), `docs/STABILITY-1.0.md` (§3.2 MSRV row, §4.1 feature list, new §4.4 pin caveat), `docs/API.md` and the README list the new feature.
+
+
+<br>
+
+
 ## [1.1.0] - 2026-10-09
 
 A security release for the `xml` feature, plus fixes in the XML, TOML and NOML paths. The default feature set is unchanged and keeps MSRV 1.75.
@@ -773,7 +801,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/jamesgober/config-lib/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/jamesgober/config-lib/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/jamesgober/config-lib/compare/v0.9.9...v1.0.0
 [0.9.9]: https://github.com/jamesgober/config-lib/compare/v0.9.8...v0.9.9
