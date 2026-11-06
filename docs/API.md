@@ -123,7 +123,7 @@ config-lib = { version = "1.2", features = [
 config-lib = { version = "1.2", default-features = false, features = ["conf"] }
 ```
 
-**MSRV:** Rust `1.75+` for the default feature set; Rust `1.79+` with the `xml` feature (`quick-xml` 0.41); Rust `1.82+` with the `noml` or `toml` features (`noml = "=0.9.2"`); Rust `1.85+` with the `jsonx` feature (`jsonx-lib = "=0.5.0"`).
+**MSRV:** Rust `1.75+` for the default feature set; Rust `1.79+` with the `xml` feature (`quick-xml` 0.41); Rust `1.82+` with the `noml` or `toml` features (`noml = "=0.9.2"`); Rust `1.85+` with the `jsonx` feature (`jsonx-lib = "=0.5.1"`).
 
 <h2 id="feature-flags">Feature Flags</h2>
 
@@ -132,7 +132,7 @@ config-lib = { version = "1.2", default-features = false, features = ["conf"] }
 | `conf`         | yes      | Built-in CONF format parser                                                            |
 | `hot-reload`   | yes      | Event-driven file watching via `notify` (inotify/FSEvents/RDCW)                        |
 | `json`         | no       | JSON parsing via `serde_json` (used when `jsonx` is off)                               |
-| `jsonx`        | no       | JSON parsing via `jsonx-lib` (pinned `=0.5.0`, MSRV 1.85); wins over `json` when both are on |
+| `jsonx`        | no       | JSON parsing via `jsonx-lib` (pinned `=0.5.1`, MSRV 1.85); wins over `json` when both are on |
 | `xml`          | no       | XML parsing via `quick-xml` 0.41 (MSRV 1.79)                                           |
 | `hcl`          | no       | HashiCorp Configuration Language (built-in parser)                                     |
 | `noml`         | no       | NOML parsing via the upstream `noml` crate (pinned `=0.9.2`)                           |
