@@ -1,7 +1,7 @@
 <h1 id="top" align="center">
     <img width="99" alt="Rust logo" src="https://raw.githubusercontent.com/jamesgober/rust-collection/72baabd71f00e14aa9184efcb16fa3deddda3a0a/assets/rust-logo.svg">
     <br><b>config-lib</b><br>
-    <sub><sup>API REFERENCE - v1.2.0</sup></sub>
+    <sub><sup>API REFERENCE - v1.3.0</sup></sub>
 </h1>
 <div align="center">
     <sup>
@@ -29,7 +29,7 @@
 
 <br>
 
-> Canonical API reference for `config-lib v1.2.0`. Every public type and free function is documented here with description, key methods, parameter notes, and at least one runnable code example. The full v1.x stability contract for these items is in [`STABILITY-1.0.md`](./STABILITY-1.0.md).
+> Canonical API reference for `config-lib v1.3.0`. Every public type and free function is documented here with description, key methods, parameter notes, and at least one runnable code example. The full v1.x stability contract for these items is in [`STABILITY-1.0.md`](./STABILITY-1.0.md).
 
 ---
 
@@ -41,6 +41,7 @@
 
 ### Top-Level Free Functions
 - [`parse`](#parse)
+- [`parse_strict`](#parse_strict)
 - [`parse_file`](#parse_file)
 - [`parse_file_async`](#parse_file_async)
 - [`validate`](#validate)
@@ -107,20 +108,20 @@
 
 ```toml
 [dependencies]
-config-lib = "1.2"
+config-lib = "1.3"
 
 # Common feature additions:
-config-lib = { version = "1.2", features = ["jsonx", "validation", "env-override"] }
+config-lib = { version = "1.3", features = ["jsonx", "validation", "env-override"] }
 
 # Everything on:
-config-lib = { version = "1.2", features = [
+config-lib = { version = "1.3", features = [
     "jsonx", "json", "xml", "hcl", "noml", "toml",
     "validation", "schema", "async", "chrono",
     "env-override",
 ] }
 
 # Slim build (CONF only, no hot reload, no extras):
-config-lib = { version = "1.2", default-features = false, features = ["conf"] }
+config-lib = { version = "1.3", default-features = false, features = ["conf"] }
 ```
 
 **MSRV:** Rust `1.75+` for the default feature set; Rust `1.79+` with the `xml` feature (`quick-xml` 0.41); Rust `1.82+` with the `noml` or `toml` features (`noml = "=0.9.2"`); Rust `1.85+` with the `jsonx` feature (`jsonx-lib = "=0.5.1"`).
@@ -149,7 +150,7 @@ Feature names and their effects are part of the v1.x stability contract — see 
 
 # Top-Level Free Functions
 
-The crate root re-exports four free functions for users who only need parse-once / validate-once semantics.
+The crate root re-exports five free functions for users who only need parse-once / validate-once semantics.
 
 <h2 id="parse"><code>parse</code></h2>
 
@@ -186,6 +187,35 @@ use config_lib::parse;
 // Auto-detects JSON from the leading `{`.
 let value = parse(r#"{"port": 8080}"#, None)?;
 assert_eq!(value.get("port").unwrap().as_integer()?, 8080);
+# Ok::<(), config_lib::Error>(())
+```
+
+<h2 id="parse_strict"><code>parse_strict</code></h2>
+
+```rust
+pub fn parse_strict(source: &str, format: Option<&str>) -> Result<Value>
+```
+
+Since v1.3.0. The same as [`parse`](#parse), but reads nothing outside `source`. For NOML (feature `noml`), `include` and every function call (`env()` included) are refused with [`Error::Parse`](#error) carrying the line and column of the first one; native types (`@size("10MB")`) and `${...}` references inside the document still work. For every other format the result is the same as `parse`. TOML refuses NOML syntax in both functions.
+
+Use it when your program checks the configuration file itself (owner, mode, size, file type) before reading it: an include would read a second file without those checks, and `env()` would copy an environment variable into the configuration. The error message does not quote the input.
+
+**Example:**
+
+```rust
+use config_lib::parse_strict;
+
+let value = parse_strict("port = 8080", Some("conf"))?;
+assert_eq!(value.get("port").unwrap().as_integer()?, 8080);
+
+# #[cfg(feature = "noml")]
+# {
+// NOML: env() is refused at line 1, column 9
+match parse_strict("token = env(\"API_TOKEN\")", Some("noml")) {
+    Err(config_lib::Error::Parse { line, column, .. }) => assert_eq!((line, column), (1, 9)),
+    other => panic!("expected a parse error, got {other:?}"),
+}
+# }
 # Ok::<(), config_lib::Error>(())
 ```
 
@@ -436,6 +466,7 @@ The primary user-facing configuration type. Owns a [`Value`](#value) tree, track
 |--------------------------------------------|----------------------------------------------------------------------------|
 | `Config::new()`                            | Empty configuration (no values, no file path)                              |
 | `Config::from_string(source, format)`      | Parse from in-memory string with optional format hint                      |
+| `Config::from_string_strict(source, format)` | Same, but reads nothing outside `source`: NOML `include` and function calls (`env()`) are refused (since v1.3.0; see [`parse_strict`](#parse_strict)) |
 | `Config::from_file(path)`                  | Read + parse from disk; format detected by extension or content            |
 | `Config::from_file_async(path)` *(async)*  | Async variant; requires the `async` feature                                |
 | `Config::with_options(opts)`               | Empty `Config` with non-default [`ConfigOptions`](#configoptions)          |
@@ -1453,12 +1484,13 @@ The `parsers` module is `pub` so advanced users can call format-specific parsers
 
 ```rust
 pub fn parse_string(source: &str, format: Option<&str>) -> Result<Value>;
+pub fn parse_string_strict(source: &str, format: Option<&str>) -> Result<Value>; // since v1.3.0
 pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Value>;
 pub fn detect_format(content: &str) -> &'static str;
 pub fn detect_format_from_path(path: &Path) -> Option<&'static str>;
 ```
 
-Same dispatch logic used by `crate::parse` and `crate::parse_file`. Exposed for callers who want the format-detection helpers directly.
+Same dispatch logic used by `crate::parse`, `crate::parse_strict` and `crate::parse_file`. Exposed for callers who want the format-detection helpers directly.
 
 <h2 id="parsers-per-format">Per-Format Parsers</h2>
 
@@ -1472,7 +1504,7 @@ Each submodule exposes a `parse(source: &str) -> Result<Value>` and (in most cas
 | `parsers::json_parser`                | `parse`, `serialize`; `from_json_value`, `to_json_value` with `json` only | `jsonx` or `json` |
 | `parsers::xml_parser`                 | `parse`, `parse_xml`, `XmlParser`                    | `xml`     |
 | `parsers::hcl_parser`                 | `parse`, `parse_hcl`, `HclParser`                    | `hcl`     |
-| `parsers::noml_parser`                | `parse`, `parse_with_preservation`                   | `noml`    |
+| `parsers::noml_parser`                | `parse`, `parse_strict` (v1.3.0), `parse_with_preservation` | `noml`    |
 | `parsers::toml_parser`                | `parse`, `parse_with_preservation`                   | `toml`    |
 
 When the corresponding Cargo feature is disabled, the module's `parse` function still exists but returns `Err(Error::feature_not_enabled(...))`.
@@ -1522,6 +1554,18 @@ let _ = (value, document);
 # }
 # Ok::<(), config_lib::Error>(())
 ```
+
+**TOML and strict NOML.** `parsers::toml_parser` refuses NOML syntax
+(`include`, function calls such as `env()`, native types, bare `${...}`)
+in both `parse` and `parse_with_preservation`, since v1.3.0. A refusal is
+`Error::Parse` with the line and column of the node, and the message does
+not quote the input. `parsers::noml_parser::parse_strict` refuses
+`include` and function calls the same way and allows the rest of NOML.
+
+**Positions.** The CONF, INI and Properties parsers report lines and
+columns in characters, from 1, and accept any `&str` (non-ASCII text
+included) without a panic, in time linear in the input. CONF arrays nest
+at most 128 levels.
 
 For full format details, see [`FORMATS.md`](./FORMATS.md).
 

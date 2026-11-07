@@ -31,13 +31,25 @@ pub fn parse(source: &str) -> Result<Value> {
     parser.parse()
 }
 
-/// High-performance CONF parser with zero-allocation lexing
-/// CONF parser state
+/// Deepest nesting of `[...]` arrays the parser accepts.
+///
+/// Arrays are parsed recursively, so without a limit a value such as a
+/// long run of `[` would overflow the stack. 128 matches the XML parser's
+/// element limit and jsonx-lib's default depth.
+const MAX_ARRAY_DEPTH: usize = 128;
+
+/// CONF parser state.
+///
+/// `position` is a byte offset into `input` and always sits on a UTF-8
+/// character boundary: it only moves by the encoded length of the
+/// character under it. `line` and `column` count lines and characters
+/// (from 1) for error messages.
 struct ConfParser<'a> {
     input: &'a str,
     position: usize,
     line: usize,
     column: usize,
+    depth: usize,
 }
 
 impl<'a> ConfParser<'a> {
@@ -48,6 +60,7 @@ impl<'a> ConfParser<'a> {
             position: 0,
             line: 1,
             column: 1,
+            depth: 0,
         }
     }
 
@@ -113,7 +126,7 @@ impl<'a> ConfParser<'a> {
             self.advance();
         }
 
-        let section_name = self.input[start..self.position].trim().to_string();
+        let section_name = self.since(start).trim().to_string();
         self.expect(']')?;
 
         Ok(section_name)
@@ -146,7 +159,7 @@ impl<'a> ConfParser<'a> {
             return Err(Error::parse("Expected key name", self.line, self.column));
         }
 
-        Ok(self.input[start..self.position].to_string())
+        Ok(self.since(start).to_string())
     }
 
     /// Parse a configuration value
@@ -218,13 +231,28 @@ impl<'a> ConfParser<'a> {
             self.advance();
         }
 
-        let content = self.input[start..self.position].to_string();
+        let content = self.since(start).to_string();
         self.expect('\'')?;
         Ok(Value::string(content))
     }
 
     /// Parse an array [item1, item2, item3]
     fn parse_array(&mut self) -> Result<Value> {
+        if self.depth >= MAX_ARRAY_DEPTH {
+            return Err(Error::parse(
+                format!("Arrays are nested deeper than the limit of {MAX_ARRAY_DEPTH} levels"),
+                self.line,
+                self.column,
+            ));
+        }
+        self.depth += 1;
+        let result = self.parse_array_items();
+        self.depth -= 1;
+        result
+    }
+
+    /// Parse the brackets and items of one array (see [`Self::parse_array`])
+    fn parse_array_items(&mut self) -> Result<Value> {
         self.expect('[')?;
         let mut items = Vec::new();
 
@@ -284,7 +312,7 @@ impl<'a> ConfParser<'a> {
             }
         }
 
-        let number_str = &self.input[start..self.position];
+        let number_str = self.since(start);
 
         if has_dot {
             number_str.parse::<f64>().map(Value::float).map_err(|_| {
@@ -317,7 +345,7 @@ impl<'a> ConfParser<'a> {
             self.advance();
         }
 
-        let raw_value = self.input[start..self.position].trim();
+        let raw_value = self.since(start).trim();
 
         if raw_value.is_empty() {
             return Ok(Value::null());
@@ -402,15 +430,26 @@ impl<'a> ConfParser<'a> {
         }
     }
 
-    /// Peek at the current character
+    /// Peek at the current character.
+    ///
+    /// O(1): `position` is a byte offset on a character boundary, so this
+    /// decodes one character instead of counting from the start.
     fn peek(&self) -> Option<char> {
-        self.input.chars().nth(self.position)
+        self.input.get(self.position..)?.chars().next()
+    }
+
+    /// The input from byte offset `start` to the current position.
+    ///
+    /// Both ends are character boundaries, because positions only move by
+    /// whole characters; the empty fallback is never taken.
+    fn since(&self, start: usize) -> &'a str {
+        self.input.get(start..self.position).unwrap_or("")
     }
 
     /// Advance to the next character
     fn advance(&mut self) -> Option<char> {
         if let Some(ch) = self.peek() {
-            self.position += 1;
+            self.position += ch.len_utf8();
             if ch == '\n' {
                 self.line += 1;
                 self.column = 1;
@@ -500,5 +539,75 @@ mod tests {
     fn test_comments() {
         let config = parse("# This is a comment\nkey = value # inline comment").unwrap();
         assert_eq!(config.get("key").unwrap().as_string().unwrap(), "value");
+    }
+
+    #[test]
+    fn non_ascii_comment_before_section_does_not_panic() {
+        // Used to slice at a character count instead of a byte offset
+        let config = parse("#\u{e9}\u{e9}\u{e9}\n[a]\nk = 1\n").unwrap();
+        assert_eq!(config.get("a.k").unwrap().as_integer().unwrap(), 1);
+    }
+
+    #[test]
+    fn non_ascii_keys_values_and_comments() {
+        let source = "# caf\u{e9} \u{4e2d}\u{6587}\n\
+                      n\u{e4}me = J\u{fc}rgen # \u{2713}\n\
+                      [se\u{e7}\u{e3}o]\n\
+                      \u{43a}\u{43b}\u{44e}\u{447} = '\u{1F600} single'\n\
+                      quoted = \"\u{3b1}\\t\u{3b2}\"\n\
+                      list = [\"\u{e9}\", '\u{fc}']\n";
+        let config = parse(source).unwrap();
+        assert_eq!(
+            config.get("n\u{e4}me").unwrap().as_string().unwrap(),
+            "J\u{fc}rgen"
+        );
+        let section = config.get("se\u{e7}\u{e3}o").unwrap();
+        assert_eq!(
+            section
+                .get("\u{43a}\u{43b}\u{44e}\u{447}")
+                .unwrap()
+                .as_string()
+                .unwrap(),
+            "\u{1F600} single"
+        );
+        assert_eq!(
+            section.get("quoted").unwrap().as_string().unwrap(),
+            "\u{3b1}\t\u{3b2}"
+        );
+        let list = section.get("list").unwrap().as_array().unwrap();
+        assert_eq!(list[0].as_string().unwrap(), "\u{e9}");
+        assert_eq!(list[1].as_string().unwrap(), "\u{fc}");
+    }
+
+    #[test]
+    fn error_columns_count_characters() {
+        // Four two-byte characters and four one-byte characters give the
+        // same column: columns count characters, not bytes.
+        let wide = parse("\u{43a}\u{43b}\u{44e}\u{447} ? 1").unwrap_err();
+        let narrow = parse("abcd ? 1").unwrap_err();
+        for err in [wide, narrow] {
+            match err {
+                Error::Parse { line, column, .. } => assert_eq!((line, column), (1, 7)),
+                other => panic!("expected a parse error, got {other:?}"),
+            }
+        }
+        match parse("# \u{e9}\u{e9}\n\u{e9} = 1\n[open\n").unwrap_err() {
+            Error::Parse { line, .. } => assert_eq!(line, 3),
+            other => panic!("expected a parse error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn deep_array_nesting_is_an_error() {
+        let ok = format!(
+            "k = {}{}",
+            "[".repeat(MAX_ARRAY_DEPTH),
+            "]".repeat(MAX_ARRAY_DEPTH)
+        );
+        assert!(parse(&ok).is_ok());
+        let deep = format!("k = {}", "[".repeat(MAX_ARRAY_DEPTH + 1));
+        assert!(parse(&deep).is_err());
+        // A million levels is an error, not a stack overflow
+        assert!(parse(&format!("k = {}", "[".repeat(1_000_000))).is_err());
     }
 }

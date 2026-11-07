@@ -62,6 +62,7 @@
 ### Reliability & Safety
 - **Zero Unsafe Code** - All `unwrap()` calls eliminated, comprehensive error handling
 - **Type Safety** - Rich type system with automatic conversions and validation
+- **Reads only what you give it** - TOML never resolves NOML's `include` or `env()`; `Config::from_string_strict` refuses them in NOML too (since v1.3.0)
 - **Enterprise Error Handling** - Production-ready error messages with context preservation
 - **Comprehensive Testing** - Extensive unit, integration, and doc test coverage
 
@@ -92,10 +93,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-config-lib = "1.2"
+config-lib = "1.3"
 
 # For enhanced functionality, enable optional features:
-config-lib = { version = "1.2", features = [
+config-lib = { version = "1.3", features = [
     "jsonx",          # JSON format support on jsonx-lib (strict, no dependencies; Rust 1.85+)
     "json",           # JSON format support on serde_json (used when `jsonx` is off)
     "xml",            # XML format support with quick-xml backend  

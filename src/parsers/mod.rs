@@ -29,6 +29,10 @@ pub mod toml_parser;
 #[cfg(feature = "noml")]
 pub mod noml_parser;
 
+// Checks shared by the TOML parser and strict NOML
+#[cfg(any(feature = "noml", feature = "toml"))]
+mod noml_guard;
+
 use crate::error::{Error, Result};
 use crate::value::Value;
 use std::path::Path;
@@ -36,6 +40,23 @@ use std::path::Path;
 /// Parse configuration from a string with optional format hint
 /// Uses zero-copy AST parser for enterprise performance
 pub fn parse_string(source: &str, format: Option<&str>) -> Result<Value> {
+    parse_string_with(source, format, false)
+}
+
+/// Parse configuration from a string without reading anything outside it.
+///
+/// The same as [`parse_string`] for every format except NOML, which is
+/// read with `noml_parser::parse_strict`: `include` and function calls
+/// (`env()` included) are refused. TOML never resolves them in either
+/// entry point. With no format hint, a document that uses `include` or
+/// `env(` is detected as NOML and refused.
+pub fn parse_string_strict(source: &str, format: Option<&str>) -> Result<Value> {
+    parse_string_with(source, format, true)
+}
+
+fn parse_string_with(source: &str, format: Option<&str>, strict: bool) -> Result<Value> {
+    #[cfg(not(feature = "noml"))]
+    let _ = strict;
     let detected_format = format.unwrap_or_else(|| detect_format(source));
 
     match detected_format {
@@ -48,6 +69,8 @@ pub fn parse_string(source: &str, format: Option<&str>) -> Result<Value> {
         "xml" => xml_parser::parse(source),
         #[cfg(feature = "hcl")]
         "hcl" => hcl_parser::parse(source),
+        #[cfg(feature = "noml")]
+        "noml" if strict => noml_parser::parse_strict(source),
         #[cfg(feature = "noml")]
         "noml" => noml_parser::parse(source),
         #[cfg(feature = "toml")]

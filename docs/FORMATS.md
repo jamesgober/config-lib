@@ -901,6 +901,14 @@ retention = @duration("30d")
 convert them (`"8080"` reads as an integer). `${path}` refers to another value by
 its dotted path from the top of the file.
 
+**Strict NOML (since v1.3.0).** `Config::from_string_strict(text, Some("noml"))`
+and `config_lib::parse_strict` read only the text they are given: `include` and
+every function call, `env()` included, are a parse error with the line and column
+of the first one. Native types and `${path}` references still work. Use it when
+your program checks the configuration file itself before reading it; an include
+would read a second file without those checks. `Config::from_string` and
+`from_file` keep the full NOML behaviour shown here.
+
 **Advanced NOML with Dynamic Features:**
 ```noml
 # Enterprise NOML Configuration
@@ -1031,6 +1039,13 @@ connection_timeout = @duration("30s")
 > support TOML date and time literals yet. Write dates and times as quoted
 > strings (`created = "2025-09-29T10:30:00Z"`) and parse them in your
 > application, or with the `chrono` feature.
+
+> **TOML is only TOML (since v1.3.0).** NOML syntax in a TOML document
+> (`include "path"`, `env("NAME")` or any other function call,
+> `@size(...)` and other native types, and a bare `${path}`) is a parse
+> error with its line and column. A `.toml` file never reads another file
+> or the environment. Strings are literal: `"${HOME}"` stays as written.
+> Keys named `include` or `env` are fine.
 
 **Basic TOML Configuration:**
 ```toml

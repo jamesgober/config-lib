@@ -1,14 +1,22 @@
 //! # NOML Format Parser
 //!
 //! Integration with the NOML library for advanced configuration features.
-//! This parser leverages the full NOML library to provide:
+//! [`parse`] uses the full NOML library to provide:
 //!
-//! - Environment variable resolution
-//! - File includes  
+//! - Environment variable resolution (`env("NAME")`)
+//! - File includes (`include "path"`)
 //! - Variable interpolation
 //! - Native types (@size, @duration, etc.)
 //! - Format preservation for round-trip editing
+//!
+//! [`parse_strict`] (since v1.3.0) reads only the text it is given: it
+//! refuses `include` and every function call, `env()` included, with
+//! `Error::Parse` and the line and column, before anything is resolved.
+//! Native types and `${...}` references to other values in the same
+//! document still work.
 
+#[cfg(feature = "noml")]
+use super::noml_guard::{self, Policy};
 #[cfg(not(feature = "noml"))]
 use crate::error::Error;
 use crate::error::Result;
@@ -25,6 +33,26 @@ pub fn parse(source: &str) -> Result<Value> {
     let mut resolver = noml::Resolver::new();
     let resolved = resolver.resolve(&document)?;
 
+    convert_noml_value(resolved)
+}
+
+/// Parse NOML without reading anything outside `source`.
+///
+/// Same as [`parse`], except that `include` and every function call
+/// (`env()` included) are refused with `Error::Parse` carrying the line and
+/// column of the first one. The message does not quote the input. Native
+/// types (`@size("10MB")`) and `${...}` references to other values in the
+/// document are allowed, since they read only the document.
+///
+/// Use this when the caller has checked the configuration file itself
+/// (owner, mode, size, file type): an include would read a second file
+/// without those checks, and `env()` would copy any environment variable
+/// into the configuration.
+#[cfg(feature = "noml")]
+pub fn parse_strict(source: &str) -> Result<Value> {
+    let document = noml::parse_string(source, None)?;
+    noml_guard::check(&document, Policy::StrictNoml)?;
+    let resolved = noml::Resolver::new().resolve(&document)?;
     convert_noml_value(resolved)
 }
 

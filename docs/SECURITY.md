@@ -45,11 +45,71 @@ guarantees.
   reads the file at `path`. If the operator controls the path,
   that's a path-traversal question at the caller, not in this
   crate. (We expose `Config::from_string` for callers that want to
-  pre-read with a chroot or sandbox of their choice.)
+  pre-read with a chroot or sandbox of their choice. Callers that
+  pre-read should use `Config::from_string_strict`, so a NOML file
+  cannot read a second file or the environment; see below.)
 - **TOCTOU on hot-reloaded files.** The `notify` watcher detects
   *that* the file changed, not *what changed inside it*. A
   malicious peer with write access to the watched file can
   obviously change its contents.
+
+---
+
+## Reading only the given text (v1.3.0)
+
+A caller that checks a configuration file before reading it (owner,
+mode, size, refusing a FIFO) needs the parser to read nothing else.
+The noml crate's resolver honours `include "path"`, which opens any
+file relative to the working directory with none of those checks (a
+FIFO blocks the reader), and `env("NAME")`, which copies any
+environment variable into a value.
+
+- **TOML never resolves NOML syntax.** The `toml` feature reads TOML
+  through the noml crate. Since v1.3.0 the syntax tree is checked
+  before it is resolved, and `include`, `env()` and any other function
+  call, `@type(...)` values and bare `${...}` are refused with
+  `Error::Parse` and the line and column of the first one. This
+  applies to every TOML entry point and cannot be turned off; none of
+  these is TOML. In 1.2.0 and earlier, a `.toml` file could include
+  other files and read the environment.
+- **Strict NOML is opt-in.** `Config::from_string_strict(text, format)`
+  and `config_lib::parse_strict(text, format)` take the same arguments
+  as `from_string` and `parse`. For NOML they refuse `include` and every
+  function call, `env()` included, the same way; native types
+  (`@size("10MB")`) and `${...}` references inside the document still
+  work. For every other format they are the same as `from_string` and
+  `parse`. Default NOML is unchanged and still resolves `include` and
+  `env()`.
+- **The refusal does not quote the input.** The message names only
+  the kind of node (`env() is not allowed in strict NOML`), not the
+  path or variable name.
+
+Cost: one pass over the syntax tree before resolving, with an
+explicit stack. On a 4 KiB NOML document it measured about 12 µs on
+top of a 340 µs parse (release build, one desktop machine; an
+estimate for other hardware).
+
+### Text positions in CONF, INI and Properties
+
+Before v1.3.0 these three parsers counted their position in
+characters and sliced the input with it as a byte offset. Non-ASCII
+text could panic the CONF parser (`#ééé` before a section header),
+made INI loop forever, and made valid files fail to parse; looking up
+each character from the start made every parse quadratic (about
+250 ms for 40 KB of CONF). They now keep a byte offset on a character
+boundary and slice with checked `str::get`, so any `&str` parses or
+returns an error without a panic, in linear time: 1 MiB of CONF
+parses in about 24 ms (release) and well under a second in a debug
+build (tested). Line and column numbers count characters from 1, as
+before.
+
+Also fixed in v1.3.0, found while testing these parsers:
+
+- CONF arrays nest at most 128 levels. Arrays are parsed recursively,
+  and a long run of `[` used to overflow the stack and abort the
+  process.
+- An INI line starting with `=` or `:` looped forever; it is now a
+  parse error.
 
 ---
 
@@ -264,4 +324,4 @@ anonymous.
 
 ---
 
-<sub>Last reviewed: 2026-05-19 (v0.9.8).</sub>
+<sub>Last reviewed: 2026-11-07 (v1.3.0).</sub>

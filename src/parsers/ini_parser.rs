@@ -23,6 +23,11 @@ pub fn parse_ini(content: &str) -> Result<Value> {
     parser.parse()
 }
 
+/// INI parser state.
+///
+/// `position` is a byte offset into `content` and always sits on a UTF-8
+/// character boundary: it only moves by the encoded length of the
+/// character under it.
 struct IniParser<'a> {
     content: &'a str,
     position: usize,
@@ -43,60 +48,62 @@ impl<'a> IniParser<'a> {
     }
 
     fn parse(&mut self) -> Result<Value> {
-        while self.position < self.content.len() {
+        loop {
             self.skip_whitespace_and_comments()?;
 
-            if self.position >= self.content.len() {
-                break;
-            }
-
-            let ch = self.current_char();
-
-            match ch {
-                '[' => self.parse_section()?,
-                '\n' | '\r' => {
-                    self.advance();
-                    self.line += 1;
-                }
-                _ => self.parse_key_value()?,
+            match self.peek() {
+                None => break,
+                Some('[') => self.parse_section()?,
+                Some(_) => self.parse_key_value()?,
             }
         }
 
-        Ok(Value::Table(self.result.clone()))
+        Ok(Value::Table(std::mem::take(&mut self.result)))
     }
 
-    fn current_char(&self) -> char {
-        self.content.chars().nth(self.position).unwrap_or('\0')
+    /// The character at the current position, or `None` at the end.
+    ///
+    /// O(1): `position` is a byte offset on a character boundary, so this
+    /// decodes one character instead of counting from the start.
+    fn peek(&self) -> Option<char> {
+        self.content.get(self.position..)?.chars().next()
     }
 
     fn advance(&mut self) {
-        if self.position < self.content.len() {
-            self.position += 1;
+        if let Some(ch) = self.peek() {
+            self.position += ch.len_utf8();
         }
     }
 
-    // Commented out to avoid unused warnings - could be useful for future enhancements
-    // fn peek_char(&self, offset: usize) -> char {
-    //     self.content.chars().nth(self.position + offset).unwrap_or('\0')
-    // }
+    /// The input from byte offset `start` to the current position.
+    ///
+    /// Both ends are character boundaries, because positions only move by
+    /// whole characters; the empty fallback is never taken.
+    fn since(&self, start: usize) -> &'a str {
+        self.content.get(start..self.position).unwrap_or("")
+    }
+
+    /// Skip spaces and tabs on the current line
+    fn skip_spaces(&mut self) {
+        while let Some(' ' | '\t') = self.peek() {
+            self.advance();
+        }
+    }
 
     fn skip_whitespace_and_comments(&mut self) -> Result<()> {
         loop {
-            let ch = self.current_char();
-
-            match ch {
-                ' ' | '\t' => self.advance(),
-                ';' | '#' => {
+            match self.peek() {
+                Some(' ' | '\t' | '\r') => self.advance(),
+                Some(';' | '#') => {
                     // Skip comment until end of line
-                    while self.current_char() != '\n' && self.current_char() != '\0' {
+                    while !matches!(self.peek(), None | Some('\n')) {
                         self.advance();
                     }
                 }
-                '\n' | '\r' => {
+                Some('\n') => {
                     self.advance();
                     self.line += 1;
                 }
-                '\0' => break,
                 _ => break,
             }
         }
@@ -108,8 +115,8 @@ impl<'a> IniParser<'a> {
         let start = self.position;
 
         // Find closing bracket
-        while self.current_char() != ']' && self.current_char() != '\0' {
-            if self.current_char() == '\n' {
+        while !matches!(self.peek(), None | Some(']')) {
+            if self.peek() == Some('\n') {
                 return Err(Error::Parse {
                     message: "Unterminated section".to_string(),
                     line: self.line,
@@ -120,7 +127,7 @@ impl<'a> IniParser<'a> {
             self.advance();
         }
 
-        if self.current_char() != ']' {
+        if self.peek() != Some(']') {
             return Err(Error::Parse {
                 message: "Missing closing bracket for section".to_string(),
                 line: self.line,
@@ -129,7 +136,7 @@ impl<'a> IniParser<'a> {
             });
         }
 
-        let section_name = self.content[start..self.position].trim().to_string();
+        let section_name = self.since(start).trim().to_string();
         self.advance(); // Skip ']'
 
         if section_name.is_empty() {
@@ -149,13 +156,21 @@ impl<'a> IniParser<'a> {
         let key = self.parse_key()?;
 
         if key.is_empty() {
-            return Ok(()); // Skip empty lines
+            // A line that starts with '=' or ':'. Returning without
+            // consuming anything used to loop forever here.
+            return Err(Error::Parse {
+                message: "Expected a key name".to_string(),
+                line: self.line,
+                column: 1,
+                file: None,
+            });
         }
 
-        self.skip_whitespace_and_comments()?;
+        // The separator and the value are on the key's line: an empty
+        // value must not take the next line as its text.
+        self.skip_spaces();
 
-        let ch = self.current_char();
-        if ch != '=' && ch != ':' {
+        if !matches!(self.peek(), Some('=' | ':')) {
             return Err(Error::Parse {
                 message: format!("Expected '=' or ':' after key '{key}'"),
                 line: self.line,
@@ -165,7 +180,7 @@ impl<'a> IniParser<'a> {
         }
 
         self.advance(); // Skip separator
-        self.skip_whitespace_and_comments()?;
+        self.skip_spaces();
 
         let value = self.parse_value()?;
 
@@ -182,16 +197,15 @@ impl<'a> IniParser<'a> {
     fn parse_key(&mut self) -> Result<String> {
         let start = self.position;
 
-        while self.position < self.content.len() {
-            let ch = self.current_char();
+        while let Some(ch) = self.peek() {
             match ch {
-                '=' | ':' | '\n' | '\r' | '\0' => break,
+                '=' | ':' | '\n' | '\r' => break,
                 ';' | '#' => break, // Comment starts
                 _ => self.advance(),
             }
         }
 
-        let key = self.content[start..self.position].trim();
+        let key = self.since(start).trim();
         Ok(key.to_string())
     }
 
@@ -200,9 +214,7 @@ impl<'a> IniParser<'a> {
         let mut in_quotes = false;
         let mut quote_char = '\0';
 
-        while self.position < self.content.len() {
-            let ch = self.current_char();
-
+        while let Some(ch) = self.peek() {
             match ch {
                 '"' | '\'' if !in_quotes => {
                     in_quotes = true;
@@ -213,8 +225,7 @@ impl<'a> IniParser<'a> {
                 '\\' if in_quotes => {
                     // Handle escape sequences within quotes
                     self.advance(); // Skip backslash
-                    if self.position < self.content.len() {
-                        let escaped_char = self.current_char();
+                    if let Some(escaped_char) = self.peek() {
                         match escaped_char {
                             'n' => value_chars.push('\n'),
                             't' => value_chars.push('\t'),
@@ -236,9 +247,13 @@ impl<'a> IniParser<'a> {
                     // Don't include the closing quote
                     break;
                 }
-                '\n' | '\r' | '\0' if !in_quotes => break,
+                '\n' | '\r' if !in_quotes => break,
                 ';' | '#' if !in_quotes => break, // Comment starts
                 _ => {
+                    if ch == '\n' {
+                        // A line end inside quotes
+                        self.line += 1;
+                    }
                     value_chars.push(ch);
                     self.advance();
                 }
@@ -498,6 +513,54 @@ key2:value2
             assert_eq!(map.get("key2").unwrap().as_string().unwrap(), "value2");
         } else {
             panic!("Expected table");
+        }
+    }
+
+    #[test]
+    fn non_ascii_text_parses() {
+        let content = "; caf\u{e9}\n[se\u{e7}\u{e3}o]\nn\u{e4}me = J\u{fc}rgen ; \u{2713}\n\
+                       quoted = \"\u{3b1} \u{3b2}\"\n";
+        let Value::Table(map) = parse_ini(content).unwrap() else {
+            panic!("Expected table");
+        };
+        assert_eq!(
+            map.get("se\u{e7}\u{e3}o.n\u{e4}me")
+                .unwrap()
+                .as_string()
+                .unwrap(),
+            "J\u{fc}rgen"
+        );
+        assert_eq!(
+            map.get("se\u{e7}\u{e3}o.quoted")
+                .unwrap()
+                .as_string()
+                .unwrap(),
+            "\u{3b1} \u{3b2}"
+        );
+    }
+
+    #[test]
+    fn line_starting_with_separator_is_an_error() {
+        // The first three used to loop forever; a NUL used to read as the end
+        for content in ["=x\n", ":x\n", "a=1\n= 2\n", "\0"] {
+            assert!(parse_ini(content).is_err(), "{content:?}");
+        }
+    }
+
+    #[test]
+    fn empty_value_does_not_take_the_next_line() {
+        let Value::Table(map) = parse_ini("a=\nb=2\n").unwrap() else {
+            panic!("Expected table");
+        };
+        assert_eq!(map.get("a").unwrap().as_string().unwrap(), "");
+        assert_eq!(map.get("b").unwrap().as_integer().unwrap(), 2);
+    }
+
+    #[test]
+    fn crlf_counts_one_line() {
+        match parse_ini("a=1\r\nb=2\r\n[open\r\n").unwrap_err() {
+            Error::Parse { line, .. } => assert_eq!(line, 3),
+            other => panic!("expected a parse error, got {other:?}"),
         }
     }
 

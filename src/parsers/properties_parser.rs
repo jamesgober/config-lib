@@ -290,8 +290,18 @@ impl PropertiesParser {
         }
     }
 
+    /// The character at the current position, or `'\0'` at the end
+    /// (callers check [`Self::at_end`] to tell the two apart).
+    ///
+    /// O(1): `position` is a byte offset that only moves by the encoded
+    /// length of the character under it, so it is always a character
+    /// boundary and this decodes one character instead of counting from
+    /// the start.
     fn current_char(&self) -> char {
-        self.input.chars().nth(self.position).unwrap_or('\0')
+        self.input
+            .get(self.position..)
+            .and_then(|rest| rest.chars().next())
+            .unwrap_or('\0')
     }
 
     fn at_end(&self) -> bool {
@@ -300,13 +310,14 @@ impl PropertiesParser {
 
     fn advance(&mut self) {
         if !self.at_end() {
-            if self.current_char() == '\n' {
+            let ch = self.current_char();
+            if ch == '\n' {
                 self.line += 1;
                 self.column = 1;
             } else {
                 self.column += 1;
             }
-            self.position += 1;
+            self.position += ch.len_utf8();
         }
     }
 }
@@ -352,6 +363,23 @@ mod tests {
                 "line1\nline2\ttab"
             );
         }
+    }
+
+    #[test]
+    fn non_ascii_text_parses() {
+        let input = "# caf\u{e9} \u{e9}\u{e9}\u{e9}\nn\u{e4}me=J\u{fc}rgen\n\u{43a}\u{43b}: \u{3b1}\u{3b2}\n";
+        let result = parse(input).unwrap();
+        let Value::Table(table) = result else {
+            panic!("Expected table");
+        };
+        assert_eq!(
+            table.get("n\u{e4}me").unwrap().as_string().unwrap(),
+            "J\u{fc}rgen"
+        );
+        assert_eq!(
+            table.get("\u{43a}\u{43b}").unwrap().as_string().unwrap(),
+            "\u{3b1}\u{3b2}"
+        );
     }
 
     #[test]

@@ -220,6 +220,29 @@ never quote the input. The exact budgets are jsonx-lib's defaults and
 may change with a pin bump; such a change is noted in the release
 notes.
 
+### 4.5 TOML semantics and strict parsing
+
+Since v1.3.0, and for the rest of v1.x:
+
+- **TOML refuses NOML-only syntax.** With the `toml` feature, a TOML
+  document that uses `include`, a function call (`env()` or any other),
+  a native type (`@size(...)` and the rest) or a bare `${...}` is an
+  `Error::Parse` with the line and column of the first one. Parsing TOML
+  never reads a file or an environment variable. This is not optional
+  and a `noml` pin bump does not change it.
+- **Strict entry points.** `Config::from_string_strict` and
+  `parse_strict` (and `parsers::parse_string_strict`,
+  `parsers::noml_parser::parse_strict`) read only the text they are
+  given. For NOML they refuse `include` and every function call with
+  `Error::Parse` and a position; for every other format they return
+  what `from_string` and `parse` return. If a later noml release adds
+  another way to read outside the document, the config-lib release
+  that moves the pin to it also refuses it in TOML and strict NOML.
+- **Refusal messages never quote the input.** Their wording is not
+  part of the contract (§2); the variant, line and column are.
+- **Default NOML is unchanged.** `from_string`, `from_file` and `parse`
+  keep resolving `include` and `env()` for NOML.
+
 ---
 
 ## 5. Performance contract

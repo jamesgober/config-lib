@@ -15,6 +15,36 @@
 <br>
 
 
+## [1.3.0] - 2026-11-07
+
+A security release. TOML no longer runs NOML's `include` and `env()`, a new strict entry point refuses them in NOML too, and the CONF, INI and Properties parsers handle non-ASCII text without panicking, hanging or slowing down. The default feature set is unchanged and keeps MSRV 1.75.
+
+### Security
+- **TOML resolved NOML `include` and `env()`** (`toml` feature, high). The TOML parser reads through the noml crate, whose resolver opened any `include "path"` relative to the working directory and copied any `env("NAME")` into a value. A caller that checked the configuration file (owner, mode, size, not a FIFO) had all of that bypassed by an included file, and an included FIFO blocked the reader. TOML now refuses `include`, `env()` and any other function call, `@type(...)` native types and bare `${...}` with `Error::Parse` and the line and column of the first one. The message does not quote the path or the variable name. This is a fix to TOML semantics and cannot be turned off.
+- **CONF panicked on non-ASCII text** (medium). The CONF parser counted its position in characters and sliced the input with it as a byte offset: `"#ééé\n[a]\nk = 1\n"` panicked, other non-ASCII text before a section header made valid files fail, and every parse was quadratic (about 250 ms for 40 KB). The parser now works on byte offsets on character boundaries: any `&str` parses or returns an error without a panic, in linear time (1 MiB in about 24 ms in a release build). Line and column numbers still count characters.
+- **INI and Properties had the same position bug.** INI looped forever on any non-ASCII character, and Properties refused valid files that contained one. Both are fixed the same way.
+- **CONF arrays overflowed the stack** when nested deeply (a long run of `[`). Nesting beyond 128 levels is now a parse error.
+- **INI looped forever on a line starting with `=` or `:`.** It is now a parse error.
+
+### Added
+- **`Config::from_string_strict(source, format)`** and **`parse_strict(source, format)`**: the same as `Config::from_string` and `parse`, except that NOML `include` and every function call (`env()` included) are refused with `Error::Parse` and a position. NOML native types and `${...}` references to the same document still work. For every other format they return what `from_string` and `parse` return. Also `parsers::parse_string_strict` and `parsers::noml_parser::parse_strict`.
+
+### Changed
+- **TOML refuses NOML-only syntax** (see Security). A TOML file that used `include`, `env()`, `@size(...)` or a bare `${...}` loaded in 1.2.0 and is now an error. Keys named `include` or `env`, and `${...}` inside strings (kept literally since 1.1.0), are not affected.
+- **INI: an empty value no longer takes the next line.** `a=` followed by `b=2` used to give `a = "b=2"`; it now gives `a = ""` and `b = 2`. A key and its separator must be on the same line.
+- **INI line numbers** count a CRLF line end once (they counted it twice).
+
+### Docs
+- `docs/SECURITY.md` (reading only the given text, text positions), `docs/STABILITY-1.0.md` (new §4.5), `docs/ARCHITECTURE.md` (§7, with the decision log for strict parsing), `docs/FORMATS.md` (TOML and NOML notes), `docs/API.md` and the README list the new functions.
+
+### Tests
+- `tests/strict_parsing.rs`: the panic case, non-ASCII round trips, a generated-input test over every parser (random and mutated documents, every prefix of non-ASCII documents), 1 MiB of CONF in under a second in a debug build, TOML `include` and `env()` refused with their positions, strict NOML refusing both, default NOML still resolving both.
+- `tests/parser_corpus.rs`: regression inputs for each parser fix.
+
+
+<br>
+
+
 ## [1.2.0] - 2026-11-04
 
 A second JSON backend: the new `jsonx` feature reads and writes the `json` format with `jsonx-lib`, which has no dependencies and refuses duplicate keys. The `json` feature and its serde_json backend are unchanged. The default feature set is unchanged and keeps MSRV 1.75.
@@ -801,7 +831,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/jamesgober/config-lib/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/jamesgober/config-lib/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/jamesgober/config-lib/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/jamesgober/config-lib/compare/v0.9.9...v1.0.0

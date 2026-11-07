@@ -131,8 +131,50 @@ impl Config {
     /// Load configuration from a string
     pub fn from_string(source: &str, format: Option<&str>) -> Result<Self> {
         let detected_format = format.unwrap_or_else(|| parsers::detect_format(source));
-
         let values = parsers::parse_string(source, Some(detected_format))?;
+        Ok(Self::from_parsed(source, detected_format, values))
+    }
+
+    /// Load configuration from a string without reading anything outside it
+    ///
+    /// The same as [`Config::from_string`] for every format except NOML
+    /// (feature `noml`): `include` and every function call (`env()`
+    /// included) are refused with [`Error::Parse`] carrying the line and
+    /// column of the first one, and the message does not quote the input.
+    /// NOML native types (`@size("10MB")`) and `${...}` references to other
+    /// values in the same document still work.
+    ///
+    /// Use it when the caller has checked the configuration file itself
+    /// (owner, mode, size, file type) before handing its text over: an
+    /// include would read a second file without those checks, and `env()`
+    /// would copy an environment variable into the configuration.
+    ///
+    /// TOML, JSON, CONF and the other formats read only the text in both
+    /// entry points (TOML refuses NOML's `include` and `env()` everywhere
+    /// since v1.3.0). With no format hint, a document that uses `include`
+    /// or `env(` is detected as NOML and refused here.
+    ///
+    /// Since v1.3.0.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use config_lib::Config;
+    ///
+    /// let config = Config::from_string_strict("port = 8080", Some("conf"))?;
+    /// assert_eq!(config.get("port").map(|v| v.as_integer()).transpose()?, Some(8080));
+    /// # Ok::<(), config_lib::Error>(())
+    /// ```
+    pub fn from_string_strict(source: &str, format: Option<&str>) -> Result<Self> {
+        let detected_format = format.unwrap_or_else(|| parsers::detect_format(source));
+        let values = parsers::parse_string_strict(source, Some(detected_format))?;
+        Ok(Self::from_parsed(source, detected_format, values))
+    }
+
+    /// Build a `Config` from values already parsed out of `source`
+    fn from_parsed(source: &str, detected_format: &str, values: Value) -> Self {
+        #[cfg(not(feature = "noml"))]
+        let _ = source;
 
         #[cfg(feature = "noml")]
         let mut config = Self {
@@ -165,7 +207,8 @@ impl Config {
             validation_rules: None,
         };
 
-        // Store format-specific preservation data
+        // Store format-specific preservation data (parsed only, never
+        // resolved, so nothing outside `source` is read here)
         #[cfg(feature = "noml")]
         if detected_format == "noml" || detected_format == "toml" {
             if let Ok(document) = noml::parse_string(source, None) {
@@ -173,7 +216,7 @@ impl Config {
             }
         }
 
-        Ok(config)
+        config
     }
 
     /// Load configuration from a file
