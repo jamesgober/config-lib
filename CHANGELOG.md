@@ -33,6 +33,7 @@ A security release. TOML no longer runs NOML's `include` and `env()`, a new stri
 - **TOML refuses NOML-only syntax** (see Security). A TOML file that used `include`, `env()`, `@size(...)` or a bare `${...}` loaded in 1.2.0 and is now an error. Keys named `include` or `env`, and `${...}` inside strings (kept literally since 1.1.0), are not affected.
 - **INI: an empty value no longer takes the next line.** `a=` followed by `b=2` used to give `a = "b=2"`; it now gives `a = ""` and `b = 2`. A key and its separator must be on the same line.
 - **INI line numbers** count a CRLF line end once (they counted it twice).
+- **CONF bracket arrays of unquoted items parse.** `ports = [80, 443]` and `hosts = [a, b]` were parse errors (an unquoted item ran to the end of the line); inside brackets an item now ends at `,` or `]`. Quoted items and bracket-less lists (`list = 1 2 3`) are unchanged.
 
 ### Docs
 - `docs/SECURITY.md` (reading only the given text, text positions), `docs/STABILITY-1.0.md` (new §4.5), `docs/ARCHITECTURE.md` (§7, with the decision log for strict parsing), `docs/FORMATS.md` (TOML and NOML notes), `docs/API.md` and the README list the new functions.

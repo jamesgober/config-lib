@@ -333,13 +333,15 @@ impl<'a> ConfParser<'a> {
         }
     }
 
-    /// Parse an unquoted value (string, boolean, or array)
+    /// Parse an unquoted value (string, boolean, or array). Inside
+    /// brackets an item ends at `,` or `]`, so `[80, 443]` is two items.
     fn parse_unquoted_value(&mut self) -> Result<Value> {
         let start = self.position;
+        let in_array = self.depth > 0;
 
         // Read until end of line, comment, or special character
         while let Some(ch) = self.peek() {
-            if ch == '\n' || ch == '\r' || ch == '#' {
+            if ch == '\n' || ch == '\r' || ch == '#' || (in_array && (ch == ',' || ch == ']')) {
                 break;
             }
             self.advance();
@@ -359,8 +361,9 @@ impl<'a> ConfParser<'a> {
             _ => {}
         }
 
-        // Check if it's a space or comma separated array
-        if raw_value.contains(' ') || raw_value.contains(',') {
+        // Check if it's a space or comma separated array (not inside
+        // brackets, where the brackets make the array)
+        if !in_array && (raw_value.contains(' ') || raw_value.contains(',')) {
             let items: Vec<Value> = raw_value
                 .split([' ', ','])
                 .map(|s| s.trim())
@@ -533,6 +536,23 @@ mod tests {
         let arr = config.get("arr").unwrap().as_array().unwrap();
         assert_eq!(arr.len(), 3);
         assert_eq!(arr[0].as_string().unwrap(), "item1");
+    }
+
+    #[test]
+    fn test_bracket_arrays_of_unquoted_items() {
+        let config = parse("ports = [80, 443]\nhosts = [a, b c]\nnested = [[1, 2], [3]]").unwrap();
+        let ports = config.get("ports").unwrap().as_array().unwrap();
+        assert_eq!(ports.len(), 2);
+        assert_eq!(ports[1].as_integer().unwrap(), 443);
+        let hosts = config.get("hosts").unwrap().as_array().unwrap();
+        assert_eq!(hosts.len(), 2);
+        assert_eq!(hosts[1].as_string().unwrap(), "b c");
+        let nested = config.get("nested").unwrap().as_array().unwrap();
+        assert_eq!(nested.len(), 2);
+        assert_eq!(nested[0].as_array().unwrap().len(), 2);
+        // Without brackets, spaces and commas still make a list.
+        let config = parse("list = 1, 2 3").unwrap();
+        assert_eq!(config.get("list").unwrap().as_array().unwrap().len(), 3);
     }
 
     #[test]
