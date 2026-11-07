@@ -195,7 +195,7 @@ fn formats() -> Vec<&'static str> {
 
 #[test]
 fn arbitrary_strings_never_panic() {
-    let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
+    let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
     let formats = formats();
     for _ in 0..3000 {
         let input = random_input(&mut rng);
