@@ -15,7 +15,7 @@
 <br>
 
 
-## [1.3.0] - 2026-11-07
+## [1.3.0] - 2026-11-08
 
 A security release. TOML no longer runs NOML's `include` and `env()`, a new strict entry point refuses them in NOML too, and the CONF, INI and Properties parsers handle non-ASCII text without panicking, hanging or slowing down. The default feature set is unchanged and keeps MSRV 1.75.
 
