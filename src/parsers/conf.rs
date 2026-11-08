@@ -31,6 +31,14 @@ pub fn parse(source: &str) -> Result<Value> {
     parser.parse()
 }
 
+/// Put a section's table into the root. A section with no keys is left
+/// out, as it always was.
+fn close_section(root: &mut BTreeMap<String, Value>, name: String, table: BTreeMap<String, Value>) {
+    if !table.is_empty() {
+        root.insert(name, Value::table(table));
+    }
+}
+
 /// Deepest nesting of `[...]` arrays the parser accepts.
 ///
 /// Arrays are parsed recursively, so without a limit a value such as a
@@ -67,7 +75,10 @@ impl<'a> ConfParser<'a> {
     /// Parse the entire configuration
     fn parse(&mut self) -> Result<Value> {
         let mut root = BTreeMap::new();
-        let mut current_section = None;
+        // The open section's name and table, kept out of `root` while its
+        // keys are read: each key goes straight into it, and the name is
+        // not copied per key.
+        let mut section: Option<(String, BTreeMap<String, Value>)> = None;
 
         while !self.is_at_end() {
             self.skip_whitespace_and_comments();
@@ -78,31 +89,45 @@ impl<'a> ConfParser<'a> {
 
             // Check for section header
             if self.peek() == Some('[') {
-                current_section = Some(self.parse_section_header()?);
+                let (line, column) = (self.line, self.column);
+                let name = self.parse_section_header()?;
+                if let Some((open, table)) = section.take() {
+                    close_section(&mut root, open, table);
+                }
+                // A section seen before continues where it left off. One
+                // named like a key above it used to lose its keys
+                // silently; it is refused.
+                let table = match root.remove(name.as_str()) {
+                    None => BTreeMap::new(),
+                    Some(Value::Table(table)) => table,
+                    Some(_) => {
+                        return Err(Error::parse(
+                            "A section has the name of a key above it",
+                            line,
+                            column,
+                        ))
+                    }
+                };
+                section = Some((name, table));
                 continue;
             }
 
             // Parse key-value pair
             let (key, value) = self.parse_key_value()?;
 
-            match &current_section {
-                Some(section) => {
-                    // Add to section
-                    let section_table = root
-                        .entry(section.clone())
-                        .or_insert_with(|| Value::table(BTreeMap::new()));
-
-                    if let Value::Table(table) = section_table {
-                        table.insert(key, value);
-                    }
+            match &mut section {
+                Some((_, table)) => {
+                    table.insert(key, value);
                 }
                 None => {
-                    // Add to root
                     root.insert(key, value);
                 }
             }
         }
 
+        if let Some((open, table)) = section {
+            close_section(&mut root, open, table);
+        }
         Ok(Value::table(root))
     }
 
@@ -112,18 +137,13 @@ impl<'a> ConfParser<'a> {
         let start = self.position;
 
         // Find the closing bracket
-        while let Some(ch) = self.peek() {
-            if ch == ']' {
-                break;
-            }
-            if ch == '\n' {
-                return Err(Error::parse(
-                    "Unterminated section header",
-                    self.line,
-                    self.column,
-                ));
-            }
-            self.advance();
+        self.advance_while(|ch| ch != ']' && ch != '\n');
+        if self.peek() == Some('\n') {
+            return Err(Error::parse(
+                "Unterminated section header",
+                self.line,
+                self.column,
+            ));
         }
 
         let section_name = self.since(start).trim().to_string();
@@ -147,13 +167,7 @@ impl<'a> ConfParser<'a> {
     fn parse_key(&mut self) -> Result<String> {
         let start = self.position;
 
-        while let Some(ch) = self.peek() {
-            if ch.is_alphanumeric() || ch == '_' || ch == '-' || ch == '.' {
-                self.advance();
-            } else {
-                break;
-            }
-        }
+        self.advance_while(|ch| ch.is_alphanumeric() || ch == '_' || ch == '-' || ch == '.');
 
         if start == self.position {
             return Err(Error::parse("Expected key name", self.line, self.column));
@@ -340,12 +354,9 @@ impl<'a> ConfParser<'a> {
         let in_array = self.depth > 0;
 
         // Read until end of line, comment, or special character
-        while let Some(ch) = self.peek() {
-            if ch == '\n' || ch == '\r' || ch == '#' || (in_array && (ch == ',' || ch == ']')) {
-                break;
-            }
-            self.advance();
-        }
+        self.advance_while(|ch| {
+            !(ch == '\n' || ch == '\r' || ch == '#' || (in_array && (ch == ',' || ch == ']')))
+        });
 
         let raw_value = self.since(start).trim();
 
@@ -353,12 +364,19 @@ impl<'a> ConfParser<'a> {
             return Ok(Value::null());
         }
 
-        // Try to parse as boolean
-        match raw_value.to_lowercase().as_str() {
-            "true" | "yes" | "on" => return Ok(Value::bool(true)),
-            "false" | "no" | "off" => return Ok(Value::bool(false)),
-            "null" | "nil" | "" => return Ok(Value::null()),
-            _ => {}
+        // Try to parse as boolean or null. The words are ASCII and no
+        // other character lower-cases to one of their letters, so an
+        // ASCII comparison matches what `to_lowercase` did, without
+        // allocating a lowered copy of every value.
+        let is = |word: &str| raw_value.eq_ignore_ascii_case(word);
+        if is("true") || is("yes") || is("on") {
+            return Ok(Value::bool(true));
+        }
+        if is("false") || is("no") || is("off") {
+            return Ok(Value::bool(false));
+        }
+        if is("null") || is("nil") {
+            return Ok(Value::null());
         }
 
         // Check if it's a space or comma separated array (not inside
@@ -398,13 +416,7 @@ impl<'a> ConfParser<'a> {
 
     /// Skip whitespace but not newlines
     fn skip_whitespace(&mut self) {
-        while let Some(ch) = self.peek() {
-            if ch == ' ' || ch == '\t' {
-                self.advance();
-            } else {
-                break;
-            }
-        }
+        self.advance_while(|ch| ch == ' ' || ch == '\t');
     }
 
     /// Skip whitespace and comments
@@ -414,12 +426,8 @@ impl<'a> ConfParser<'a> {
 
             // Skip comments
             if self.peek() == Some('#') {
-                while let Some(ch) = self.peek() {
-                    self.advance();
-                    if ch == '\n' {
-                        break;
-                    }
-                }
+                self.advance_while(|ch| ch != '\n');
+                self.advance();
                 continue;
             }
 
@@ -462,6 +470,39 @@ impl<'a> ConfParser<'a> {
             Some(ch)
         } else {
             None
+        }
+    }
+
+    /// Advance over every character for which `keep` holds.
+    ///
+    /// An ASCII byte is checked and stepped over directly; anything else
+    /// is decoded as a character, so `position` stays on a character
+    /// boundary and `line` and `column` count as [`advance`] does.
+    ///
+    /// [`advance`]: ConfParser::advance
+    fn advance_while(&mut self, keep: impl Fn(char) -> bool) {
+        let bytes = self.input.as_bytes();
+        while let Some(&byte) = bytes.get(self.position) {
+            if byte.is_ascii() {
+                let ch = char::from(byte);
+                if !keep(ch) {
+                    break;
+                }
+                self.position += 1;
+                if byte == b'\n' {
+                    self.line += 1;
+                    self.column = 1;
+                } else {
+                    self.column += 1;
+                }
+            } else {
+                match self.peek() {
+                    Some(ch) if keep(ch) => {
+                        self.advance();
+                    }
+                    _ => break,
+                }
+            }
         }
     }
 
@@ -553,6 +594,40 @@ mod tests {
         // Without brackets, spaces and commas still make a list.
         let config = parse("list = 1, 2 3").unwrap();
         assert_eq!(config.get("list").unwrap().as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn test_a_repeated_section_continues_and_an_empty_one_is_left_out() {
+        let value = parse("[a]\nx = 1\n[empty]\n[b]\ny = 2\n[a]\nz = 3\n").unwrap();
+        let root = value.as_table().unwrap();
+        assert_eq!(root.len(), 2);
+        let a = root["a"].as_table().unwrap();
+        assert_eq!(a["x"].as_integer().unwrap(), 1);
+        assert_eq!(a["z"].as_integer().unwrap(), 3);
+        assert_eq!(root["b"].as_table().unwrap()["y"].as_integer().unwrap(), 2);
+    }
+
+    #[test]
+    fn test_a_section_named_like_a_key_is_refused() {
+        // Its keys used to be dropped without a word.
+        match parse("db = on\n[db]\npassword = hunter2\n") {
+            Err(Error::Parse { line, message, .. }) => {
+                assert_eq!(line, 2);
+                assert!(!message.contains("hunter2"));
+            }
+            other => panic!("expected a parse error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_words_match_in_any_ascii_case() {
+        let value = parse("a = TRUE\nb = Off\nc = NiL\nd = truth\ne = Ünïcode\n").unwrap();
+        let root = value.as_table().unwrap();
+        assert!(root["a"].as_bool().unwrap());
+        assert!(!root["b"].as_bool().unwrap());
+        assert!(root["c"].is_null());
+        assert_eq!(root["d"].as_string().unwrap(), "truth");
+        assert_eq!(root["e"].as_string().unwrap(), "Ünïcode");
     }
 
     #[test]
