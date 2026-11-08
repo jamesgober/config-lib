@@ -214,6 +214,32 @@ pub fn parse(source: &str, format: Option<&str>) -> Result<Value> {
     parsers::parse_string(source, format)
 }
 
+/// Parse configuration from a string without reading anything outside it
+///
+/// The same as [`parse`] for every format except NOML (feature `noml`),
+/// where `include` and every function call (`env()` included) are refused
+/// with [`Error::Parse`] carrying the line and column of the first one.
+/// Use it when the caller has checked the configuration file itself
+/// (owner, mode, size, file type) and nothing else may be read: an include
+/// would read a second file without those checks, and `env()` would copy
+/// an environment variable into the configuration. TOML never resolves
+/// them, in either entry point.
+///
+/// Since v1.3.0.
+///
+/// # Examples
+///
+/// ```rust
+/// use config_lib::parse_strict;
+///
+/// let config = parse_strict("port = 8080", Some("conf"))?;
+/// # let _ = config;
+/// # Ok::<(), config_lib::Error>(())
+/// ```
+pub fn parse_strict(source: &str, format: Option<&str>) -> Result<Value> {
+    parsers::parse_string_strict(source, format)
+}
+
 /// Parse configuration from a file, auto-detecting format from extension
 ///
 /// Reads a configuration file from disk and automatically detects the format

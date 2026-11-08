@@ -48,3 +48,38 @@
 fn corpus_harness_compiles() {
     let _ = config_lib::parsers::conf::parse("sanity=1\n");
 }
+
+// =========================================================================
+// v1.3.0: inputs found in review rather than by the fuzzer. Kept inline
+// because each is a few bytes.
+// =========================================================================
+
+/// CONF sliced at a character count instead of a byte offset and
+/// panicked when non-ASCII text came before a section header.
+#[test]
+fn conf_parser_non_ascii_before_section() {
+    let value = config_lib::parsers::conf::parse("#\u{e9}\u{e9}\u{e9}\n[a]\nk = 1\n").unwrap();
+    assert_eq!(value.get("a.k").unwrap().as_integer().unwrap(), 1);
+}
+
+/// CONF parsed nested arrays recursively with no limit, so a run of `[`
+/// overflowed the stack.
+#[test]
+fn conf_parser_deep_array_nesting() {
+    let input = format!("k = {}", "[".repeat(100_000));
+    assert!(config_lib::parsers::conf::parse(&input).is_err());
+}
+
+/// INI looped forever on a non-ASCII character and on a line starting
+/// with a separator.
+#[test]
+fn ini_parser_non_ascii_and_leading_separator() {
+    assert!(config_lib::parsers::ini_parser::parse("; \u{e9}\nk=1\n").is_ok());
+    assert!(config_lib::parsers::ini_parser::parse("=x\n").is_err());
+}
+
+/// Properties refused a valid file with non-ASCII text in it.
+#[test]
+fn properties_parser_non_ascii() {
+    assert!(config_lib::parsers::properties_parser::parse("# \u{e9}\u{e9}\u{e9}\nk=v\n").is_ok());
+}

@@ -411,6 +411,40 @@ The fuzz harnesses in `fuzz/fuzz_targets/<parser>.rs` exercise each
 for the fuzz methodology and `tests/parser_corpus.rs` for the
 regression-test infrastructure populated from fuzz findings.
 
+### Positions in the hand-written parsers (v1.3.0+)
+
+The CONF, INI and Properties parsers keep their position as a byte
+offset into the input, on a character boundary: `peek` decodes the
+one character at that offset (`input.get(pos..)?.chars().next()`)
+and `advance` moves by that character's `len_utf8()`. Values are
+sliced with `input.get(start..pos)`, which cannot panic. Lines and
+columns are still counted in characters, from 1.
+
+Before v1.3.0 they counted the position in characters
+(`chars().nth(pos)`) and sliced with it as a byte offset. That
+panicked or misread on non-ASCII text, and made every parse
+quadratic. CONF arrays nest at most 128 levels (the XML limit and
+jsonx-lib's default), because they are parsed recursively.
+
+### Strict parsing: NOML-only syntax (v1.3.0+)
+
+The noml crate parses TOML and NOML into one syntax tree, and its
+`Resolver` acts on `include` (reads a file), `env()` (reads the
+environment), `@type(...)` and bare `${...}`. `parsers::noml_guard`
+walks the tree before it is resolved and refuses the first node a
+policy does not allow, with that node's line and column.
+
+### Decision log: strict parsing
+
+| Decision | Why |
+|----------|-----|
+| TOML refuses `include`, function calls, `@type(...)` and bare `${...}` in every entry point, with no option to turn it off. | None of them is TOML. A `.toml` file that reads another file or the environment defeats every check a caller made on the file it opened (owner, mode, size, regular file). This is a fix to TOML semantics, so it is not opt-in. |
+| Strict NOML is a separate entry point (`Config::from_string_strict`, `parse_strict`, `parsers::parse_string_strict`, `noml_parser::parse_strict`), not a `ConfigOptions` field. | `ConfigOptions` is applied after parsing (`Config::with_options` starts empty), so a parse-time knob there would be ignored by `from_string`. A second function beside `from_string` is what a caller that already passes a format string can switch to with one edit. Default NOML keeps `include` and `env()` for 1.x users. |
+| Strict NOML refuses `include` and every function call; it keeps `@type(...)` and `${...}`. | Function calls and includes are the only nodes that read outside the text. The native resolvers in noml 0.9.2 (`size`, `duration`, `regex`, `url`, `ip`, `semver`, `base64`, `uuid`) are pure functions of their arguments, and `${...}` reads the document itself (the resolver has no variables set). |
+| Refuse by walking the AST before resolving, not by configuring the resolver. | `ResolverConfig` can stop includes (`max_include_depth: 0`) but not `env()`: `env_vars: Some(empty)` turns `env("X", "d")` into its default instead of an error. A walk over `noml::parser::ast` (public in noml 0.9.2) needs no change to noml, refuses before any file is opened or variable read, and gives the node's own span. It is iterative, so it adds no stack depth. |
+| The refusal message is fixed text per node kind (`include is not allowed in TOML`). | An include path or a variable name can be sensitive, so the message quotes nothing from the input, as with the `jsonx` backend. |
+| `Config::from_string_strict` is the same as `from_string` for every other format. | They read only their own text already. One entry point for every format means a caller does not branch on the format to be safe. |
+
 ---
 
 ## 8. Where to look for what
@@ -428,4 +462,4 @@ regression-test infrastructure populated from fuzz findings.
 
 ---
 
-<sub>Last reviewed: 2026-05-19 (v0.9.9).</sub>
+<sub>Last reviewed: 2026-11-07 (v1.3.0, §7).</sub>

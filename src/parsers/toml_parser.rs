@@ -2,7 +2,15 @@
 //!
 //! TOML parser with format preservation capabilities.
 //! Uses the NOML library's TOML compatibility for round-trip editing.
+//!
+//! The noml crate reads TOML and NOML into the same syntax tree, so a
+//! `.toml` file could use NOML's `include`, `env()`, `@type(...)` and bare
+//! `${...}`. TOML has none of them: since v1.3.0 the tree is checked before
+//! it is resolved and any of them is refused with `Error::Parse` and its
+//! line and column. No file is read and no environment variable is looked
+//! up while parsing TOML.
 
+use super::noml_guard::{self, Policy};
 use crate::error::Result;
 use crate::value::Value;
 use std::collections::BTreeMap;
@@ -26,10 +34,15 @@ pub fn parse_with_preservation(source: &str) -> Result<(Value, noml::Document)> 
 
 /// Resolve a parsed document with TOML semantics.
 ///
+/// NOML-only syntax (`include`, function calls, native types, bare
+/// `${...}`) is refused first, so the resolver never reads a file or the
+/// environment.
+///
 /// TOML strings are plain text, but NOML expands `${...}` in double-quoted
 /// strings. A TOML file such as `password = "${DB_PASSWORD}"` must keep
 /// that text, so `${` is escaped as `$${` before resolving.
 fn resolve_as_toml(document: &noml::Document) -> Result<Value> {
+    noml_guard::check(document, Policy::Toml)?;
     let mut literal = document.clone();
     escape_templates(&mut literal.root);
     let resolved = noml::Resolver::new().resolve(&literal)?;
