@@ -111,6 +111,16 @@ Also fixed in v1.3.0, found while testing these parsers:
 - An INI line starting with `=` or `:` looped forever; it is now a
   parse error.
 
+Fixed in v1.3.1:
+
+- An INI value with an unclosed quote, or with an apostrophe inside
+  text (`O'Brien`), read the rest of the file, across lines, into one
+  value. A quote opens a value only as its first character, and an
+  unclosed one is a parse error that names the line and does not quote
+  the value.
+- A CONF section named like a key above it lost all its keys without
+  an error; it is a parse error now.
+
 ---
 
 ## Strict JSON (feature `jsonx`)

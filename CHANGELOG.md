@@ -15,6 +15,26 @@
 <br>
 
 
+## [1.3.1] - 2026-11-08
+
+A fix release for the INI and CONF parsers, and a faster CONF parse. No API changes; the default feature set and MSRV 1.75 are unchanged.
+
+### Fixed
+- **INI read the escapes of a quoted value twice.** `path="C:\\new"` gave `C:`, a line break and `ew` instead of `C:\new`, and the spaces at the end of a quoted value were trimmed. A quoted value's escapes are read once and its spaces kept.
+- **INI took an apostrophe inside text as an opening quote.** `name = O'Brien` read everything up to the next `'` in the file, across lines, as one value. A quote opens a quoted value only as the value's first character.
+- **INI accepted a quote that is never closed**, reading the rest of the file into one value. It is a parse error with the line the value started on; the message does not quote the value.
+- **CONF dropped the keys of a section named like a key above it.** `db = on` followed by `[db]` lost every key in `[db]` without an error. It is a parse error now. A section that appears twice still continues where it left off.
+
+### Performance
+- **CONF parses about twice as fast.** On the 1 KiB benchmark input, allocations per parse fell from 244 to 124 and the parse time from 20-25 µs to 11.5-13.5 µs (release build, the same machine under full CPU load, old and new run alternately). `true`, `yes`, `off` and the other words are compared without lower-casing a copy of every value, a section's name is no longer copied for each of its keys, and ASCII text is scanned a byte at a time.
+
+### Tests
+- INI: escapes read once, spaces kept in quotes, apostrophes inside text, an unclosed quote refused at its line. CONF: a repeated section, an empty one, a section named like a key, the words in any ASCII case next to non-ASCII text.
+
+
+<br>
+
+
 ## [1.3.0] - 2026-11-08
 
 A security release. TOML no longer runs NOML's `include` and `env()`, a new strict entry point refuses them in NOML too, and the CONF, INI and Properties parsers handle non-ASCII text without panicking, hanging or slowing down. The default feature set is unchanged and keeps MSRV 1.75.
@@ -832,7 +852,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/jamesgober/config-lib/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/jamesgober/config-lib/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/jamesgober/config-lib/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/jamesgober/config-lib/compare/v1.0.0...v1.1.0

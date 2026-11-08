@@ -212,11 +212,18 @@ impl<'a> IniParser<'a> {
     fn parse_value(&mut self) -> Result<Value> {
         let mut value_chars = Vec::new();
         let mut in_quotes = false;
+        // Set at the closing quote: the value was quoted and its escapes
+        // were already read, so it is neither trimmed nor read again.
+        let mut quoted = false;
         let mut quote_char = '\0';
+        let first_line = self.line;
 
         while let Some(ch) = self.peek() {
             match ch {
-                '"' | '\'' if !in_quotes => {
+                // Only a value's first character opens a quote: an
+                // apostrophe inside text (`name = O'Brien`) is text, not
+                // the start of a value that runs to the next quote.
+                '"' | '\'' if !in_quotes && value_chars.is_empty() => {
                     in_quotes = true;
                     quote_char = ch;
                     self.advance();
@@ -243,6 +250,7 @@ impl<'a> IniParser<'a> {
                 }
                 ch if in_quotes && ch == quote_char => {
                     in_quotes = false;
+                    quoted = true;
                     self.advance();
                     // Don't include the closing quote
                     break;
@@ -260,22 +268,22 @@ impl<'a> IniParser<'a> {
             }
         }
 
-        // If we're not in quotes, trim whitespace from the end
-        let value_str = if !in_quotes {
-            value_chars
-                .iter()
-                .collect::<String>()
-                .trim_end()
-                .to_string()
+        if in_quotes {
+            // The value's text is not quoted back: it may be a secret.
+            return Err(Error::Parse {
+                message: "Unterminated quoted value".to_string(),
+                line: first_line,
+                column: 1,
+                file: None,
+            });
+        }
+        let value_str: String = value_chars.into_iter().collect();
+        // A quoted value had its escapes read above and keeps its spaces;
+        // an unquoted one is trimmed and its escapes read here, once.
+        let processed_value = if quoted {
+            value_str
         } else {
-            value_chars.iter().collect::<String>()
-        };
-
-        // For unquoted values, still process escape sequences
-        let processed_value = if in_quotes {
-            value_str // Already processed during parsing
-        } else {
-            self.process_escape_sequences(&value_str)
+            self.process_escape_sequences(value_str.trim_end())
         };
 
         // Try to parse as different types
@@ -471,6 +479,43 @@ key3="quote\"here"
             assert_eq!(map.get("key3").unwrap().as_string().unwrap(), "quote\"here");
         } else {
             panic!("Expected table");
+        }
+    }
+
+    #[test]
+    fn test_quoted_escapes_are_read_once() {
+        // `\\n` in quotes is a backslash and an `n`, not a line break, and
+        // the spaces inside the quotes are kept.
+        let content = "path=\"C:\\\\new\"\npad=\"two  \"\nplain=a\\tb\n";
+        let result = parse_ini(content).unwrap();
+        let Value::Table(map) = result else {
+            panic!("Expected table");
+        };
+        assert_eq!(map.get("path").unwrap().as_string().unwrap(), "C:\\new");
+        assert_eq!(map.get("pad").unwrap().as_string().unwrap(), "two  ");
+        assert_eq!(map.get("plain").unwrap().as_string().unwrap(), "a\tb");
+    }
+
+    #[test]
+    fn test_a_quote_inside_text_is_text() {
+        let content = "name = O'Brien\nnext = it's here\n";
+        let result = parse_ini(content).unwrap();
+        let Value::Table(map) = result else {
+            panic!("Expected table");
+        };
+        assert_eq!(map.get("name").unwrap().as_string().unwrap(), "O'Brien");
+        assert_eq!(map.get("next").unwrap().as_string().unwrap(), "it's here");
+    }
+
+    #[test]
+    fn test_an_unterminated_quote_is_refused_at_its_line() {
+        let content = "a = 1\nsecret = \"hunter2\nb = 2\n";
+        match parse_ini(content) {
+            Err(Error::Parse { line, message, .. }) => {
+                assert_eq!(line, 2);
+                assert!(!message.contains("hunter2"));
+            }
+            other => panic!("expected a parse error, got {other:?}"),
         }
     }
 
