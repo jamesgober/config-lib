@@ -310,10 +310,11 @@ fn assert_refused(
             ..
         }) => {
             assert_eq!((line, column), at, "{message}");
-            for secret in secrets {
+            // The failure text names the index, never the value
+            for (index, secret) in secrets.iter().enumerate() {
                 assert!(
                     !message.contains(secret),
-                    "message quotes {secret}: {message}"
+                    "the message quotes test value {index}"
                 );
             }
         }
