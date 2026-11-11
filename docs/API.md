@@ -1,7 +1,7 @@
 <h1 id="top" align="center">
     <img width="99" alt="Rust logo" src="https://raw.githubusercontent.com/jamesgober/rust-collection/72baabd71f00e14aa9184efcb16fa3deddda3a0a/assets/rust-logo.svg">
     <br><b>config-lib</b><br>
-    <sub><sup>API REFERENCE - v1.3.1</sup></sub>
+    <sub><sup>API REFERENCE - v1.3.2</sup></sub>
 </h1>
 <div align="center">
     <sup>
@@ -29,7 +29,7 @@
 
 <br>
 
-> Canonical API reference for `config-lib v1.3.1`. Every public type and free function is documented here with description, key methods, parameter notes, and at least one runnable code example. The full v1.x stability contract for these items is in [`STABILITY-1.0.md`](./STABILITY-1.0.md).
+> Canonical API reference for `config-lib v1.3.2`. Every public type and free function is documented here with description, key methods, parameter notes, and at least one runnable code example. The full v1.x stability contract for these items is in [`STABILITY-1.0.md`](./STABILITY-1.0.md).
 
 ---
 
@@ -492,6 +492,14 @@ pub fn as_value(&self) -> &Value;
 | `get_arc`     | `Option<Arc<Value>>`  | Multi-threaded reads, hot loops. Cache-backed (v1.0.0+).                  |
 | `key`         | `ConfigValue<'_>`     | Fluent-style chained accessors with defaults                              |
 | `contains_key`| `bool`                | Existence check without resolving the value                               |
+| `get_or`      | `V`                   | A typed read with a default (`bool`, `String`, `f64`, integers; v1.3.2+)  |
+
+`get_or` converts through `TryFrom<Value>`, which config-lib implements (since v1.3.2) for `bool`, `String`, `f64`, `i8` to `i64`, `isize`, `u8` to `u64`, and `usize`. Integer conversions are range-checked and accept an integer, a float with no fractional part, or a string that parses as the target type; the other types follow `as_bool`, `as_float`, and `as_string`. A missing path or a value that does not convert returns the default.
+
+```rust
+let port: u16 = config.get_or("server.port", 8080);
+let debug = config.get_or("app.debug", false);
+```
 
 ### Value Access (mutate)
 
