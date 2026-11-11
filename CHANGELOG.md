@@ -23,6 +23,9 @@ A fix release: `Config::get_or` now works with plain types, as the README always
 - **`get_or` did not compile for any plain type.** It is bounded `V: TryFrom<Value>`, and config-lib implemented `TryFrom<Value>` for no plain type, so `config.get_or("server.port", 8080)` failed with E0277 for `i64`, `bool`, `String` and the rest. `TryFrom<Value>` and `TryFrom<&Value>` are now implemented for `bool`, `String`, `f64`, `i8` to `i64`, `isize`, `u8` to `u64`, and `usize`, with `Error = config_lib::Error`. Integer conversions are range-checked (`70000` does not convert to `u16`, `8080.5` converts to no integer type) and accept an integer, a whole float, or a string that parses as the target type. `bool`, `f64` and `String` follow `as_bool`, `as_float` and `as_string`.
 - **README examples did not compile.** The quick start called `?` on the `Option` that `get` returns, and other sections used APIs that do not exist (`Validator`, `EnvOverride`, `ConfigBuilder::with_defaults`, `merge_file`, `Config::from_file_with_hot_reload`, an `audit` feature). Every example is rewritten against the real API and now runs as a doctest (with the `validation` and `env-override` features on, as CI runs them). The feature list no longer names an `audit` feature, and lists `schema`.
 
+### Security
+- `Cargo.lock`: `openssl` 0.10.78 -> 0.10.82 (RUSTSEC-2026-0474, -0476, -0477; reached only through the optional `noml`/`toml` features' `async` path) and `rustix` 1.1.5 -> 1.1.6 (RUSTSEC-2026-0486; dev-dependency `tempfile`). Lockfile only; the manifest's requirements are unchanged.
+
 ### Documentation
 - `Config::get_or` has a doc example and lists the types it reads. `docs/API.md` describes `get_or` and the conversions.
 
