@@ -581,7 +581,37 @@ impl Config {
         self.contains_key(path)
     }
 
-    /// Get a value with a default fallback
+    /// Get a value converted to `V`, or `default` when the path is missing
+    /// or the value does not convert.
+    ///
+    /// `V` can be `bool`, `String`, `f64`, any integer type from `i8`/`u8`
+    /// to `i64`/`u64`, `isize`, `usize`, or `Value` itself. Integer reads
+    /// are range-checked, so `70000` read as `u16` returns the default. See
+    /// the `TryFrom<Value>` impls on [`Value`] for the conversion rules.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use config_lib::Config;
+    ///
+    /// let config = Config::from_string(
+    ///     r#"
+    /// [server]
+    /// port = 8080
+    /// host = "0.0.0.0"
+    /// "#,
+    ///     Some("conf"),
+    /// )?;
+    ///
+    /// let port: u16 = config.get_or("server.port", 3000);
+    /// let host: String = config.get_or("server.host", "localhost".to_string());
+    /// let tls = config.get_or("server.tls", false); // missing, so the default
+    ///
+    /// assert_eq!(port, 8080);
+    /// assert_eq!(host, "0.0.0.0");
+    /// assert!(!tls);
+    /// # Ok::<(), config_lib::Error>(())
+    /// ```
     pub fn get_or<V>(&self, path: &str, default: V) -> V
     where
         V: TryFrom<Value> + Clone,

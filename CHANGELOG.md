@@ -15,6 +15,24 @@
 <br>
 
 
+## [1.3.2] - 2026-11-11
+
+A fix release: `Config::get_or` now works with plain types, as the README always said it did, and every README example compiles. No breaking changes; no new dependencies; the default feature set and MSRV 1.75 are unchanged.
+
+### Fixed
+- **`get_or` did not compile for any plain type.** It is bounded `V: TryFrom<Value>`, and config-lib implemented `TryFrom<Value>` for no plain type, so `config.get_or("server.port", 8080)` failed with E0277 for `i64`, `bool`, `String` and the rest. `TryFrom<Value>` and `TryFrom<&Value>` are now implemented for `bool`, `String`, `f64`, `i8` to `i64`, `isize`, `u8` to `u64`, and `usize`, with `Error = config_lib::Error`. Integer conversions are range-checked (`70000` does not convert to `u16`, `8080.5` converts to no integer type) and accept an integer, a whole float, or a string that parses as the target type. `bool`, `f64` and `String` follow `as_bool`, `as_float` and `as_string`.
+- **README examples did not compile.** The quick start called `?` on the `Option` that `get` returns, and other sections used APIs that do not exist (`Validator`, `EnvOverride`, `ConfigBuilder::with_defaults`, `merge_file`, `Config::from_file_with_hot_reload`, an `audit` feature). Every example is rewritten against the real API and now runs as a doctest (with the `validation` and `env-override` features on, as CI runs them). The feature list no longer names an `audit` feature, and lists `schema`.
+
+### Documentation
+- `Config::get_or` has a doc example and lists the types it reads. `docs/API.md` describes `get_or` and the conversions.
+
+### Tests
+- `tests/get_or_plain_types.rs`: typed reads, defaults on missing keys, out-of-range and wrong-type values falling back, whole floats and numeric strings, `Value` still accepted. Unit tests for every conversion's edges (range limits, NaN, infinity, `i64::MIN` as a float, `u64::MAX` as a string).
+
+
+<br>
+
+
 ## [1.3.1] - 2026-11-08
 
 A fix release for the INI and CONF parsers, and a faster CONF parse. No API changes; the default feature set and MSRV 1.75 are unchanged.
@@ -852,7 +870,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/jamesgober/config-lib/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/jamesgober/config-lib/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/jamesgober/config-lib/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/jamesgober/config-lib/compare/v1.1.0...v1.2.0

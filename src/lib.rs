@@ -133,7 +133,20 @@
     )
 )]
 
+// The README's examples compile and run as doctests. Some of them use the
+// `validation` and `env-override` features, so the check runs when those are
+// on; CI runs the doctests with both.
+#[cfg(all(
+    doctest,
+    feature = "conf",
+    feature = "validation",
+    feature = "env-override"
+))]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;
+
 pub mod config;
+mod convert; // TryFrom<Value> for plain types (makes `Config::get_or` work)
 /// Enterprise-grade configuration management with advanced caching, performance optimizations,
 /// and multi-instance support. Provides thread-safe caching with `Arc<RwLock>` for high-concurrency
 /// environments and sub-50ns access times for cached values.

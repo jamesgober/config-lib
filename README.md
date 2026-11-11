@@ -103,18 +103,18 @@ config-lib = { version = "1.3", features = [
     "hcl",            # HashiCorp Configuration Language support
     "toml",           # TOML format support with preservation
     "noml",           # NOML format support with dynamic features
-    "validation",     # Schema validation and type checking
-    "async",          # Async operations and hot reloading
+    "schema",         # Schema validation (`Schema`, `SchemaBuilder`)
+    "validation",     # Validation rules (`validation` module)
+    "async",          # Async file loading on tokio
     "env-override",   # Environment variable override system
-    "audit",          # Audit logging and compliance features
 ] }
 ```
 
 **Feature Recommendations**:
 - **Minimal**: Use default features for CONF/INI/Properties support
 - **Web Applications**: Add `"jsonx"` (or `"json"`), `"env-override"`, `"validation"`
-- **DevOps Tools**: Add `"hcl"`, `"toml"`, `"async"`, `"audit"`
-- **Enterprise Systems**: Add `"xml"`, `"validation"`, `"audit"`, `"env-override"`
+- **DevOps Tools**: Add `"hcl"`, `"toml"`, `"async"`
+- **Enterprise Systems**: Add `"xml"`, `"validation"`, `"env-override"`
 - **Full Featured**: Include all features for maximum flexibility
 
 <hr>
@@ -124,7 +124,7 @@ config-lib = { version = "1.3", features = [
 ```rust
 use config_lib::Config;
 
-// Parse any supported format automatically
+// Parse a configuration; name the format, or pass `None` to detect it.
 let mut config = Config::from_string(r#"
 [database]
 host = "localhost"
@@ -134,46 +134,63 @@ username = "admin"
 [app]
 name = "MyApp"
 debug = true
-"#, None)?;
+"#, Some("conf"))?;
 
-// Access values with type safety
-let host = config.get("database.host")?.as_string()?;
-let port = config.get("database.port")?.as_integer()?;
-let debug = config.get("app.debug")?.as_bool()?;
+// Typed reads with a default: the default's type picks the conversion.
+let host: String = config.get_or("database.host", "127.0.0.1".to_string());
+let port: u16 = config.get_or("database.port", 5432);
+let debug = config.get_or("app.debug", false);
+let workers: usize = config.get_or("app.workers", 4); // missing, so 4
 
-// Modify configuration (preserves format and comments)
+// Reads that must succeed: `get` returns `Option<&Value>`.
+let name = config
+    .get("app.name")
+    .ok_or_else(|| config_lib::Error::key_not_found("app.name"))?
+    .as_string()?
+    .to_owned();
+
+// Modify configuration
 config.set("database.port", 5433)?;
 config.set("app.version", "1.0.0")?;
 
-println!("Connecting to {}:{}", host, port);
+println!("{name}: connecting to {host}:{port} (debug {debug}, {workers} workers)");
+Ok::<(), config_lib::Error>(())
 ```
+
+`get_or` works for `bool`, `String`, `f64`, and every integer type from
+`i8`/`u8` to `i64`/`u64`, `isize`, and `usize`. Integer reads are
+range-checked: a value that does not fit the requested type (say
+`70000` read as `u16`, or `8080.5` read as any integer) returns the
+default. The same conversions are available directly as
+`TryFrom<Value>` and `TryFrom<&Value>`.
 
 ### Multi-Format Support
 
 ```rust
 use config_lib::Config;
 
-// All 8 formats now fully operational
+// The same calls work for every format; name it, or pass `None` to detect it.
 let config = Config::from_string(r#"
 [server]
 port = 8080
 host = "localhost"
-"#, Some("toml"))?;
+"#, Some("conf"))?;
 
-// Consistent API patterns across all parsers
-let port = config.get("server.port")?.as_integer()?;
-let timeout = config.get("server.timeout")
-    .and_then(|v| v.as_integer().ok())
-    .unwrap_or(30);
-let name = config.get("app.name")
-    .and_then(|v| v.as_string().ok())
-    .unwrap_or_else(|| "DefaultApp".to_string());
+let port: u16 = config.get_or("server.port", 80);
+let timeout: u64 = config.get_or("server.timeout", 30);
+let name: String = config.get_or("app.name", "DefaultApp".to_string());
+assert_eq!((port, timeout, name.as_str()), (8080, 30, "DefaultApp"));
 
 // Check existence
 if config.contains_key("server.ssl") {
     println!("SSL configuration found");
 }
+Ok::<(), config_lib::Error>(())
 ```
+
+Format names are `"conf"`, `"ini"`, `"properties"`, `"json"`, `"xml"`,
+`"hcl"`, `"toml"`, and `"noml"`; each format other than CONF, INI, and
+properties needs its Cargo feature.
 
 ### Read-only mode and forward-compatible options
 
@@ -197,111 +214,82 @@ assert!(locked.set("foo", "bar").is_err());   // rejected
 
 ### Default Configuration Settings
 
-**config-lib** provides multiple powerful methods for setting default/preset values that serve as fallbacks when keys are missing from configuration files. This ensures your application always has sensible defaults while allowing configuration files to override specific values.
+**config-lib** offers three ways to supply defaults for keys that are
+missing from a configuration file.
 
-#### Method 1: ConfigBuilder with Presets (Recommended)
+#### Method 1: Inline defaults with `get_or` (recommended)
 
-```rust
-use config_lib::{ConfigBuilder, Value};
-use std::collections::HashMap;
+The default sits at the read, and its type picks the conversion.
 
-// Set up comprehensive default values before loading config files
-let mut defaults = HashMap::new();
-defaults.insert("app.name".to_string(), Value::String("MyApplication".to_string()));
-defaults.insert("app.version".to_string(), Value::String("1.0.0".to_string()));
-defaults.insert("app.debug".to_string(), Value::Bool(false));
-
-// Server defaults
-defaults.insert("server.host".to_string(), Value::String("localhost".to_string()));
-defaults.insert("server.port".to_string(), Value::Integer(8080));
-defaults.insert("server.timeout".to_string(), Value::Integer(30));
-defaults.insert("server.workers".to_string(), Value::Integer(4));
-
-// Database defaults
-defaults.insert("database.host".to_string(), Value::String("localhost".to_string()));
-defaults.insert("database.port".to_string(), Value::Integer(5432));
-defaults.insert("database.pool_size".to_string(), Value::Integer(10));
-defaults.insert("database.timeout".to_string(), Value::Integer(60));
-
-// Logging defaults
-defaults.insert("logging.level".to_string(), Value::String("info".to_string()));
-defaults.insert("logging.file".to_string(), Value::String("app.log".to_string()));
-defaults.insert("logging.max_size".to_string(), Value::String("10MB".to_string()));
-
-// Create config with defaults, then load from file
-let config = ConfigBuilder::new()
-    .with_defaults(defaults)         // Apply presets first
-    .from_file("app.conf")?          // File values override presets
-    .build()?;
-
-// All values are guaranteed to exist (from file or defaults)
-let app_name = config.get("app.name")?.as_string()?;           // File value or "MyApplication"
-let port = config.get("server.port")?.as_integer()?;           // File value or 8080
-let pool_size = config.get("database.pool_size")?.as_integer()?; // File value or 10
-let log_level = config.get("logging.level")?.as_string()?;      // File value or "info"
-```
-
-#### Method 2: Inline defaults at the access site
-
-The simplest pattern when defaults are only needed at the call site —
-no parallel defaults table to maintain, no `unwrap` on a key that may
-not exist.
-
-```rust
+```rust,no_run
 use config_lib::Config;
 
-let config = Config::from_file("production.conf")?;
+struct AppConfig {
+    name: String,
+    port: u16,
+    debug: bool,
+    timeout: u64,
+    db_host: String,
+    db_port: u16,
+    db_pool_size: u32,
+    analytics_enabled: bool,
+    cache_enabled: bool,
+}
 
-let environment = config
-    .get("app.environment")
-    .and_then(|v| v.as_string().ok())
-    .map(str::to_owned)
-    .unwrap_or_else(|| "development".to_string());
-
-let cache_ttl: i64 = config
-    .get("cache.ttl")
-    .and_then(|v| v.as_integer().ok())
-    .unwrap_or(3600);
-
-let workers: i64 = config
-    .get("server.workers")
-    .and_then(|v| v.as_integer().ok())
-    .unwrap_or(4);
-```
-
-> The richer separate-defaults-table pattern is also available on
-> `Config` directly — call `cfg.set_default(key, value)?` to populate
-> the defaults table, then `cfg.get_or_default(key)` to resolve
-> against the main value tree with the defaults as a fallback. The
-> deprecated `EnterpriseConfig::set_default` / `get_or_default`
-> behavior is fully preserved on `Config`; see
-> [`examples/enterprise_demo.rs`](examples/enterprise_demo.rs).
-
-#### Method 3: Inline Defaults with get_or()
-
-```rust
-use config_lib::Config;
-
-// Load configuration file
 let config = Config::from_file("app.conf")?;
 
-// Provide defaults inline when accessing values
 let app_config = AppConfig {
     name: config.get_or("app.name", "DefaultApp".to_string()),
     port: config.get_or("server.port", 8080),
     debug: config.get_or("app.debug", false),
     timeout: config.get_or("server.timeout", 30),
-    
+
     // Database configuration with sensible defaults
     db_host: config.get_or("database.host", "localhost".to_string()),
     db_port: config.get_or("database.port", 5432),
     db_pool_size: config.get_or("database.pool_size", 10),
-    
+
     // Feature flags with conservative defaults
     analytics_enabled: config.get_or("features.analytics", false),
     cache_enabled: config.get_or("features.cache", true),
-    monitoring_enabled: config.get_or("features.monitoring", false),
 };
+Ok::<(), config_lib::Error>(())
+```
+
+#### Method 2: A defaults table
+
+`set_default` fills a table that `get_or_default` falls back to when the
+main value tree has no entry for the path.
+
+```rust
+use config_lib::{Config, Value};
+
+let config = Config::from_string("[server]\nport = 9000", Some("conf"))?;
+
+config.set_default("server.port", 8080)?;
+config.set_default("server.workers", 4)?;
+config.set_default("logging.level", "info")?;
+
+// File value wins over the default.
+assert_eq!(config.get_or_default("server.port"), Some(Value::Integer(9000)));
+
+// Missing from the file, so the default.
+assert_eq!(config.get_or_default("logging.level"), Some(Value::from("info")));
+Ok::<(), config_lib::Error>(())
+```
+
+#### Method 3: The `key` accessor
+
+```rust
+use config_lib::Config;
+
+let config = Config::from_string("[cache]\nttl = 600", Some("conf"))?;
+
+let cache_ttl = config.key("cache.ttl").as_integer_or(3600);        // i64
+let environment = config.key("app.environment").as_string_or("development");
+let verbose = config.key("app.verbose").as_bool_or(false);
+assert_eq!((cache_ttl, environment.as_str(), verbose), (600, "development", false));
+Ok::<(), config_lib::Error>(())
 ```
 
 #### Best Practices for Default Configuration
@@ -309,116 +297,91 @@ let app_config = AppConfig {
 1. **Use Sensible Defaults**: Choose defaults that work for most use cases
 2. **Document Defaults**: Keep defaults in sync with documentation
 3. **Environment-Specific**: Use different defaults for dev/staging/production
-4. **Type Safety**: Ensure defaults match expected types
+4. **Type Safety**: Read into the narrowest type that fits (`u16` for a port), so an out-of-range value is not accepted
 5. **Validation**: Validate both defaults and overrides
-6. **Performance**: Use Enterprise config for high-performance scenarios
-
-```rust
-// Example: Production-ready defaults with validation
-use config_lib::{ConfigBuilder, Value, validation::Validator};
-
-// Production defaults (secure and performant)
-let defaults = HashMap::from([
-    ("server.host".to_string(), Value::String("127.0.0.1".to_string())), // Secure default
-    ("server.port".to_string(), Value::Integer(8443)),                     // HTTPS default
-    ("server.ssl_enabled".to_string(), Value::Bool(true)),                // Secure by default
-    ("database.ssl_mode".to_string(), Value::String("require".to_string())), // Secure DB
-    ("logging.level".to_string(), Value::String("warn".to_string())),      // Production logging
-    ("features.debug".to_string(), Value::Bool(false)),                   // Disable debug
-]);
-
-// Validation rules for all values (including defaults)
-let validator = Validator::new()
-    .add_rule("server.port", ValidationRule::IntegerRange(1, 65535))
-    .add_rule("server.host", ValidationRule::Required)
-    .add_rule("logging.level", ValidationRule::OneOf(vec!["error", "warn", "info", "debug"]));
-
-let config = ConfigBuilder::new()
-    .with_defaults(defaults)
-    .from_file("production.conf")?
-    .with_validation(validator)         // Validate defaults + file values
-    .build()?;
-```
 
 ### Environment Variable Integration
 
-```rust
-use config_lib::{Config, env_override::EnvOverride};
+Needs the `env-override` feature.
 
-// Load configuration with environment variable overrides
-let mut config = Config::from_file("app.conf")?;
+```rust,no_run
+use config_lib::env_override::EnvOverrideSystem;
+use config_lib::Config;
 
-// Enable environment variable overrides with prefix
-let env_override = EnvOverride::new()
-    .with_prefix("MYAPP_")  // Maps MYAPP_DATABASE_HOST to database.host
-    .with_separator("_")    // Use underscore as path separator
-    .case_insensitive();    // MYAPP_database_HOST also works
+let config = Config::from_file("app.conf")?;
 
-config.apply_env_overrides(&env_override)?;
+// MYAPP_DATABASE_HOST overrides database.host, MYAPP_SERVER_PORT
+// overrides server.port, and so on.
+let overrides = EnvOverrideSystem::with_prefix("MYAPP_");
+let config = Config::from(overrides.apply_overrides(config.as_value().clone())?);
 
-// Now environment variables override file values:
-// MYAPP_DATABASE_HOST=prod.db.com overrides database.host from file
-// MYAPP_SERVER_PORT=9090 overrides server.port from file
-let host = config.get("database.host")?.as_string()?;  // From env or file
-let port = config.get("server.port")?.as_integer()?;   // From env or file
+let host: String = config.get_or("database.host", "localhost".to_string());
+let port: u16 = config.get_or("server.port", 8080);
+Ok::<(), config_lib::Error>(())
 ```
 
-### Configuration Validation & Type Safety
+### Configuration Validation
+
+Needs the `validation` feature. Rules run against each top-level value.
 
 ```rust
-use config_lib::{Config, validation::{Validator, ValidationRule}};
+use config_lib::validation::{RangeValidator, TypeValidator, ValidationRuleSet, ValueType};
+use config_lib::Config;
 
-// Define validation rules for configuration
-let validator = Validator::new()
-    .add_rule("server.port", ValidationRule::IntegerRange(1, 65535))
-    .add_rule("database.host", ValidationRule::Required)
-    .add_rule("app.name", ValidationRule::StringPattern(r"^[a-zA-Z][a-zA-Z0-9_-]*$"))
-    .add_rule("logging.level", ValidationRule::OneOf(vec!["debug", "info", "warn", "error"]));
+let mut config = Config::from_string("server_port = 8080\nmax_connections = 100", Some("conf"))?;
 
-let mut config = Config::from_file("app.conf")?;
+config.set_validation_rules(
+    ValidationRuleSet::new()
+        .add_rule(TypeValidator::new(ValueType::Integer))
+        .add_rule(RangeValidator::new(Some(1.0), Some(65535.0))),
+);
 
-// Validate configuration before use
-validator.validate(&config)?;  // Fails fast with detailed error messages
-
-// Safe access with automatic type conversion
-let port = config.get("server.port")?.as_integer()?;  // Guaranteed valid range
-let log_level = config.get("logging.level")?.as_string()?;  // Guaranteed valid value
+let errors = config.validate()?;
+assert!(errors.is_empty(), "{errors:?}");
+Ok::<(), config_lib::Error>(())
 ```
 
 ### Hot Reloading & Audit Logging
 
-```rust
-use config_lib::{Config, audit};
+```rust,no_run
+use config_lib::audit::{self, AuditLogger, AuditSeverity, ConsoleSink};
+use config_lib::hot_reload::{ConfigChangeEvent, HotReloadConfig};
 
-// Enable audit logging
-let audit_logger = audit::AuditLogger::new()
-    .with_console_sink(audit::Severity::Info)
-    .with_file_sink("config_audit.log", audit::Severity::Warning)?;
+// Process-wide audit logger
+audit::init_audit_logger(
+    AuditLogger::new().add_sink(Box::new(ConsoleSink::new(AuditSeverity::Info))),
+);
 
-// Hot reloading configuration
-let config = Config::from_file_with_hot_reload("app.conf", move |new_config| {
-    println!("Configuration reloaded!");
-    audit_logger.log_reload("app.conf", "admin");
-})?;
+// Hot reloading: take the shared handle before `start_watching` consumes the watcher.
+let hot = HotReloadConfig::from_file("app.conf")?;
+let shared = hot.config();
+let _sub = hot.on_change(|event| {
+    if let ConfigChangeEvent::Reloaded { path, .. } = event {
+        println!("reloaded {}", path.display());
+    }
+});
+let _handle = hot.start_watching();
+
+let port: u16 = shared
+    .read()
+    .map(|config| config.get_or("server.port", 8080))
+    .unwrap_or(8080);
+Ok::<(), config_lib::Error>(())
 ```
 
-### Advanced Multi-File Configuration
+### Multi-File Configuration
 
-```rust
-use config_lib::{ConfigBuilder, ConfigMergeStrategy};
+```rust,no_run
+use config_lib::Config;
 
-// Load and merge multiple configuration files
-let config = ConfigBuilder::new()
-    .from_file("default.conf")?     // Base configuration
-    .merge_file("environment.json", ConfigMergeStrategy::Override)?  // Environment overrides
-    .merge_file("local.toml", ConfigMergeStrategy::Additive)?        // Local additions
-    .merge_file("secrets.hcl", ConfigMergeStrategy::SecureOverride)? // Secure values
-    .build()?;
+// Later files override earlier ones, key by key.
+let mut config = Config::from_file("default.conf")?;
+config.merge(&Config::from_file("environment.conf")?)?;
+config.merge(&Config::from_file("local.conf")?)?;
 
-// Access merged configuration
-let database_url = config.get("database.url")?.as_string()?;  // From secrets.hcl
-let app_name = config.get("app.name")?.as_string()?;          // From default.conf
-let debug_mode = config.get("debug")?.as_bool()?;             // From environment.json
+let database_url: String = config.get_or("database.url", String::new());
+let debug_mode = config.get_or("debug", false);
+Ok::<(), config_lib::Error>(())
 ```
 
 ## Documentation & Resources
