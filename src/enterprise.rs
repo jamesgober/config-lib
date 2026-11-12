@@ -216,7 +216,8 @@ impl EnterpriseConfig {
     /// Load configuration from file with caching
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path_str = path.as_ref().to_string_lossy().to_string();
-        let content = std::fs::read_to_string(&path)?;
+        // Regular files of at most 16 MiB, as every load (since v1.4.0)
+        let content = crate::load::read_file(path.as_ref(), crate::load::DEFAULT_MAX_FILE_SIZE)?;
 
         // Detect format from extension
         let format = Self::detect_format(&path_str);
@@ -674,8 +675,7 @@ pub mod direct {
     )]
     #[inline(always)]
     pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Value> {
-        let content = std::fs::read_to_string(path)?;
-        parse_string(&content, None)
+        crate::parsers::parse_file(path)
     }
 
     /// Parse string directly to [`Value`] (no caching).

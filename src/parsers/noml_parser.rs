@@ -14,26 +14,28 @@
 //! `Error::Parse` and the line and column, before anything is resolved.
 //! Native types and `${...}` references to other values in the same
 //! document still work.
+//!
+//! Since v1.4.0 every entry point applies the limits in
+//! [`crate::LoadOptions`]: `${...}` references may not expand
+//! the document past 64 MiB (10,000 references, chains 32 deep), includes
+//! are read only from the directory of the file being loaded (the current
+//! directory for text), and errors never quote the document or an included
+//! file.
 
 #[cfg(feature = "noml")]
-use super::noml_guard::{self, Policy};
+use super::noml_resolve;
 #[cfg(not(feature = "noml"))]
 use crate::error::Error;
 use crate::error::Result;
+#[cfg(feature = "noml")]
+use crate::load::LoadOptions;
 use crate::value::Value;
 use std::collections::BTreeMap;
 
 /// Parse NOML format configuration using the noml library
 #[cfg(feature = "noml")]
 pub fn parse(source: &str) -> Result<Value> {
-    // Parse the document
-    let document = noml::parse_string(source, None)?;
-
-    // Resolve dynamic features (env vars, includes, etc.)
-    let mut resolver = noml::Resolver::new();
-    let resolved = resolver.resolve(&document)?;
-
-    convert_noml_value(resolved)
+    parse_with(source, None, &LoadOptions::default())
 }
 
 /// Parse NOML without reading anything outside `source`.
@@ -50,9 +52,17 @@ pub fn parse(source: &str) -> Result<Value> {
 /// into the configuration.
 #[cfg(feature = "noml")]
 pub fn parse_strict(source: &str) -> Result<Value> {
-    let document = noml::parse_string(source, None)?;
-    noml_guard::check(&document, Policy::StrictNoml)?;
-    let resolved = noml::Resolver::new().resolve(&document)?;
+    parse_with(source, None, &LoadOptions::default().strict(true))
+}
+
+/// Parse NOML text read from `file` (if any) with `options`
+#[cfg(feature = "noml")]
+pub(crate) fn parse_with(
+    source: &str,
+    file: Option<&std::path::Path>,
+    options: &LoadOptions,
+) -> Result<Value> {
+    let resolved = noml_resolve::resolve_source(source, file, options)?;
     convert_noml_value(resolved)
 }
 
@@ -85,7 +95,7 @@ fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
             Ok(Value::Table(converted))
         }
         #[cfg(feature = "chrono")]
-        noml::Value::DateTime(_) => Ok(Value::String("datetime_value".to_string())),
+        noml::Value::DateTime(dt) => Ok(Value::DateTime(dt)),
         // Handle NOML-specific types by converting to basic types.
         //
         // Binary values render as the literal `"<binary data>"` placeholder
@@ -95,8 +105,11 @@ fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
         // `base64` dependency was unused. Removed for v0.9.7.
         noml::Value::Binary(_) => Ok(Value::String("<binary data>".to_string())),
         noml::Value::Size(size) => {
-            // Convert size to integer (bytes)
-            Ok(Value::Integer(size as i64))
+            // Convert size to integer (bytes). Sizes past i64::MAX are
+            // refused rather than wrapped to a negative number.
+            i64::try_from(size)
+                .map(Value::Integer)
+                .map_err(|_| crate::error::Error::general("NOML: a @size value is too large"))
         }
         noml::Value::Duration(duration) => {
             // Convert duration to float (seconds)
@@ -107,16 +120,9 @@ fn convert_noml_value(noml_value: noml::Value) -> Result<Value> {
 
 /// Parse NOML with format preservation for round-trip editing
 pub fn parse_with_preservation(source: &str) -> Result<(Value, noml::Document)> {
-    // Parse to get the AST document for format preservation
-    let document = noml::parse_string(source, None)?;
-
-    // Resolve to get the actual values
-    let mut resolver = noml::Resolver::new();
-    let resolved = resolver.resolve(&document)?;
-
-    // Convert to config-lib Value
+    let document = noml_resolve::parse(source)?;
+    let resolved = noml_resolve::resolve_document(&document, None, &LoadOptions::default())?;
     let value = convert_noml_value(resolved)?;
-
     Ok((value, document))
 }
 

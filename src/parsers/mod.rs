@@ -33,14 +33,18 @@ pub mod noml_parser;
 #[cfg(any(feature = "noml", feature = "toml"))]
 mod noml_guard;
 
-use crate::error::{Error, Result};
+// NOML resolution within the limits of `LoadOptions`
+#[cfg(feature = "noml")]
+mod noml_resolve;
+
+use crate::error::Result;
+use crate::load::LoadOptions;
 use crate::value::Value;
 use std::path::Path;
 
 /// Parse configuration from a string with optional format hint
-/// Uses zero-copy AST parser for enterprise performance
 pub fn parse_string(source: &str, format: Option<&str>) -> Result<Value> {
-    parse_string_with(source, format, false)
+    parse_string_with(source, format, None, &LoadOptions::default())
 }
 
 /// Parse configuration from a string without reading anything outside it.
@@ -48,15 +52,20 @@ pub fn parse_string(source: &str, format: Option<&str>) -> Result<Value> {
 /// The same as [`parse_string`] for every format except NOML, which is
 /// read with `noml_parser::parse_strict`: `include` and function calls
 /// (`env()` included) are refused. TOML never resolves them in either
-/// entry point. With no format hint, a document that uses `include` or
-/// `env(` is detected as NOML and refused.
+/// entry point. Without a format hint the text is never read as NOML.
 pub fn parse_string_strict(source: &str, format: Option<&str>) -> Result<Value> {
-    parse_string_with(source, format, true)
+    parse_string_with(source, format, None, &LoadOptions::default().strict(true))
 }
 
-fn parse_string_with(source: &str, format: Option<&str>, strict: bool) -> Result<Value> {
+/// Parse text read from `file` (if any) with `options`
+pub(crate) fn parse_string_with(
+    source: &str,
+    format: Option<&str>,
+    file: Option<&Path>,
+    options: &LoadOptions,
+) -> Result<Value> {
     #[cfg(not(feature = "noml"))]
-    let _ = strict;
+    let _ = (file, options);
     let detected_format = format.unwrap_or_else(|| detect_format(source));
 
     match detected_format {
@@ -70,65 +79,75 @@ fn parse_string_with(source: &str, format: Option<&str>, strict: bool) -> Result
         #[cfg(feature = "hcl")]
         "hcl" => hcl_parser::parse(source),
         #[cfg(feature = "noml")]
-        "noml" if strict => noml_parser::parse_strict(source),
-        #[cfg(feature = "noml")]
-        "noml" => noml_parser::parse(source),
+        "noml" => noml_parser::parse_with(source, file, options),
         #[cfg(feature = "toml")]
         "toml" => toml_parser::parse(source),
         _ => {
             #[cfg(not(any(feature = "json", feature = "jsonx")))]
             if detected_format == "json" {
-                return Err(Error::feature_not_enabled("json"));
+                return Err(crate::error::Error::feature_not_enabled("json"));
             }
 
             #[cfg(not(feature = "xml"))]
             if detected_format == "xml" {
-                return Err(Error::feature_not_enabled("xml"));
+                return Err(crate::error::Error::feature_not_enabled("xml"));
             }
 
             #[cfg(not(feature = "hcl"))]
             if detected_format == "hcl" {
-                return Err(Error::feature_not_enabled("hcl"));
+                return Err(crate::error::Error::feature_not_enabled("hcl"));
             }
 
             #[cfg(not(feature = "noml"))]
             if detected_format == "noml" {
-                return Err(Error::feature_not_enabled("noml"));
+                return Err(crate::error::Error::feature_not_enabled("noml"));
             }
 
             #[cfg(not(feature = "toml"))]
             if detected_format == "toml" {
-                return Err(Error::feature_not_enabled("toml"));
+                return Err(crate::error::Error::feature_not_enabled("toml"));
             }
 
-            // For now, treat everything else as conf format
+            // Any other name is read as CONF, as it always was
             conf::parse(source)
         }
     }
 }
 
+/// The format of a file: from its extension, or from its text when it has
+/// none
+pub(crate) fn file_format(path: &Path, content: &str) -> &'static str {
+    detect_format_from_path(path).unwrap_or_else(|| detect_format(content))
+}
+
 /// Parse configuration from a file with automatic format detection
+///
+/// Applies the default [`LoadOptions`]: regular files of at most 16 MiB,
+/// NOML includes only from the file's directory.
 pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Value> {
     let path = path.as_ref();
-    let content =
-        std::fs::read_to_string(path).map_err(|e| Error::io(path.display().to_string(), e))?;
-
-    let format = detect_format_from_path(path).or_else(|| Some(detect_format(&content)));
-
-    parse_string(&content, format)
+    let options = LoadOptions::default();
+    let content = crate::load::read_file(path, options.max_file_size)?;
+    parse_string_with(
+        &content,
+        Some(file_format(path, &content)),
+        Some(path),
+        &options,
+    )
 }
 
 /// Async version of parse_file
 #[cfg(feature = "async")]
 pub async fn parse_file_async<P: AsRef<Path>>(path: P) -> Result<Value> {
     let path = path.as_ref();
-    let content = tokio::fs::read_to_string(path)
-        .await
-        .map_err(|e| Error::io(path.display().to_string(), e))?;
-
-    let format = detect_format_from_path(path).or_else(|| Some(detect_format(&content)));
-
-    parse_string(&content, format)
+    let options = LoadOptions::default();
+    let content = crate::load::read_file_async(path, options.max_file_size).await?;
+    parse_string_with(
+        &content,
+        Some(file_format(path, &content)),
+        Some(path),
+        &options,
+    )
 }
 
 /// Detect configuration format from file path
@@ -149,210 +168,89 @@ pub fn detect_format_from_path(path: &Path) -> Option<&'static str> {
 }
 
 /// Detect configuration format from content
+///
+/// Only text with an unambiguous signature is routed away from CONF:
+///
+/// - XML: starts with `<?xml`, or with `<` and has a closing or
+///   self-closing tag;
+/// - JSON: starts with `{`, or with `[` when the first line is not a
+///   `[section]` header;
+/// - INI: a line starts with `;` (CONF has no `;` comments).
+///
+/// Everything else is CONF. TOML, NOML, HCL and Properties are never
+/// detected from text: pass the format, or load a file with the matching
+/// extension. Since v1.4.0; before that, substring guesses could send
+/// ordinary CONF text to another parser (a quoted `\n` meant Properties,
+/// a `T` and a `Z` on one line meant TOML, a comment mentioning `include`
+/// meant NOML).
 pub fn detect_format(content: &str) -> &'static str {
-    let trimmed = content.trim();
+    let trimmed = content.trim_start_matches('\u{feff}').trim();
 
-    // XML detection - starts with < and contains XML tags
-    if trimmed.starts_with('<') && contains_xml_features(content) {
+    if trimmed.starts_with("<?xml")
+        || (trimmed.starts_with('<') && (trimmed.contains("</") || trimmed.contains("/>")))
+    {
         return "xml";
     }
 
-    // JSON detection - starts with { or [
-    if trimmed.starts_with('{') || trimmed.starts_with('[') {
+    if trimmed.starts_with('{') {
         return "json";
     }
-
-    // HCL detection - look for HCL-specific features
-    if contains_hcl_features(content) {
-        return "hcl";
+    if trimmed.starts_with('[') {
+        let first_line = trimmed.lines().next().unwrap_or("").trim();
+        if !is_section_header(first_line) {
+            return "json";
+        }
     }
 
-    // NOML detection - look for NOML-specific features
-    if contains_noml_features(content) {
-        return "noml";
-    }
-
-    // INI detection - look for section headers (before properties since INI can use colons)
-    if contains_ini_features(content) {
+    if content
+        .lines()
+        .any(|line| line.trim_start().starts_with(';'))
+    {
         return "ini";
     }
 
-    // Properties detection - look for properties-specific features
-    if contains_properties_features(content) {
-        return "properties";
-    }
-
-    // TOML detection - look for TOML-specific syntax
-    if contains_toml_features(content) {
-        return "toml";
-    }
-
-    // Default to conf format
     "conf"
 }
 
-/// Check if content contains NOML-specific features
-fn contains_noml_features(content: &str) -> bool {
-    // Look for NOML-specific syntax
-    content.contains("env(")
-        || content.contains("include ")
-        || content.contains("${")
-        || content.contains("@size(")
-        || content.contains("@duration(")
-        || content.contains("@url(")
-        || content.contains("@ip(")
+/// True for a `[name]` line whose name is a plain section name
+fn is_section_header(line: &str) -> bool {
+    let inner = match line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+        Some(inner) => inner.trim(),
+        None => return false,
+    };
+    !inner.is_empty()
+        && inner
+            .chars()
+            .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | ' '))
 }
 
-/// Check if content contains Properties-specific features
-fn contains_properties_features(content: &str) -> bool {
-    content.lines().any(|line| {
-        let trimmed = line.trim();
-        // Properties comments with ! (specific to Java Properties)
-        if trimmed.starts_with('!') {
-            return true;
-        }
-        // Properties escape sequences (more specific than CONF)
-        if trimmed.contains("\\n") || trimmed.contains("\\t") || trimmed.contains("\\u") {
-            return true;
-        }
-        // Properties use : separator more commonly than CONF
-        if trimmed.contains(':') && !trimmed.contains('=') && !trimmed.starts_with('#') {
-            return true;
-        }
-        false
-    })
-}
-
-/// Check if content contains INI-specific features
-fn contains_ini_features(content: &str) -> bool {
-    let mut has_section = false;
-    let mut has_ini_comment = false;
-    let mut has_key_value_in_section = false;
-    let mut in_section = false;
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-
-        // INI section headers [section] but not TOML arrays
-        if trimmed.starts_with('[') && trimmed.ends_with(']') && !trimmed.contains('=') {
-            // Make sure it's not a TOML array of tables
-            let section_content = &trimmed[1..trimmed.len() - 1];
-            if !section_content.contains('[') && !section_content.contains(']') {
-                has_section = true;
-                in_section = true;
-                continue;
-            }
-        }
-
-        // INI comments with ; (TOML uses #)
-        if trimmed.starts_with(';') {
-            has_ini_comment = true;
-        }
-
-        // Key-value pairs in sections
-        if in_section
-            && (trimmed.contains('=') || trimmed.contains(':'))
-            && !trimmed.starts_with('#')
-            && !trimmed.starts_with(';')
-        {
-            has_key_value_in_section = true;
-        }
+/// Parse `text` as a float written in decimal syntax: digits with an
+/// optional sign, a fractional part, and an exponent (`1.5`, `-2e3`).
+///
+/// `str::parse::<f64>` also takes `nan`, `inf` and `infinity`, which turned
+/// a value spelled like that into a float. A whole number with no fraction
+/// or exponent is not a float here either: one too large for `i64` stays
+/// text rather than becoming a rounded float.
+pub(crate) fn decimal_float(text: &str) -> Option<f64> {
+    let digits = text.strip_prefix(['+', '-']).unwrap_or(text);
+    let (mantissa, exponent) = match digits.find(['e', 'E']) {
+        Some(i) => (&digits[..i], Some(&digits[i + 1..])),
+        None => (digits, None),
+    };
+    let (whole, fraction) = match mantissa.find('.') {
+        Some(i) => (&mantissa[..i], Some(&mantissa[i + 1..])),
+        None => (mantissa, None),
+    };
+    let all_digits = |s: &str| s.bytes().all(|b| b.is_ascii_digit());
+    let mantissa_ok = all_digits(whole)
+        && fraction.map_or(true, all_digits)
+        && !(whole.is_empty() && fraction.map_or(true, str::is_empty));
+    let exponent_ok = exponent.map_or(true, |e| {
+        let e = e.strip_prefix(['+', '-']).unwrap_or(e);
+        !e.is_empty() && all_digits(e)
+    });
+    if !mantissa_ok || !exponent_ok || (fraction.is_none() && exponent.is_none()) {
+        return None;
     }
-
-    // INI is likely if we have sections with key-value pairs OR semicolon comments
-    has_section && has_key_value_in_section || has_ini_comment
-}
-
-/// Check if content contains TOML-specific features
-fn contains_toml_features(content: &str) -> bool {
-    // Look for TOML-specific syntax patterns
-    content.lines().any(|line| {
-        let trimmed = line.trim();
-        // TOML section headers
-        if trimmed.starts_with('[') && trimmed.ends_with(']') && !trimmed.contains('=') {
-            return true;
-        }
-        // TOML datetime format
-        if trimmed.contains("T") && trimmed.contains("Z") {
-            return true;
-        }
-        false
-    })
-}
-
-/// Check if content contains XML-specific features
-fn contains_xml_features(content: &str) -> bool {
-    let trimmed = content.trim();
-
-    // Look for XML declaration
-    if trimmed.starts_with("<?xml") {
-        return true;
-    }
-
-    // Look for closing XML tags
-    if trimmed.contains("</") {
-        return true;
-    }
-
-    // Look for XML namespaces
-    if trimmed.contains("xmlns") {
-        return true;
-    }
-
-    // Look for self-closing tags
-    if trimmed.contains("/>") {
-        return true;
-    }
-
-    // Check for balanced XML structure
-    let open_tags = trimmed.matches('<').count();
-    let close_tags = trimmed.matches('>').count();
-
-    // Basic XML structure validation
-    open_tags > 0 && close_tags > 0 && open_tags <= close_tags
-}
-
-/// Check if content contains HCL-specific features
-fn contains_hcl_features(content: &str) -> bool {
-    // Look for HCL-specific syntax patterns
-    for line in content.lines() {
-        let trimmed = line.trim();
-
-        // HCL block syntax: resource "type" "name" {
-        if trimmed.contains(" \"") && trimmed.contains("\" {") {
-            return true;
-        }
-
-        // HCL variable/output blocks
-        if trimmed.starts_with("variable ") || trimmed.starts_with("output ") {
-            return true;
-        }
-
-        // HCL resource/data blocks
-        if trimmed.starts_with("resource ") || trimmed.starts_with("data ") {
-            return true;
-        }
-
-        // HCL provider blocks
-        if trimmed.starts_with("provider ") {
-            return true;
-        }
-
-        // HCL terraform blocks
-        if trimmed.starts_with("terraform ") {
-            return true;
-        }
-
-        // HCL module blocks
-        if trimmed.starts_with("module ") {
-            return true;
-        }
-
-        // HCL functions and interpolation
-        if trimmed.contains("${") && trimmed.contains("}") {
-            return true;
-        }
-    }
-
-    false
+    text.parse::<f64>().ok().filter(|f| f.is_finite())
 }

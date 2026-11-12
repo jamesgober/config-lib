@@ -94,7 +94,7 @@ impl EnvOverrideSystem {
                     };
 
                     // Check for environment override
-                    if let Some(env_value) = self.get_env_override(&nested_path)? {
+                    if let Some(env_value) = self.get_env_override(&nested_path, val)? {
                         *val = env_value;
                     } else {
                         // Recurse into nested structures
@@ -114,7 +114,10 @@ impl EnvOverrideSystem {
     }
 
     /// Get environment variable override for a configuration key
-    fn get_env_override(&self, key: &str) -> Result<Option<Value>> {
+    ///
+    /// The variable's text is read as the type of the value it replaces
+    /// (see [`EnvOverrideSystem::typed_value`]).
+    fn get_env_override(&self, key: &str, current: &Value) -> Result<Option<Value>> {
         // Try different override patterns
         let env_keys = vec![
             self.generate_env_key(key),
@@ -124,14 +127,14 @@ impl EnvOverrideSystem {
 
         for env_key in env_keys {
             if let Some(env_value) = self.get_cached_env(&env_key)? {
-                return Ok(Some(self.parse_env_value(&env_value)));
+                return Ok(Some(self.typed_value(&env_value, current)));
             }
         }
 
         // Check custom mappings
         if let Some(custom_key) = self.config.custom_mappings.get(key) {
             if let Some(env_value) = self.get_cached_env(custom_key)? {
-                return Ok(Some(self.parse_env_value(&env_value)));
+                return Ok(Some(self.typed_value(&env_value, current)));
             }
         }
 
@@ -195,8 +198,61 @@ impl EnvOverrideSystem {
         Ok(env_value)
     }
 
+    /// Read an override as the type of the value it replaces.
+    ///
+    /// Since v1.4.0 a string stays a string (`APP_DB_PASSWORD=ab,cd` is the
+    /// text `ab,cd`, not a list), an integer, float or boolean is parsed as
+    /// one, and a list is split at commas only when the file holds a list.
+    /// Text that does not read as the old type, and an override of a null,
+    /// a table or a date, falls back to [`EnvOverrideSystem::parse_env_value`].
+    fn typed_value(&self, raw: &str, current: &Value) -> Value {
+        let trimmed = raw.trim();
+        match current {
+            Value::String(_) => return Value::string(raw),
+            Value::Integer(_) => {
+                if let Ok(i) = trimmed.parse::<i64>() {
+                    return Value::integer(i);
+                }
+            }
+            Value::Float(_) => {
+                if let Some(f) = crate::parsers::decimal_float(trimmed) {
+                    return Value::float(f);
+                }
+                if let Ok(i) = trimmed.parse::<i64>() {
+                    return Value::float(i as f64);
+                }
+            }
+            Value::Bool(_) => {
+                if let Ok(b) = Value::string(trimmed).as_bool() {
+                    return Value::bool(b);
+                }
+            }
+            Value::Array(_) if !trimmed.starts_with('[') => {
+                return Value::array(
+                    raw.split(',')
+                        .map(|s| self.parse_scalar_value(s.trim()))
+                        .collect(),
+                );
+            }
+            _ => {}
+        }
+        self.parse_env_value(raw)
+    }
+
     /// Parse environment variable value into appropriate type
+    ///
+    /// JSON (when a JSON backend is enabled) is tried first, then a
+    /// comma-separated list, then a scalar.
     fn parse_env_value(&self, value: &str) -> Value {
+        // Handle objects and arrays (JSON), when a JSON backend is enabled.
+        // A value that does not parse as JSON falls through.
+        #[cfg(any(feature = "json", feature = "jsonx"))]
+        if value.trim_start().starts_with('{') || value.trim_start().starts_with('[') {
+            if let Ok(json_value) = crate::parsers::json_parser::parse(value) {
+                return json_value;
+            }
+        }
+
         // Handle arrays (comma-separated)
         if value.contains(',') {
             let items: Vec<Value> = value
@@ -204,15 +260,6 @@ impl EnvOverrideSystem {
                 .map(|s| self.parse_scalar_value(s.trim()))
                 .collect();
             return Value::array(items);
-        }
-
-        // Handle objects (JSON-like), when a JSON backend is enabled. A value
-        // that does not parse as JSON falls through to a scalar.
-        #[cfg(any(feature = "json", feature = "jsonx"))]
-        if value.trim_start().starts_with('{') || value.trim_start().starts_with('[') {
-            if let Ok(json_value) = crate::parsers::json_parser::parse(value) {
-                return json_value;
-            }
         }
 
         // Handle scalar values
@@ -223,8 +270,10 @@ impl EnvOverrideSystem {
     fn parse_scalar_value(&self, value: &str) -> Value {
         // Try boolean
         match value.to_lowercase().as_str() {
-            "true" | "yes" | "on" | "1" => return Value::bool(true),
-            "false" | "no" | "off" | "0" => return Value::bool(false),
+            // `1` and `0` stay integers (since v1.4.0); `as_bool` still
+            // reads them as true and false
+            "true" | "yes" | "on" => return Value::bool(true),
+            "false" | "no" | "off" => return Value::bool(false),
             _ => {}
         }
 
@@ -233,8 +282,8 @@ impl EnvOverrideSystem {
             return Value::integer(int_val);
         }
 
-        // Try float
-        if let Ok(float_val) = value.parse::<f64>() {
+        // Try float (decimal syntax only, so `nan` and `inf` stay text)
+        if let Some(float_val) = crate::parsers::decimal_float(value) {
             return Value::float(float_val);
         }
 
@@ -340,8 +389,7 @@ mod tests {
     fn test_json_values() {
         let system = EnvOverrideSystem::with_defaults();
 
-        // Values with a comma are split as a list before JSON is tried, so
-        // only comma-free documents reach the JSON backend.
+        // JSON is tried before a comma-separated list
         let mut inner = std::collections::BTreeMap::new();
         inner.insert("on".to_string(), Value::bool(true));
         let mut outer = std::collections::BTreeMap::new();

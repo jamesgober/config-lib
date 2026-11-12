@@ -4,6 +4,7 @@
 //! loading, modifying, validating, and saving configurations with format preservation.
 
 use crate::error::{Error, Result};
+use crate::load::{self, LoadOptions};
 use crate::parsers;
 use crate::value::Value;
 use dashmap::DashMap;
@@ -119,7 +120,7 @@ impl Config {
             options: ConfigOptions::default(),
             cache_hits: AtomicU64::new(0),
             cache_misses: AtomicU64::new(0),
-            cache: DashMap::new(),
+            cache: new_cache(),
             defaults: Arc::new(RwLock::new(BTreeMap::new())),
             #[cfg(feature = "noml")]
             noml_document: None,
@@ -129,9 +130,28 @@ impl Config {
     }
 
     /// Load configuration from a string
+    ///
+    /// Applies the default [`LoadOptions`]. With no format the text is
+    /// read as CONF unless it is clearly XML, JSON or INI (see
+    /// [`parsers::detect_format`]); pass the format when you know it.
     pub fn from_string(source: &str, format: Option<&str>) -> Result<Self> {
+        Self::from_string_with(source, format, &LoadOptions::default())
+    }
+
+    /// Load configuration from a string with the given [`LoadOptions`]
+    ///
+    /// NOML includes in the text resolve against the current directory and
+    /// may only read files inside it (or the directories the options
+    /// allow).
+    ///
+    /// Since v1.4.0.
+    pub fn from_string_with(
+        source: &str,
+        format: Option<&str>,
+        options: &LoadOptions,
+    ) -> Result<Self> {
         let detected_format = format.unwrap_or_else(|| parsers::detect_format(source));
-        let values = parsers::parse_string(source, Some(detected_format))?;
+        let values = parsers::parse_string_with(source, Some(detected_format), None, options)?;
         Ok(Self::from_parsed(source, detected_format, values))
     }
 
@@ -151,8 +171,8 @@ impl Config {
     ///
     /// TOML, JSON, CONF and the other formats read only the text in both
     /// entry points (TOML refuses NOML's `include` and `env()` everywhere
-    /// since v1.3.0). With no format hint, a document that uses `include`
-    /// or `env(` is detected as NOML and refused here.
+    /// since v1.3.0). With no format hint the text is never read as NOML
+    /// (since v1.4.0).
     ///
     /// Since v1.3.0.
     ///
@@ -166,9 +186,7 @@ impl Config {
     /// # Ok::<(), config_lib::Error>(())
     /// ```
     pub fn from_string_strict(source: &str, format: Option<&str>) -> Result<Self> {
-        let detected_format = format.unwrap_or_else(|| parsers::detect_format(source));
-        let values = parsers::parse_string_strict(source, Some(detected_format))?;
-        Ok(Self::from_parsed(source, detected_format, values))
+        Self::from_string_with(source, format, &LoadOptions::strict_defaults())
     }
 
     /// Build a `Config` from values already parsed out of `source`
@@ -185,7 +203,7 @@ impl Config {
             options: ConfigOptions::default(),
             cache_hits: AtomicU64::new(0),
             cache_misses: AtomicU64::new(0),
-            cache: DashMap::new(),
+            cache: new_cache(),
             defaults: Arc::new(RwLock::new(BTreeMap::new())),
             noml_document: None,
             #[cfg(feature = "validation")]
@@ -201,7 +219,7 @@ impl Config {
             options: ConfigOptions::default(),
             cache_hits: AtomicU64::new(0),
             cache_misses: AtomicU64::new(0),
-            cache: DashMap::new(),
+            cache: new_cache(),
             defaults: Arc::new(RwLock::new(BTreeMap::new())),
             #[cfg(feature = "validation")]
             validation_rules: None,
@@ -220,17 +238,41 @@ impl Config {
     }
 
     /// Load configuration from a file
+    ///
+    /// The format comes from the file extension (an unknown extension is
+    /// CONF; a file with none is detected from its text). Applies the
+    /// default [`LoadOptions`]: the file must be a regular file of at most
+    /// 16 MiB, and NOML includes may only read files inside the file's own
+    /// directory.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Self::from_file_with(path, &LoadOptions::default())
+    }
+
+    /// Load configuration from a file with strict NOML
+    ///
+    /// The file counterpart of [`Config::from_string_strict`]: a NOML file
+    /// may not use `include` or call `env()`. Other formats load as with
+    /// [`Config::from_file`].
+    ///
+    /// Since v1.4.0.
+    pub fn from_file_strict<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Self::from_file_with(path, &LoadOptions::strict_defaults())
+    }
+
+    /// Load configuration from a file with the given [`LoadOptions`]
+    ///
+    /// Since v1.4.0.
+    pub fn from_file_with<P: AsRef<Path>>(path: P, options: &LoadOptions) -> Result<Self> {
         let path = path.as_ref();
-        let content =
-            std::fs::read_to_string(path).map_err(|e| Error::io(path.display().to_string(), e))?;
+        let content = load::read_file(path, options.max_file_size)?;
+        Self::from_file_content(path, &content, options)
+    }
 
-        let format = parsers::detect_format_from_path(path)
-            .unwrap_or_else(|| parsers::detect_format(&content));
-
-        let mut config = Self::from_string(&content, Some(format))?;
+    fn from_file_content(path: &Path, content: &str, options: &LoadOptions) -> Result<Self> {
+        let format = parsers::file_format(path, content);
+        let values = parsers::parse_string_with(content, Some(format), Some(path), options)?;
+        let mut config = Self::from_parsed(content, format, values);
         config.file_path = Some(path.to_path_buf());
-
         Ok(config)
     }
 
@@ -238,17 +280,9 @@ impl Config {
     #[cfg(feature = "async")]
     pub async fn from_file_async<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
-        let content = tokio::fs::read_to_string(path)
-            .await
-            .map_err(|e| Error::io(path.display().to_string(), e))?;
-
-        let format = parsers::detect_format_from_path(path)
-            .unwrap_or_else(|| parsers::detect_format(&content));
-
-        let mut config = Self::from_string(&content, Some(format))?;
-        config.file_path = Some(path.to_path_buf());
-
-        Ok(config)
+        let options = LoadOptions::default();
+        let content = load::read_file_async(path, options.max_file_size).await?;
+        Self::from_file_content(path, &content, &options)
     }
 
     /// Get a value by path
@@ -257,8 +291,16 @@ impl Config {
     }
 
     /// Get a mutable reference to a value by path
+    ///
+    /// Counts as a change: refused on a read-only configuration (since
+    /// v1.4.0), and clears the resolved-path cache so [`Config::get_arc`]
+    /// does not return the old value.
     pub fn get_mut(&mut self, path: &str) -> Result<&mut Value> {
-        self.values.get_mut_nested(path)
+        self.ensure_writable()?;
+        let value = self.values.get_mut_nested(path)?;
+        self.modified = true;
+        self.cache.clear();
+        Ok(value)
     }
 
     /// Set a value by path
@@ -344,10 +386,16 @@ impl Config {
     }
 
     /// Save the configuration to a specific file
+    ///
+    /// Since v1.4.0 the file is replaced atomically: the text is written to
+    /// a temporary file in the same directory, flushed to disk, and renamed
+    /// over the target, so a reader (a hot-reload watcher, for one) never
+    /// sees a half-written file. The new file keeps the old one's
+    /// permissions. When `path` is a symbolic link, the file it points to is
+    /// replaced and the link is kept.
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let serialized = self.serialize()?;
-        std::fs::write(path, serialized).map_err(|e| Error::io("save".to_string(), e))?;
-        Ok(())
+        atomic_write(path.as_ref(), serialized.as_bytes())
     }
 
     /// Async version of save
@@ -369,10 +417,10 @@ impl Config {
     #[cfg(feature = "async")]
     pub async fn save_to_file_async<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let serialized = self.serialize()?;
-        tokio::fs::write(path, serialized)
+        let path = path.as_ref().to_path_buf();
+        tokio::task::spawn_blocking(move || atomic_write(&path, serialized.as_bytes()))
             .await
-            .map_err(|e| Error::io("save".to_string(), e))?;
-        Ok(())
+            .map_err(|_| Error::internal("save task failed"))?
     }
 
     /// Serialize the configuration to string format
@@ -419,74 +467,20 @@ impl Config {
     }
 
     /// Serialize as CONF format
+    ///
+    /// The text reads back to the same values (since v1.4.0): strings are
+    /// always quoted and escaped, arrays are written as `[a, b]`, and a
+    /// nested table becomes a `[parent.child]` section. Comments and the
+    /// original layout are not kept, and an empty table is not written.
+    /// Values CONF cannot hold (NaN and infinite floats, tables inside
+    /// arrays, keys with characters outside letters, digits, `_`, `-` and
+    /// `.`) are an error rather than text that reads back differently.
     fn serialize_as_conf(&self) -> Result<String> {
         let mut output = String::new();
         if let Value::Table(table) = &self.values {
-            self.write_conf_table(&mut output, table, "")?;
+            conf_writer::write_table(&mut output, table, &mut Vec::new())?;
         }
         Ok(output)
-    }
-
-    /// Helper to write CONF format table
-    fn write_conf_table(
-        &self,
-        output: &mut String,
-        table: &BTreeMap<String, Value>,
-        section_prefix: &str,
-    ) -> Result<()> {
-        // First pass: write simple key-value pairs
-        for (key, value) in table {
-            if !value.is_table() {
-                let formatted_value = self.format_conf_value(value)?;
-                output.push_str(&format!("{key} = {formatted_value}\n"));
-            }
-        }
-
-        // Second pass: write sections
-        for (key, value) in table {
-            if let Value::Table(nested_table) = value {
-                let section_name = if section_prefix.is_empty() {
-                    key.clone()
-                } else {
-                    format!("{section_prefix}.{key}")
-                };
-
-                output.push_str(&format!("\n[{section_name}]\n"));
-                self.write_conf_table(output, nested_table, &section_name)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Format a value for CONF output
-    #[allow(clippy::only_used_in_recursion)]
-    fn format_conf_value(&self, value: &Value) -> Result<String> {
-        match value {
-            Value::Null => Ok("null".to_string()),
-            Value::Bool(b) => Ok(b.to_string()),
-            Value::Integer(i) => Ok(i.to_string()),
-            Value::Float(f) => Ok(f.to_string()),
-            Value::String(s) => {
-                if s.contains(' ') || s.contains('\t') || s.contains('\n') {
-                    Ok(format!("\"{}\"", s.replace('"', "\\\"")))
-                } else {
-                    Ok(s.clone())
-                }
-            }
-            Value::Array(arr) => {
-                let items: Result<Vec<String>> =
-                    arr.iter().map(|v| self.format_conf_value(v)).collect();
-                Ok(items?.join(" "))
-            }
-            Value::Table(_) => Err(Error::type_error(
-                "Cannot serialize nested table as value",
-                "primitive",
-                "table",
-            )),
-            #[cfg(feature = "chrono")]
-            Value::DateTime(dt) => Ok(dt.to_rfc3339()),
-        }
     }
 
     /// Serialize the values as TOML text.
@@ -533,36 +527,35 @@ impl Config {
 
     /// Helper to merge values recursively
     fn merge_value(&mut self, other: &Value) -> Result<()> {
-        match (&mut self.values, other) {
-            (Value::Table(self_table), Value::Table(other_table)) => {
-                for (key, other_value) in other_table {
-                    match self_table.get_mut(key) {
-                        Some(self_value) => {
-                            if let (Value::Table(_), Value::Table(_)) = (&*self_value, other_value)
-                            {
-                                // Create a temporary config for recursive merging
-                                let mut temp_config = Config::new();
-                                temp_config.values = self_value.clone();
-                                temp_config.merge_value(other_value)?;
-                                *self_value = temp_config.values;
-                            } else {
-                                // Replace value
-                                *self_value = other_value.clone();
-                            }
-                        }
-                        None => {
-                            // Insert new value
-                            self_table.insert(key.clone(), other_value.clone());
-                        }
-                    }
-                }
-            }
-            _ => {
-                // Replace entire value
-                self.values = other.clone();
-            }
-        }
+        merge_in_place(&mut self.values, other);
         Ok(())
+    }
+
+    /// Take over the runtime state of `old`: options (read-only mode and
+    /// the cache knobs), the shared defaults table, and the validation
+    /// rules. Used by hot reload so that a reload changes only the values.
+    pub(crate) fn inherit_runtime_state(&mut self, old: &mut Config) {
+        self.options = old.options.clone();
+        self.defaults = Arc::clone(&old.defaults);
+        #[cfg(feature = "validation")]
+        {
+            self.validation_rules = old.validation_rules.take();
+        }
+    }
+
+    /// Give the validation rules back to `old` (a reload was refused)
+    #[cfg(feature = "validation")]
+    pub(crate) fn return_validation_rules(&mut self, old: &mut Config) {
+        old.validation_rules = self.validation_rules.take();
+    }
+
+    /// True when the configuration holds no values at all
+    pub(crate) fn is_empty(&self) -> bool {
+        match &self.values {
+            Value::Table(table) => table.is_empty(),
+            Value::Null => true,
+            _ => false,
+        }
     }
 
     // =====================================================================
@@ -631,21 +624,36 @@ impl Config {
     }
 
     /// Validate the current configuration against all registered rules
+    ///
+    /// Every value is checked, at every level, with its full dotted path
+    /// (`server.port`) as the path. Before v1.4.0 only top-level values
+    /// were checked, so keys inside sections were never validated.
     #[cfg(feature = "validation")]
     pub fn validate(&mut self) -> Result<Vec<ValidationError>> {
+        fn walk(
+            rules: &mut ValidationRuleSet,
+            table: &BTreeMap<String, Value>,
+            prefix: &str,
+            errors: &mut Vec<ValidationError>,
+        ) {
+            for (key, value) in table {
+                let path = if prefix.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{prefix}.{key}")
+                };
+                errors.extend(rules.validate(&path, value));
+                if let Value::Table(inner) = value {
+                    walk(rules, inner, &path, errors);
+                }
+            }
+        }
+
         match &mut self.validation_rules {
             Some(rules) => {
                 if let Value::Table(table) = &self.values {
                     let mut errors = Vec::new();
-
-                    // Validate each key-value pair
-                    for (key, value) in table {
-                        errors.extend(rules.validate(key, value));
-                    }
-
-                    // Also validate for required keys (if any RequiredKeyValidator exists)
-                    // This is handled by individual rule implementations
-
+                    walk(rules, table, "", &mut errors);
                     Ok(errors)
                 } else {
                     Err(Error::validation(
@@ -1063,6 +1071,7 @@ impl<'a> ConfigValue<'a> {
 /// Builder pattern for Config creation
 pub struct ConfigBuilder {
     format: Option<String>,
+    load: LoadOptions,
     #[cfg(feature = "validation")]
     validation_rules: Option<ValidationRuleSet>,
 }
@@ -1072,9 +1081,17 @@ impl ConfigBuilder {
     pub fn new() -> Self {
         Self {
             format: None,
+            load: LoadOptions::default(),
             #[cfg(feature = "validation")]
             validation_rules: None,
         }
+    }
+
+    /// Set the [`LoadOptions`] the build reads with (limits, include
+    /// policy, strict NOML). Since v1.4.0.
+    pub fn load_options(mut self, options: LoadOptions) -> Self {
+        self.load = options;
+        self
     }
 
     /// Set the configuration format
@@ -1093,9 +1110,9 @@ impl ConfigBuilder {
     /// Build Config from string
     pub fn from_string(self, source: &str) -> Result<Config> {
         #[cfg(feature = "validation")]
-        let mut config = Config::from_string(source, self.format.as_deref())?;
+        let mut config = Config::from_string_with(source, self.format.as_deref(), &self.load)?;
         #[cfg(not(feature = "validation"))]
-        let config = Config::from_string(source, self.format.as_deref())?;
+        let config = Config::from_string_with(source, self.format.as_deref(), &self.load)?;
 
         #[cfg(feature = "validation")]
         if let Some(rules) = self.validation_rules {
@@ -1108,9 +1125,9 @@ impl ConfigBuilder {
     /// Build Config from file
     pub fn from_file<P: AsRef<Path>>(self, path: P) -> Result<Config> {
         #[cfg(feature = "validation")]
-        let mut config = Config::from_file(path)?;
+        let mut config = Config::from_file_with(path, &self.load)?;
         #[cfg(not(feature = "validation"))]
-        let config = Config::from_file(path)?;
+        let config = Config::from_file_with(path, &self.load)?;
 
         #[cfg(feature = "validation")]
         if let Some(rules) = self.validation_rules {
@@ -1138,13 +1155,202 @@ impl From<Value> for Config {
             options: ConfigOptions::default(),
             cache_hits: AtomicU64::new(0),
             cache_misses: AtomicU64::new(0),
-            cache: DashMap::new(),
+            cache: new_cache(),
             defaults: Arc::new(RwLock::new(BTreeMap::new())),
             #[cfg(feature = "noml")]
             noml_document: None,
             #[cfg(feature = "validation")]
             validation_rules: None,
         }
+    }
+}
+
+/// Merge `other` into `target`: tables merge key by key at every level,
+/// anything else replaces. Works in place, with no temporary `Config`.
+fn merge_in_place(target: &mut Value, other: &Value) {
+    match (target, other) {
+        (Value::Table(target_table), Value::Table(other_table)) => {
+            for (key, other_value) in other_table {
+                match target_table.get_mut(key) {
+                    Some(existing) if existing.is_table() && other_value.is_table() => {
+                        merge_in_place(existing, other_value);
+                    }
+                    Some(existing) => *existing = other_value.clone(),
+                    None => {
+                        target_table.insert(key.clone(), other_value.clone());
+                    }
+                }
+            }
+        }
+        (target, other) => *target = other.clone(),
+    }
+}
+
+/// The resolved-path cache with a fixed, small shard count.
+///
+/// `DashMap::new` sizes its shard array from the CPU count (about 16 KiB on
+/// a 32-thread host) before holding a single key; eight shards keep an
+/// empty `Config` small at configuration-scale load.
+fn new_cache() -> DashMap<Box<str>, Arc<Value>> {
+    DashMap::with_shard_amount(8)
+}
+
+/// Replace `path` with `bytes` so that no reader sees a partial file.
+///
+/// Writes a temporary file next to the target, flushes it to disk, copies
+/// the old file's permissions, and renames it over the target. A symbolic
+/// link is followed, so the file it points to is replaced.
+fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::io::Write;
+    use std::sync::atomic::AtomicUsize;
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    let io_err = |e| Error::io(path.display().to_string(), e);
+    let target = match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => std::fs::canonicalize(path).map_err(io_err)?,
+        _ => path.to_path_buf(),
+    };
+    let dir = match target.parent() {
+        Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
+        _ => PathBuf::from("."),
+    };
+    let name = target
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "config".to_string());
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let tmp = dir.join(format!(".{name}.{}.{n}.tmp", std::process::id()));
+
+    let result = (|| -> std::io::Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)?;
+        if let Ok(meta) = std::fs::metadata(&target) {
+            file.set_permissions(meta.permissions())?;
+        }
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&tmp, &target)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result.map_err(io_err)
+}
+
+/// CONF text output that reads back to the same values
+mod conf_writer {
+    use crate::error::{Error, Result};
+    use crate::value::Value;
+    use std::collections::BTreeMap;
+    use std::fmt::Write;
+
+    fn key_ok(key: &str) -> bool {
+        !key.is_empty()
+            && key
+                .chars()
+                .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.'))
+    }
+
+    fn bad_key() -> Error {
+        Error::serialize("a key holds characters CONF cannot write")
+    }
+
+    /// Plain keys first, then one `[a.b]` section per nested table
+    pub(super) fn write_table(
+        out: &mut String,
+        table: &BTreeMap<String, Value>,
+        path: &mut Vec<String>,
+    ) -> Result<()> {
+        let has_plain = table.values().any(|v| !v.is_table());
+        if !path.is_empty() && (has_plain || table.is_empty()) {
+            if !out.is_empty() {
+                out.push('\n');
+            }
+            out.push('[');
+            out.push_str(&path.join("."));
+            out.push_str("]\n");
+        }
+        for (key, value) in table {
+            if value.is_table() {
+                continue;
+            }
+            if !key_ok(key) {
+                return Err(bad_key());
+            }
+            out.push_str(key);
+            out.push_str(" = ");
+            write_value(out, value)?;
+            out.push('\n');
+        }
+        for (key, value) in table {
+            if let Value::Table(inner) = value {
+                // A section name is split at dots when read back
+                if !key_ok(key) || key.contains('.') {
+                    return Err(bad_key());
+                }
+                path.push(key.clone());
+                write_table(out, inner, path)?;
+                path.pop();
+            }
+        }
+        Ok(())
+    }
+
+    fn write_value(out: &mut String, value: &Value) -> Result<()> {
+        match value {
+            Value::Null => out.push_str("null"),
+            Value::Bool(b) => {
+                let _ = write!(out, "{b}");
+            }
+            Value::Integer(i) => {
+                let _ = write!(out, "{i}");
+            }
+            Value::Float(f) if f.is_finite() => {
+                // Debug keeps a '.' or an exponent, so it reads back as a float
+                let _ = write!(out, "{f:?}");
+            }
+            Value::Float(_) => {
+                return Err(Error::serialize("CONF cannot hold NaN or infinity"));
+            }
+            Value::String(s) => write_string(out, s),
+            Value::Array(items) => {
+                out.push('[');
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    if item.is_table() {
+                        return Err(Error::serialize("CONF cannot hold a table in an array"));
+                    }
+                    write_value(out, item)?;
+                }
+                out.push(']');
+            }
+            Value::Table(_) => {
+                return Err(Error::serialize("CONF cannot hold a table as a value"));
+            }
+            #[cfg(feature = "chrono")]
+            Value::DateTime(dt) => write_string(out, &dt.to_rfc3339()),
+        }
+        Ok(())
+    }
+
+    fn write_string(out: &mut String, s: &str) {
+        out.push('"');
+        for c in s.chars() {
+            match c {
+                '"' => out.push_str("\\\""),
+                '\\' => out.push_str("\\\\"),
+                '\n' => out.push_str("\\n"),
+                '\t' => out.push_str("\\t"),
+                '\r' => out.push_str("\\r"),
+                c => out.push(c),
+            }
+        }
+        out.push('"');
     }
 }
 

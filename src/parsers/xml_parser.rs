@@ -59,7 +59,45 @@ impl<'a> XmlParser<'a> {
     /// elements with the same name are collected into an array in document
     /// order. Entity and character references (`&amp;`, `&#x41;`) and CDATA
     /// sections are resolved into the text.
+    ///
+    /// Errors are [`Error::Parse`] with the line and column (since v1.4.0;
+    /// before, every XML error was an `Error::Io` with no position). The
+    /// message never quotes the input.
     pub fn parse(&mut self) -> Result<Value> {
+        self.parse_events().map_err(|e| match e {
+            Error::Io { path, source } if path == XML_ERROR => {
+                let (line, column) = self.position();
+                Error::parse(source.to_string(), line, column)
+            }
+            other => other,
+        })
+    }
+
+    /// Line and column (from 1) of the reader's position, or of its last
+    /// syntax error
+    fn position(&self) -> (usize, usize) {
+        let at = match self.reader.error_position() {
+            0 => self.reader.buffer_position(),
+            p => p,
+        };
+        let bytes: &[u8] = self.reader.get_ref();
+        let end = usize::try_from(at).unwrap_or(usize::MAX).min(bytes.len());
+        let before = &bytes[..end];
+        let line = before.split(|&b| b == b'\n').count();
+        let line_start = before
+            .iter()
+            .rposition(|&b| b == b'\n')
+            .map_or(0, |i| i + 1);
+        // Count characters, not bytes: UTF-8 continuation bytes are skipped
+        let column = before[line_start..]
+            .iter()
+            .filter(|&&b| b & 0xc0 != 0x80)
+            .count()
+            + 1;
+        (line, column)
+    }
+
+    fn parse_events(&mut self) -> Result<Value> {
         let mut stack: Vec<OpenElement> = Vec::new();
         let mut root = BTreeMap::new();
         let mut buf = Vec::new();
@@ -68,9 +106,9 @@ impl<'a> XmlParser<'a> {
             match self.reader.read_event_into(&mut buf) {
                 Ok(Event::Start(e)) => {
                     if stack.len() >= MAX_DEPTH {
-                        return Err(xml_error(format!(
-                            "elements are nested deeper than {MAX_DEPTH} levels"
-                        )));
+                        return Err(xml_problem(
+                            "XML elements are nested deeper than 128 levels",
+                        ));
                     }
                     let (name, children) = Self::element(&e)?;
                     stack.push(OpenElement {
@@ -124,22 +162,15 @@ impl<'a> XmlParser<'a> {
                             let name = e.decode().map_err(xml_error)?;
                             match resolve_predefined_entity(&name) {
                                 Some(text) => element.text.push_str(text),
-                                None => {
-                                    return Err(xml_error(format!(
-                                        "unknown entity reference `&{name};`"
-                                    )))
-                                }
+                                None => return Err(xml_problem("XML unknown entity reference")),
                             }
                         }
                     }
                 }
 
                 Ok(Event::Eof) => {
-                    if let Some(element) = stack.last() {
-                        return Err(xml_error(format!(
-                            "element `<{}>` is not closed",
-                            element.name
-                        )));
+                    if !stack.is_empty() {
+                        return Err(xml_problem("XML element is not closed"));
                     }
                     break;
                 }
@@ -214,13 +245,25 @@ fn insert_child(parent: &mut BTreeMap<String, Value>, name: String, value: Value
     }
 }
 
-/// Wrap an XML problem in the crate's error type
+/// Marks an error raised while reading XML; [`XmlParser::parse`] turns it
+/// into [`Error::Parse`] with a position
 #[cfg(feature = "xml")]
-fn xml_error(err: impl std::fmt::Display) -> Error {
+const XML_ERROR: &str = "XML parsing error";
+
+/// A problem found by this parser, with fixed text
+#[cfg(feature = "xml")]
+fn xml_problem(message: &'static str) -> Error {
     Error::io(
-        "XML parsing error".to_string(),
-        std::io::Error::new(std::io::ErrorKind::InvalidData, format!("XML error: {err}")),
+        XML_ERROR,
+        std::io::Error::new(std::io::ErrorKind::InvalidData, message),
     )
+}
+
+/// A quick-xml error. Its text can hold a name or text from the input, so
+/// only the fact of a syntax error is kept.
+#[cfg(feature = "xml")]
+fn xml_error(_err: impl std::fmt::Display) -> Error {
+    xml_problem("XML syntax error")
 }
 
 #[cfg(feature = "xml")]

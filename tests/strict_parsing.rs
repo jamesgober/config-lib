@@ -418,12 +418,16 @@ mod noml {
 
     #[test]
     fn default_noml_still_resolves_include_and_env() {
-        let (_dir, path) = included_file();
+        let (dir, path) = included_file();
         std::env::set_var("CONFIG_LIB_NOML_VAR", "from-env");
         let source = format!("shared = include \"{path}\"\nv = env(\"CONFIG_LIB_NOML_VAR\")\n");
-        let config = Config::from_string(&source, Some("noml")).unwrap();
+        // Since v1.4.0 text may include only files inside the current
+        // directory unless another directory is allowed
+        let options = config_lib::LoadOptions::new().allow_include_dir(dir.path());
+        let config = Config::from_string_with(&source, Some("noml"), &options).unwrap();
         assert_eq!(config.get("shared.x").unwrap().as_integer().unwrap(), 1);
         assert_eq!(config.get("v").unwrap().as_string().unwrap(), "from-env");
+        assert!(Config::from_string(&source, Some("noml")).is_err());
     }
 
     #[test]
@@ -458,13 +462,13 @@ mod noml {
             (2, 12),
             &secrets,
         );
-        // Detected as NOML without a hint, and refused
+        // Without a hint the text is never read as NOML (since v1.4.0), so
+        // env() is plain CONF text and nothing is resolved
         let unhinted = "user = \"app\"\npassword = env(\"CONFIG_LIB_NOML_SECRET\")\n";
-        assert_refused(
-            Config::from_string_strict(unhinted, None),
-            (2, 12),
-            &secrets,
-        );
+        let config = Config::from_string_strict(unhinted, None).unwrap();
+        assert_eq!(config.format(), "conf");
+        let password = config.get("password").unwrap().as_string().unwrap();
+        assert!(!password.contains("hunter2"));
         // Nested in a native type's arguments
         assert_refused(
             Config::from_string_strict(

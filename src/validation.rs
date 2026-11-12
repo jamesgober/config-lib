@@ -252,13 +252,26 @@ impl ValidationRule for RangeValidator {
     }
 
     fn validate(&self, path: &str, value: &Value) -> ValidationResult {
-        let numeric_value = if let Ok(int_val) = value.as_integer() {
-            int_val as f64
-        } else if let Ok(float_val) = value.as_float() {
-            float_val
-        } else {
+        // Compared as a float, so 100.9 is checked as 100.9 and not cut to
+        // 100. NaN and infinity are outside every range (before v1.4.0 NaN
+        // read as 0 and passed any range that held 0).
+        let numeric_value = match value {
+            Value::Integer(i) => *i as f64,
+            Value::Float(f) if f.is_finite() => *f,
+            Value::Float(_) => {
+                return ValidationResult::Invalid(ValidationError::new(
+                    path,
+                    self.name(),
+                    "Value is not a finite number",
+                ));
+            }
+            Value::String(s) => match s.trim().parse::<f64>() {
+                Ok(f) if f.is_finite() => f,
+                // Not a number written as text: not this rule's business
+                _ => return ValidationResult::Valid,
+            },
             // Not a numeric value, skip validation
-            return ValidationResult::Valid;
+            _ => return ValidationResult::Valid,
         };
 
         if let Some(min) = self.min {

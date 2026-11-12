@@ -31,13 +31,87 @@ pub fn parse(source: &str) -> Result<Value> {
     parser.parse()
 }
 
-/// Put a section's table into the root. A section with no keys is left
-/// out, as it always was.
-fn close_section(root: &mut BTreeMap<String, Value>, name: String, table: BTreeMap<String, Value>) {
-    if !table.is_empty() {
-        root.insert(name, Value::table(table));
+/// Split a section name at its dots: `[a.b]` is the table `b` inside `a`
+/// (since v1.4.0; before, it was one key named `a.b`).
+fn section_path(name: &str, line: usize, column: usize) -> Result<Vec<String>> {
+    let parts: Vec<String> = name.split('.').map(|p| p.trim().to_string()).collect();
+    if parts.iter().any(String::is_empty) {
+        return Err(Error::parse(
+            "A section name has an empty part",
+            line,
+            column,
+        ));
+    }
+    Ok(parts)
+}
+
+fn section_clash(line: usize, column: usize) -> Error {
+    Error::parse("A section has the name of a key above it", line, column)
+}
+
+/// Take the table at `path` out of `root` so a section can add to it, or
+/// start an empty one. A non-table in the way is refused.
+fn open_section(
+    root: &mut BTreeMap<String, Value>,
+    path: &[String],
+    line: usize,
+    column: usize,
+) -> Result<BTreeMap<String, Value>> {
+    let (last, parents) = match path.split_last() {
+        Some(split) => split,
+        None => return Ok(BTreeMap::new()),
+    };
+    let mut table = root;
+    for part in parents {
+        table = match table.get_mut(part.as_str()) {
+            None => return Ok(BTreeMap::new()),
+            Some(Value::Table(inner)) => inner,
+            Some(_) => return Err(section_clash(line, column)),
+        };
+    }
+    match table.remove(last.as_str()) {
+        None => Ok(BTreeMap::new()),
+        Some(Value::Table(inner)) => Ok(inner),
+        Some(other) => {
+            table.insert(last.clone(), other);
+            Err(section_clash(line, column))
+        }
     }
 }
+
+/// Put a section's table back at its path. A section with no keys is left
+/// out, as it always was.
+fn close_section(
+    root: &mut BTreeMap<String, Value>,
+    path: &[String],
+    section: BTreeMap<String, Value>,
+    line: usize,
+    column: usize,
+) -> Result<()> {
+    if section.is_empty() {
+        return Ok(());
+    }
+    let (last, parents) = match path.split_last() {
+        Some(split) => split,
+        None => return Ok(()),
+    };
+    let mut table = root;
+    for part in parents {
+        let entry = table
+            .entry(part.clone())
+            .or_insert_with(|| Value::table(BTreeMap::new()));
+        table = match entry {
+            Value::Table(inner) => inner,
+            _ => return Err(section_clash(line, column)),
+        };
+    }
+    table.insert(last.clone(), Value::table(section));
+    Ok(())
+}
+
+/// A section being read: its path, its table, and the header's line and
+/// column
+type OpenSection = (Vec<String>, BTreeMap<String, Value>, usize, usize);
 
 /// Deepest nesting of `[...]` arrays the parser accepts.
 ///
@@ -75,10 +149,10 @@ impl<'a> ConfParser<'a> {
     /// Parse the entire configuration
     fn parse(&mut self) -> Result<Value> {
         let mut root = BTreeMap::new();
-        // The open section's name and table, kept out of `root` while its
-        // keys are read: each key goes straight into it, and the name is
-        // not copied per key.
-        let mut section: Option<(String, BTreeMap<String, Value>)> = None;
+        // The open section's path, table and header position, kept out of
+        // `root` while its keys are read: each key goes straight into it,
+        // and the name is not copied per key.
+        let mut section: Option<OpenSection> = None;
 
         while !self.is_at_end() {
             self.skip_whitespace_and_comments();
@@ -91,24 +165,15 @@ impl<'a> ConfParser<'a> {
             if self.peek() == Some('[') {
                 let (line, column) = (self.line, self.column);
                 let name = self.parse_section_header()?;
-                if let Some((open, table)) = section.take() {
-                    close_section(&mut root, open, table);
+                let path = section_path(&name, line, column)?;
+                if let Some((open, table, l, c)) = section.take() {
+                    close_section(&mut root, &open, table, l, c)?;
                 }
                 // A section seen before continues where it left off. One
                 // named like a key above it used to lose its keys
                 // silently; it is refused.
-                let table = match root.remove(name.as_str()) {
-                    None => BTreeMap::new(),
-                    Some(Value::Table(table)) => table,
-                    Some(_) => {
-                        return Err(Error::parse(
-                            "A section has the name of a key above it",
-                            line,
-                            column,
-                        ))
-                    }
-                };
-                section = Some((name, table));
+                let table = open_section(&mut root, &path, line, column)?;
+                section = Some((path, table, line, column));
                 continue;
             }
 
@@ -116,7 +181,7 @@ impl<'a> ConfParser<'a> {
             let (key, value) = self.parse_key_value()?;
 
             match &mut section {
-                Some((_, table)) => {
+                Some((_, table, _, _)) => {
                     table.insert(key, value);
                 }
                 None => {
@@ -125,8 +190,8 @@ impl<'a> ConfParser<'a> {
             }
         }
 
-        if let Some((open, table)) = section {
-            close_section(&mut root, open, table);
+        if let Some((open, table, l, c)) = section {
+            close_section(&mut root, &open, table, l, c)?;
         }
         Ok(Value::table(root))
     }
@@ -159,6 +224,17 @@ impl<'a> ConfParser<'a> {
         self.expect('=')?;
         self.skip_whitespace();
         let value = self.parse_value()?;
+
+        // Only a comment may follow a value on its line, so a line such as
+        // `tls = "on" tls = off` is an error, not two assignments
+        self.skip_whitespace();
+        if !matches!(self.peek(), None | Some('\n' | '\r' | '#')) {
+            return Err(Error::parse(
+                "Unexpected text after the value",
+                self.line,
+                self.column,
+            ));
+        }
 
         Ok((key, value))
     }
@@ -353,9 +429,17 @@ impl<'a> ConfParser<'a> {
         let start = self.position;
         let in_array = self.depth > 0;
 
-        // Read until end of line, comment, or special character
+        // Read until end of line, comment, or special character. A `#`
+        // starts a comment only at the start of the value or after
+        // whitespace, so `abc#def` is one value (since v1.4.0).
+        let after_space = std::cell::Cell::new(true);
         self.advance_while(|ch| {
-            !(ch == '\n' || ch == '\r' || ch == '#' || (in_array && (ch == ',' || ch == ']')))
+            let stop = ch == '\n'
+                || ch == '\r'
+                || (ch == '#' && after_space.get())
+                || (in_array && (ch == ',' || ch == ']'));
+            after_space.set(ch == ' ' || ch == '\t');
+            !stop
         });
 
         let raw_value = self.since(start).trim();
@@ -405,8 +489,10 @@ impl<'a> ConfParser<'a> {
             return Ok(Value::integer(i));
         }
 
-        // Try float
-        if let Ok(f) = value.parse::<f64>() {
+        // Try float: decimal syntax only, so `nan`, `inf` and `infinity`
+        // stay strings, and an integer too large for i64 is a string
+        // rather than a rounded float
+        if let Some(f) = super::decimal_float(value) {
             return Ok(Value::float(f));
         }
 
@@ -510,8 +596,9 @@ impl<'a> ConfParser<'a> {
     fn expect(&mut self, expected: char) -> Result<()> {
         match self.advance() {
             Some(ch) if ch == expected => Ok(()),
-            Some(ch) => Err(Error::parse(
-                format!("Expected '{expected}', found '{ch}'"),
+            // The character found is not quoted back
+            Some(_) => Err(Error::parse(
+                format!("Expected '{expected}'"),
                 self.line,
                 self.column,
             )),

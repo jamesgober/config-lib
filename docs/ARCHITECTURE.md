@@ -445,6 +445,16 @@ policy does not allow, with that node's line and column.
 | The refusal message is fixed text per node kind (`include is not allowed in TOML`). | An include path or a variable name can be sensitive, so the message quotes nothing from the input, as with the `jsonx` backend. |
 | `Config::from_string_strict` is the same as `from_string` for every other format. | They read only their own text already. One entry point for every format means a caller does not branch on the format to be safe. |
 
+### Decision log: NOML limits (v1.4.0)
+
+| Decision | Why |
+|----------|-----|
+| Bound `${...}` expansion in config-lib, in front of the noml resolver, rather than in noml. | config-lib pins noml at 0.9.2, and its resolver has no size limit. A fix in noml would need a noml release and a pin bump; the check in config-lib works with the pinned version and applies whatever noml does later. |
+| Measure on a copy of the tree with every `${...}` value replaced by a marker, resolved by noml first. | That copy has no interpolation, so resolving it costs at most the input. Its structure is noml's own (table merges, arrays of tables), so references are looked up the way the resolver will look them up. Sizes are memoised per value, so the measure is linear in the tree. |
+| Limit the longest reference chain, not the recursion depth of the measure. | The resolver settles values recursively in document order; the longest chain bounds its stack whatever that order is. The measure computes it exactly (memoised longest path) and refuses past 32. |
+| Read includes in config-lib and put the included tree in place of the `include` node. | Confinement checked before handing the path to noml would leave a gap between the check and noml's own read, and noml reads with no size limit and blocks on a FIFO. With the tree inlined, noml never opens a file. References in an included file that name a value of that file are rewritten to their full path, which keeps noml's "included file first" lookup. |
+| Errors from noml are mapped to fixed text by kind, with the line and column. | noml messages quote tokens, keys, variable names and paths, any of which can be a secret. |
+
 ---
 
 ## 8. Where to look for what

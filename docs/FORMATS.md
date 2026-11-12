@@ -1768,6 +1768,8 @@ backup_retention = 2592000  # seconds (30 days)
     <strong>HCL</strong> (HashiCorp Configuration Language) is a structured configuration language created by HashiCorp. It's designed to be both human and machine-friendly, with a syntax that's more concise than JSON but more structured than YAML. HCL is widely used in infrastructure-as-code tools like Terraform.
 </p>
 
+> **What config-lib reads (since v1.4.0):** the static subset of HCL. Attributes, blocks with labels (`resource "a" "b" { }` becomes the table `resource.a.b`; a repeated block becomes an array of tables), double-quoted strings with escapes, integers, decimal floats, `true`, `false`, `null`, lists, objects, and `#`, `//` and `/* */` comments. Anything that needs evaluating is refused with its line and column: references such as `var.environment` or a bare `string`, function calls, operators, conditionals, `for` expressions and heredocs. A `${...}` inside a string is kept as text. The examples below show HCL as Terraform writes it; the ones that use variables, functions or heredocs do not load with config-lib.
+
 **Key Features:**
 - Block-based structure with labels
 - Variable interpolation with `${...}`

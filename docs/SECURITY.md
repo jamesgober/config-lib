@@ -78,8 +78,10 @@ environment variable into a value.
   function call, `env()` included, the same way; native types
   (`@size("10MB")`) and `${...}` references inside the document still
   work. For every other format they are the same as `from_string` and
-  `parse`. Default NOML is unchanged and still resolves `include` and
-  `env()`.
+  `parse`. Default NOML still resolves `include` and `env()`; since
+  v1.4.0 includes are confined (see below), and files and hot reload
+  have strict entry points too (`Config::from_file_strict`,
+  `HotReloadConfig::from_file_strict`, or `LoadOptions::strict`).
 - **The refusal does not quote the input.** The message names only
   the kind of node (`env() is not allowed in strict NOML`), not the
   path or variable name.
@@ -88,6 +90,58 @@ Cost: one pass over the syntax tree before resolving, with an
 explicit stack. On a 4 KiB NOML document it measured about 12 µs on
 top of a 340 µs parse (release build, one desktop machine; an
 estimate for other hardware).
+
+## Limits on every load (v1.4.0)
+
+Up to 1.3.2 the NOML paths did not hold to the threat model above.
+v1.4.0 fixes them; every load applies
+[`LoadOptions`](https://docs.rs/config-lib/latest/config_lib/struct.LoadOptions.html),
+whose defaults are listed here.
+
+- **`${...}` expansion is bounded.** Each reference copies the value it
+  names, so ten lines of `s1 = "${s0}${s0}..."` grew 424 bytes into
+  100 MB, in strict mode too. config-lib now measures what every
+  reference would copy before the noml resolver runs, and refuses the
+  document with `Error::Parse` when the expanded size would pass 64 MiB,
+  when it has more than 10,000 references, or when a chain of references
+  is more than 32 deep. The limits apply in strict and default NOML and
+  can be changed with `LoadOptions::max_expanded_size`,
+  `max_expansions` and `max_expansion_depth`. The fix is in config-lib,
+  in front of the noml crate (pinned at 0.9.2): the noml resolver itself
+  has no limit.
+- **Includes are confined.** config-lib reads included files itself and
+  hands the noml resolver a tree with no `include` left, so noml never
+  opens a file. An included file must be a regular file of at most
+  16 MiB inside the directory of the file being loaded (the current
+  directory for text), checked on the canonical path, so `..` and
+  symbolic links cannot leave it. `LoadOptions::allow_include_dir` adds
+  directories and `allow_includes_anywhere` turns the check off. At most
+  64 files are included per load, nested at most 10 deep, and a file
+  that includes itself is refused. Remote (`http://`) includes are
+  refused.
+- **Files are checked before they are read.** Every file load refuses
+  anything that is not a regular file (a FIFO, a device, a directory)
+  and anything over 16 MiB (`LoadOptions::max_file_size`), counted again
+  while reading, so a file that grows in between is still refused.
+- **Errors never quote the input.** TOML, NOML, INI, Properties and XML
+  syntax errors are `Error::Parse` with a line, a column and fixed text.
+  Before, TOML and NOML quoted the offending token (a password with a
+  missing quote appeared in the error), INI quoted the whole line, and a
+  file included by mistake had its first token quoted. Hot-reload
+  `ReloadFailed` events carry the same text.
+- **No format is guessed from content but XML, JSON and INI.**
+  `parse(text, None)` and files with no extension used substring
+  heuristics, so a comment mentioning `include` sent CONF text to the
+  NOML parser, which resolves includes. Text is now read as CONF unless
+  it starts like XML or JSON or has a `;` comment line (INI).
+
+Remaining: the noml crate's parser is not ours and is fuzzed only
+through the `noml_parser` and `toml_parser` targets. Hot reload checks
+that a file did not change while it was read and refuses an empty file
+in place of a non-empty configuration, but a writer that pauses in the
+middle of an in-place rewrite can still leave a prefix that parses;
+write a temporary file and rename it over the target
+(`Config::save_to_file` does).
 
 ### Text positions in CONF, INI and Properties
 
@@ -206,6 +260,8 @@ ships out-of-tree).
 | `xml_parser`                            | `parsers::xml_parser::parse`                |
 | `hcl_parser`                            | `parsers::hcl_parser::parse`                |
 | `format_detection`                      | `crate::parse(content, None)` (auto-detect) |
+| `noml_parser`                           | `crate::parse_strict` and `crate::parse`, NOML (v1.4.0) |
+| `toml_parser`                           | `crate::parse(content, Some("toml"))` (v1.4.0) |
 
 Each target accepts a `&[u8]` from the fuzzer, transcodes to `&str`
 (non-UTF-8 inputs are valid `&[u8]` but not valid `&str` and the

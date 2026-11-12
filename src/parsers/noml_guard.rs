@@ -86,3 +86,52 @@ fn refused(value: &AstValue, policy: Policy) -> Option<&'static str> {
         _ => None,
     }
 }
+
+/// Turn a noml error into a crate error that does not quote the input.
+///
+/// The noml crate's messages can hold text from the document (an unquoted
+/// value, a key, a variable name, a path), so only the kind of problem and
+/// its line and column are kept. `format` names the format in the message.
+pub(crate) fn noml_error(error: noml::NomlError, format: &str) -> Error {
+    use noml::NomlError as E;
+    match error {
+        E::Parse {
+            message,
+            line,
+            column,
+            ..
+        } => {
+            let what = if message.starts_with("Environment variable") {
+                "an env() variable is not set and has no default"
+            } else if message.starts_with("Duplicate key") {
+                "a key is defined twice"
+            } else if message.starts_with("Value is nested deeper") {
+                "values are nested too deeply"
+            } else if message.starts_with("Unknown function") {
+                "unknown function"
+            } else if message.starts_with("Unknown native type") {
+                "unknown native type"
+            } else if message.starts_with("Maximum include depth") {
+                "includes are nested too deeply"
+            } else if message.starts_with("include can only") {
+                "include is only allowed as the value of a key or an array element"
+            } else {
+                "syntax error"
+            };
+            Error::parse(format!("{format} {what}"), line, column)
+        }
+        E::Interpolation { .. } => Error::general(format!(
+            "{format}: a ${{...}} reference could not be resolved"
+        )),
+        E::CircularReference { .. } => {
+            Error::general(format!("{format}: a reference or include refers to itself"))
+        }
+        E::EnvVar { .. } => Error::general(format!(
+            "{format}: an env() variable is not set and has no default"
+        )),
+        E::Import { .. } | E::Io { .. } => {
+            Error::general(format!("{format}: an included file could not be read"))
+        }
+        _ => Error::general(format!("{format}: the document is not valid")),
+    }
+}
