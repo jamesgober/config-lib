@@ -306,7 +306,7 @@ ships the gate.
 
 Phase 0.9.8 introduced the harness infrastructure. A short CI fuzz
 pass (10 CPU-minutes per target) on every PR is a v0.9.9 polish
-goal — see `.dev/ROADMAP.md`. Continuous extended fuzzing (via
+goal. Continuous extended fuzzing (via
 e.g. `oss-fuzz` or a dedicated workflow on a long-running runner)
 is a post-1.0 ambition.
 

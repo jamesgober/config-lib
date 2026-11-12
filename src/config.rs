@@ -755,7 +755,7 @@ pub struct ConfigOptions {
 }
 
 impl Default for ConfigOptions {
-    /// The canonical options for the Hive DB use case:
+    /// The canonical options for the server use case:
     /// caching enabled, writes allowed, capacity tuned for typical
     /// server config size.
     fn default() -> Self {
