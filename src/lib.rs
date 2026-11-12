@@ -92,7 +92,7 @@
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 // Refactor suggestions deferred to a dedicated cleanup phase
-// (see `.dev/ROADMAP.md` post-1.0 backlog):
+// (on the post-1.0 backlog):
 #![allow(clippy::unused_self)]
 #![allow(clippy::self_only_used_in_recursion)]
 #![allow(clippy::unnecessary_wraps)]

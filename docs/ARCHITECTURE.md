@@ -229,8 +229,7 @@ underlying primitive), but it adds a dependency, a wrapper type
 mismatch with our existing `Receiver`-style API, and a
 1-for-1-replacement-shape problem. We took the load-bearing
 primitive (`arc-swap`) and built the dispatch surface in-tree.
-See the canonical decision log in `.dev/registry-io-integration.md`
-and the v1.0.0 release notes for the full rationale.
+See the v1.0.0 release notes for the full rationale.
 
 ### The deprecated `with_change_notifications` bridge
 

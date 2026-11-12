@@ -10,7 +10,7 @@
 //! the same multi-tier caching that `EnterpriseConfig` provides today.
 //!
 //! Items in this example that are NOT YET on `Config` and land in v0.9.5
-//! are noted inline as `TODO(v0.9.5)`. See `.dev/ROADMAP.md`.
+//! are noted inline as `TODO(v0.9.5)`.
 
 use config_lib::{Config, ConfigOptions, Value};
 

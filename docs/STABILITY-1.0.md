@@ -319,8 +319,7 @@ compile through the entire v1.x line.
 
 ## 9. Release process
 
-config-lib releases follow a transparent cadence visible in the
-`.dev/ROADMAP.md` document. The flow:
+config-lib releases follow a steady cadence. The flow:
 
 1. Each `0.9.x` patch ships a single roadmap Phase's deliverables
    (or the foundation half of a phase, with the implementation half
@@ -354,5 +353,5 @@ bug:
 ---
 
 <sub>This document is canonical. If it conflicts with anything in the
-README, the rustdoc, or `.dev/`, this document wins. Updates to it
+README or the rustdoc, this document wins. Updates to it
 require a release notes entry under "Stability contract changes".</sub>

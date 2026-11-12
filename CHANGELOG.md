@@ -423,7 +423,7 @@ All four are deferred to v0.9.8.x because they require nightly Rust + libFuzzer 
 ## [0.9.7] - 2026-05-19
 
 ### Added
-- **`docs/STABILITY-1.0.md`** — the canonical 1.0 stability contract. Locks down: the set of `pub` items that ship under SemVer, the `#[non_exhaustive]` policy and which types it applies to, the exact list of items *not* covered (performance numbers, error message text, transitive deps, iteration order), the MSRV baseline + feature-flag MSRV asymmetry, the feature flag stability promises, the NOML/TOML pre-1.0 caveat, the performance contract with target table, the security contract, the `#[deprecated]` removal timeline, the yank policy, the release process (including the **direct 0.9.9 → 1.0.0 path**, no `1.0.0-rc.1` cut), and the post-1.0 backlog. This document is the single source of truth for "what does 1.0 promise?" — it takes precedence over README / rustdoc / `.dev/` when they conflict.
+- **`docs/STABILITY-1.0.md`** — the canonical 1.0 stability contract. Locks down: the set of `pub` items that ship under SemVer, the `#[non_exhaustive]` policy and which types it applies to, the exact list of items *not* covered (performance numbers, error message text, transitive deps, iteration order), the MSRV baseline + feature-flag MSRV asymmetry, the feature flag stability promises, the NOML/TOML pre-1.0 caveat, the performance contract with target table, the security contract, the `#[deprecated]` removal timeline, the yank policy, the release process (including the **direct 0.9.9 → 1.0.0 path**, no `1.0.0-rc.1` cut), and the post-1.0 backlog. This document is the single source of truth for "what does 1.0 promise?" — it takes precedence over README / rustdoc when they conflict.
 
 ### Changed
 - **`noml` and `toml` are no longer default features.** The default feature set is now `["conf", "hot-reload"]`. The default build pulls in zero pre-1.0 dependencies — the 1.0 stability contract requires this and v0.9.7 delivers it. Users wanting NOML or TOML parsing must opt in: `features = ["noml"]` or `features = ["toml"]`. See *Migration* below.
@@ -512,7 +512,7 @@ The roadmap also calls for five cross-platform integration tests (`hot_reload_mo
 
 ## [0.9.5] - 2026-05-19
 
-> **Scope note.** This is the **foundation half** of Phase 0.9.5. It lands the public API surface (`CacheStats`, `Config::cache_stats()`, the `#[non_exhaustive]` enum hardening required by the 1.0 stability contract) so the actual lock-free cache wire-up — and the borrow-vs-thread-safety architectural decision on `Config::get` — can drop in without a second public-API change. The cache implementation, multi-backend prototype benchmarks, and the verified sub-50ns numbers land in a follow-up v0.9.5.x release once the implementation work is run on canonical hardware. See `.dev/release/v0.9.5.md` for the full rationale.
+> **Scope note.** This is the **foundation half** of Phase 0.9.5. It lands the public API surface (`CacheStats`, `Config::cache_stats()`, the `#[non_exhaustive]` enum hardening required by the 1.0 stability contract) so the actual lock-free cache wire-up — and the borrow-vs-thread-safety architectural decision on `Config::get` — can drop in without a second public-API change. The cache implementation, multi-backend prototype benchmarks, and the verified sub-50ns numbers land in a follow-up v0.9.5.x release once the implementation work is run on canonical hardware.
 
 ### Added
 - **`CacheStats`** — `#[non_exhaustive]` public struct returned by [`Config::cache_stats()`]. Snapshot of cache-hit / cache-miss counters with a derived `hit_ratio` in `[0.0, 1.0]`. Re-exported at the crate root. In v0.9.5 every snapshot reads `{ hits: 0, misses: 0, hit_ratio: 0.0 }` because no cache layer is yet populating the counters — the shape is shipping now so downstream instrumentation can be written against the final API and the eventual cache wire-up is a drop-in change.
@@ -545,7 +545,7 @@ The Phase 0.9.5 roadmap also commits to the **lock-free cache implementation**, 
 2. **The `Config::get` return-type architecture** depends on the chosen backend. `&Value` from a lock-free store either requires guards (`DashMap::Ref`) or `Arc<Value>` returns (`ArcSwap`). Locking the return semantics ahead of the benchmark would either force a second migration or freeze a suboptimal contract.
 3. **The "<50ns under 16 threads" performance claim** has to be measured on canonical hardware. Committing baseline numbers generated on a developer laptop would be dishonest — performance claims in the README and rustdoc must be backed by committed benchmarks that anyone can re-run.
 
-The deferred work is now explicitly scoped on [`.dev/ROADMAP.md`](.dev/ROADMAP.md) as Phase 0.9.5 **Implementation**; v0.9.5 (this release) is Phase 0.9.5 **Foundation**.
+The deferred work is now scoped on the roadmap as Phase 0.9.5 **Implementation**; v0.9.5 (this release) is Phase 0.9.5 **Foundation**.
 
 ### Internal
 - All 96 tests pass (63 unit + 14 integration + 11 validation + 8 doc — one new doctest from the `CacheStats` example).
@@ -602,7 +602,7 @@ See [`examples/enterprise_demo.rs`](examples/enterprise_demo.rs) for a runnable 
 - **`README.md`** leads with `Config` everywhere a configuration API is recommended. The previous **Enterprise Caching** section is now a **Read-only mode and forward-compatible options** section featuring `ConfigOptions`, with an explicit deprecation banner pointing readers at v0.9.5. The **Default Configuration Settings — Method 2** section was rewritten from the `EnterpriseConfig::set_default` pattern to the simpler inline-default pattern. The troubleshooting tip about cached reads no longer recommends `EnterpriseConfig` for new code.
 
 ### Internal
-- This is Phase 0.9.4 (Architectural consolidation) of the [roadmap to 1.0](.dev/ROADMAP.md). The deprecation surface is in force; the **data-model merger** (combining the borrowed-`&Value` return convention of `Config` with the lock-free caching of `EnterpriseConfig`) lands with the v0.9.5 caching work. Doing them as one release is intentional: the caching architecture decides how the unified `Config::get` actually returns its `&Value` under contention, and shipping the merger ahead of that design would either freeze the wrong API or force a second migration. All 95 tests pass (63 unit + 14 integration + 11 validation + 7 doc, up from 6 doc — the new `ConfigOptions` example added a doctest). `cargo clippy --all-targets --all-features -- -D warnings` clean.
+- This is Phase 0.9.4 (Architectural consolidation) of the roadmap to 1.0. The deprecation surface is in force; the **data-model merger** (combining the borrowed-`&Value` return convention of `Config` with the lock-free caching of `EnterpriseConfig`) lands with the v0.9.5 caching work. Doing them as one release is intentional: the caching architecture decides how the unified `Config::get` actually returns its `&Value` under contention, and shipping the merger ahead of that design would either freeze the wrong API or force a second migration. All 95 tests pass (63 unit + 14 integration + 11 validation + 7 doc, up from 6 doc — the new `ConfigOptions` example added a doctest). `cargo clippy --all-targets --all-features -- -D warnings` clean.
 
 
 
@@ -627,7 +627,7 @@ See [`examples/enterprise_demo.rs`](examples/enterprise_demo.rs) for a runnable 
 - **MSRV stays at `1.82` for 0.9.3.** The roadmap's commitment to MSRV 1.75 cannot be honoured this release because `noml 0.9.0` (currently a default feature) itself declares `rust-version = "1.82"`. Pinning a chain of older transitive crates to fake the constraint would have shipped known-old `url` / `native-tls` / icu crates with their own security trade-offs. The 1.75 promise is deferred to Phase 0.9.7, which already plans to make `noml` and `toml` opt-in — at that point the default feature set will be 1.75-compatible cleanly, with users of the optional NOML/TOML formats accepting the higher MSRV explicitly.
 
 ### Internal
-- This is Phase 0.9.3 (Toolchain alignment + REPS lint discipline) of the [roadmap to 1.0](.dev/ROADMAP.md). All 94 tests (63 unit + 14 integration + 11 validation + 6 doc) pass. `cargo clippy --all-targets --all-features -- -D warnings` is clean. `cargo audit` reports zero vulnerabilities (the one allowed `rustls-pemfile` unmaintained advisory carries over from 0.9.2 and is scoped to the Phase 0.9.7 NOML opt-in work).
+- This is Phase 0.9.3 (Toolchain alignment + REPS lint discipline) of the roadmap to 1.0. All 94 tests (63 unit + 14 integration + 11 validation + 6 doc) pass. `cargo clippy --all-targets --all-features -- -D warnings` is clean. `cargo audit` reports zero vulnerabilities (the one allowed `rustls-pemfile` unmaintained advisory carries over from 0.9.2 and is scoped to the Phase 0.9.7 NOML opt-in work).
 
 
 
@@ -654,7 +654,7 @@ See [`examples/enterprise_demo.rs`](examples/enterprise_demo.rs) for a runnable 
 - **CHANGELOG footer compare URLs.** All `[X.Y.Z]:` link references pointed at `github.com/jamesgober/metrics-lib` (a copy-paste leftover from an early template). Corrected to `github.com/jamesgober/config-lib`.
 
 ### Internal
-- This is Phase 0.9.2 (Structure normalization) of the [roadmap to 1.0](.dev/ROADMAP.md). No code logic was changed in this release; the work is purely structural so that Phase 0.9.3 (toolchain + REPS lint discipline) can land cleanly without churn from concurrent layout moves.
+- This is Phase 0.9.2 (Structure normalization) of the roadmap to 1.0. No code logic was changed in this release; the work is purely structural so that Phase 0.9.3 (toolchain + REPS lint discipline) can land cleanly without churn from concurrent layout moves.
 
 
 
