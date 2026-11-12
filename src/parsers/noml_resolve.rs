@@ -1,7 +1,8 @@
 //! # Resolving NOML within limits
 //!
 //! The noml crate's resolver copies the referenced value for every `${...}`
-//! and reads every `include` itself, with no limit on either. Ten lines of
+//! and reads every `include` itself (up to noml 0.9.2 with no limit on
+//! either; noml 0.9.4 adds limits, which config-lib sets to its own). Ten lines of
 //! `s1 = "${s0}${s0}..."` grow a few hundred bytes of text into gigabytes,
 //! and an include can name any file. This module puts config-lib in front of
 //! the resolver:
@@ -20,7 +21,8 @@
 //! 4. References inside an included file that name a value of that file are
 //!    rewritten to their full path, because the included text now sits
 //!    inside the including document.
-//! 5. The resolver runs on the checked tree.
+//! 5. The resolver runs on the checked tree, with the same limits (noml
+//!    0.9.4 checks them too).
 //!
 //! Errors carry a line and column and fixed text: they never quote the
 //! document, an included file, a path or a reference.
@@ -120,7 +122,7 @@ pub(crate) fn resolve_document(
     } = prep;
 
     if !sites.is_empty() {
-        let mut tree = run_resolver(neutral)?;
+        let mut tree = run_resolver(neutral, options)?;
         let mut include_locs = vec![None; includes];
         collect_includes(&mut tree, &mut Vec::new(), &mut include_locs);
         let include_locs: Vec<Vec<Seg>> = include_locs
@@ -141,16 +143,30 @@ pub(crate) fn resolve_document(
             rewrite.walk(&mut real)?;
         }
     }
-    run_resolver(real)
+    run_resolver(real, options)
 }
 
-fn run_resolver(root: AstNode) -> Result<NValue> {
+/// The noml resolver's limits for `options`.
+///
+/// noml 0.9.4 bounds every resolve on its own, with defaults equal to
+/// config-lib's. config-lib checks first; passing the same limits keeps a
+/// caller's raised limit from being refused by the resolver's default.
+fn resolver_limits(options: &LoadOptions) -> noml::ResolverLimits {
+    noml::ResolverLimits::new()
+        .with_max_output_bytes(usize::try_from(options.max_expanded_size).unwrap_or(usize::MAX))
+        .with_max_references(options.max_expansions)
+        .with_max_reference_depth(options.max_expansion_depth)
+        .with_max_includes(options.max_includes)
+}
+
+fn run_resolver(root: AstNode, options: &LoadOptions) -> Result<NValue> {
     let document = Document {
         root,
         source_path: None,
         source_text: None,
     };
     noml::Resolver::new()
+        .with_limits(resolver_limits(options))
         .resolve(&document)
         .map_err(|e| noml_guard::noml_error(e, "NOML"))
 }
@@ -579,7 +595,8 @@ impl<'t> Measure<'t> {
     /// The value the bare site `k` copies
     fn target(&mut self, k: usize, depth: usize) -> Result<&'t NValue> {
         self.guard(k, depth)?;
-        match self.target_state[k] {
+        let state = self.target_state[k];
+        match state {
             State::Done => {
                 if let Some(value) = self.targets[k] {
                     self.bump_chain(self.target_chains[k]);
@@ -659,7 +676,8 @@ impl<'t> Measure<'t> {
     /// Expanded size of site `k`
     fn site_size(&mut self, k: usize, depth: usize) -> Result<u64> {
         self.guard(k, depth)?;
-        match self.size_state[k] {
+        let state = self.size_state[k];
+        match state {
             State::Done => {
                 self.bump_chain(self.chains[k]);
                 return Ok(self.sizes[k]);
@@ -977,5 +995,117 @@ impl Rewrite<'_> {
             _ => {}
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Run the noml resolver alone, without config-lib's checks in front,
+    /// so the error comes from noml's own limit
+    fn noml_only(source: &str, options: &LoadOptions) -> Error {
+        let document = parse(source).expect("test document parses");
+        match run_resolver(document.root, options) {
+            Ok(value) => panic!("expected the resolver to refuse, got {value:?}"),
+            Err(error) => error,
+        }
+    }
+
+    fn message(error: Error) -> String {
+        match error {
+            Error::Parse { message, .. } => message,
+            other => panic!("expected a parse error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn noml_output_limit_maps_to_the_size_limit() {
+        let options = LoadOptions::new().max_expanded_size(16);
+        let error = noml_only("a = \"SECRET-VALUE\"\nb = \"${a}\"\n", &options);
+        assert_eq!(
+            message(error),
+            "the document expands past the size limit through ${...} references"
+        );
+    }
+
+    #[test]
+    fn noml_reference_limit_maps_to_too_many_references() {
+        let options = LoadOptions::new().max_expansions(1);
+        let error = noml_only("a = \"x\"\nb = \"${a}\"\nc = \"${a}\"\n", &options);
+        assert_eq!(
+            message(error),
+            "the document has too many ${...} references"
+        );
+    }
+
+    #[test]
+    fn noml_chain_limit_maps_to_a_chain_too_long() {
+        let options = LoadOptions::new().max_expansion_depth(1);
+        let error = noml_only("a = \"x\"\nb = ${a}\nc = ${b}\nd = ${c}\n", &options);
+        assert_eq!(message(error), "a chain of ${...} references is too long");
+    }
+
+    #[test]
+    fn noml_include_count_maps_to_too_many_included_files() {
+        let options = LoadOptions::new().max_includes(0);
+        let error = noml_only("a = include \"secret-name.noml\"\n", &options);
+        assert_eq!(message(error), "too many included files");
+    }
+
+    #[test]
+    fn noml_include_refusal_maps_to_the_include_policy_error() {
+        // Text has no base path, so noml refuses every include
+        let error = noml_only("a = include \"secret-name.noml\"\n", &LoadOptions::new());
+        let text = message(error);
+        assert_eq!(text, "the included file is outside the allowed directories");
+        assert!(!text.contains("secret-name"));
+    }
+
+    #[test]
+    fn limits_follow_load_options() {
+        let options = LoadOptions::new()
+            .max_expanded_size(1 << 40)
+            .max_expansions(20_000)
+            .max_expansion_depth(48)
+            .max_includes(500);
+        let limits = resolver_limits(&options);
+        assert_eq!(
+            limits.max_output_bytes(),
+            usize::try_from(1u64 << 40).unwrap_or(usize::MAX)
+        );
+        assert_eq!(limits.max_references(), 20_000);
+        assert_eq!(limits.max_reference_depth(), 48);
+        assert_eq!(limits.max_includes(), 500);
+        assert_eq!(
+            resolver_limits(&LoadOptions::new().max_expanded_size(u64::MAX)).max_output_bytes(),
+            usize::MAX
+        );
+    }
+
+    #[test]
+    fn raised_reference_limit_reaches_the_resolver() {
+        // More references than noml's default of 10,000
+        let mut doc = String::from("a = \"x\"\n");
+        for i in 0..10_050 {
+            doc.push_str(&format!("k{i} = \"${{a}}\"\n"));
+        }
+        assert!(resolve_source(&doc, None, &LoadOptions::new()).is_err());
+        let options = LoadOptions::new().max_expansions(20_000);
+        let value = resolve_source(&doc, None, &options).expect("raised limit");
+        assert_eq!(value.get("k10049").unwrap().as_string().unwrap(), "x");
+    }
+
+    #[test]
+    fn raised_chain_limit_reaches_the_resolver() {
+        // A chain longer than noml's default of 32
+        let mut doc = String::from("v0 = \"x\"\n");
+        for i in 1..=40 {
+            doc.push_str(&format!("v{i} = ${{v{}}}\n", i - 1));
+        }
+        assert!(resolve_source(&doc, None, &LoadOptions::new()).is_err());
+        let options = LoadOptions::new().max_expansion_depth(48);
+        let value = resolve_source(&doc, None, &options).expect("raised limit");
+        assert_eq!(value.get("v40").unwrap().as_string().unwrap(), "x");
     }
 }

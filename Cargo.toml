@@ -2,7 +2,7 @@
 #▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▒░
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
 name = "config-lib"
-version = "1.4.0"
+version = "1.4.1"
 
 # Project Metadata
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
@@ -155,7 +155,7 @@ notify = { version = "6", optional = true }
 # pin is a deliberate maintainer action, not a silent `cargo update`.
 # Documented in `docs/STABILITY-1.0.md`.
 #☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐☐
-noml = { version = "=0.9.2", optional = true, features = [] }
+noml = { version = "=0.9.4", optional = true, features = [] }
 
 # jsonx-lib: strict RFC 8259 JSON (Published Crate)
 #

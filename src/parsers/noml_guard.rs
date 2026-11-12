@@ -25,7 +25,7 @@ pub(crate) enum Policy {
     /// `@type(...)` values and no bare `${...}`.
     Toml,
     /// Strict NOML: no `include` and no function calls (`env()` is the
-    /// only one noml 0.9.2 knows). Native types and `${...}` stay, because
+    /// only one noml 0.9.4 knows). Native types and `${...}` stay, because
     /// they only read the document itself.
     // Used only by the NOML parser; `toml` alone compiles this module too
     #[cfg_attr(not(feature = "noml"), allow(dead_code))]
@@ -101,6 +101,12 @@ pub(crate) fn noml_error(error: noml::NomlError, format: &str) -> Error {
             column,
             ..
         } => {
+            // The resolver's own limits and include checks (noml 0.9.4).
+            // config-lib checks the same limits before the resolver runs, so
+            // these get the text config-lib's own checks use.
+            if let Some(what) = resolver_refusal(&message) {
+                return Error::parse(what, line, column);
+            }
             let what = if message.starts_with("Environment variable") {
                 "an env() variable is not set and has no default"
             } else if message.starts_with("Duplicate key") {
@@ -133,5 +139,121 @@ pub(crate) fn noml_error(error: noml::NomlError, format: &str) -> Error {
             Error::general(format!("{format}: an included file could not be read"))
         }
         _ => Error::general(format!("{format}: the document is not valid")),
+    }
+}
+
+/// The config-lib text for a noml resolver limit or include refusal, from
+/// the start of the noml message. The rest of the message is never used: it
+/// can name a path.
+fn resolver_refusal(message: &str) -> Option<&'static str> {
+    const REFUSALS: [(&str, &str); 6] = [
+        (
+            "Interpolation output exceeds",
+            "the document expands past the size limit through ${...} references",
+        ),
+        (
+            "Interpolation uses more than",
+            "the document has too many ${...} references",
+        ),
+        (
+            "Interpolation references are chained",
+            "a chain of ${...} references is too long",
+        ),
+        ("Maximum include count", "too many included files"),
+        (
+            "Include refused",
+            "the included file is outside the allowed directories",
+        ),
+        (
+            "Failed to read include",
+            "the included file could not be read",
+        ),
+    ];
+    REFUSALS
+        .iter()
+        .find(|(prefix, _)| message.starts_with(prefix))
+        .map(|&(_, what)| what)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A noml 0.9.4 resolver message, with text from the document in it
+    fn parse_error(message: &str) -> noml::NomlError {
+        noml::NomlError::parse(format!("{message} SECRET-TEXT"), 7, 3)
+    }
+
+    fn mapped(message: &str) -> (String, usize, usize) {
+        match noml_error(parse_error(message), "NOML") {
+            Error::Parse {
+                message,
+                line,
+                column,
+                ..
+            } => {
+                assert!(!message.contains("SECRET-TEXT"), "{message}");
+                (message, line, column)
+            }
+            other => panic!("expected a parse error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn output_limit_is_the_size_limit() {
+        let (message, line, column) =
+            mapped("Interpolation output exceeds the limit of 67108864 bytes");
+        assert_eq!(
+            message,
+            "the document expands past the size limit through ${...} references"
+        );
+        assert_eq!((line, column), (7, 3));
+    }
+
+    #[test]
+    fn reference_limit_is_too_many_references() {
+        let (message, ..) = mapped("Interpolation uses more than the limit of 10000 references");
+        assert_eq!(message, "the document has too many ${...} references");
+    }
+
+    #[test]
+    fn chain_limit_is_a_chain_too_long() {
+        let (message, ..) =
+            mapped("Interpolation references are chained deeper than the limit of 32 levels");
+        assert_eq!(message, "a chain of ${...} references is too long");
+    }
+
+    #[test]
+    fn include_count_is_too_many_included_files() {
+        let (message, ..) = mapped("Maximum include count (64) exceeded");
+        assert_eq!(message, "too many included files");
+    }
+
+    #[test]
+    fn include_refused_is_outside_the_allowed_directories() {
+        for text in [
+            "Include refused: the file is outside the include root",
+            "Include refused: the document has no base path or include root",
+        ] {
+            let (message, ..) = mapped(text);
+            assert_eq!(
+                message,
+                "the included file is outside the allowed directories"
+            );
+        }
+    }
+
+    #[test]
+    fn unreadable_include_does_not_quote_the_path() {
+        let (message, ..) = mapped("Failed to read include 'secret/path.noml': not found");
+        assert_eq!(message, "the included file could not be read");
+    }
+
+    #[test]
+    fn other_parse_errors_keep_their_mapping() {
+        let (message, ..) = mapped("Unexpected token");
+        assert_eq!(message, "NOML syntax error");
+        let (message, ..) = mapped("Maximum include depth (10) exceeded");
+        assert_eq!(message, "NOML includes are nested too deeply");
     }
 }

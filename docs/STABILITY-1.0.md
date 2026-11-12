@@ -120,7 +120,7 @@ because their upstream dependency declares a higher `rust-version`:
 | Feature          | MSRV | Reason                                                   |
 |------------------|------|----------------------------------------------------------|
 | `xml`            | 1.79 | `quick-xml` 0.41 declares `rust-version = "1.79"` (since v1.1.0) |
-| `noml`, `toml`   | 1.82 | `noml = "=0.9.2"` declares `rust-version = "1.82"`        |
+| `noml`, `toml`   | 1.82 | `noml = "=0.9.4"` declares `rust-version = "1.82"`        |
 | `jsonx`          | 1.85 | `jsonx-lib = "=0.5.1"` declares `rust-version = "1.85"` (since v1.2.0) |
 
 Every other feature, and the default build, stays on 1.75. CI checks
@@ -196,8 +196,8 @@ way, is a MAJOR-release event.
 ### 4.3 NOML / TOML pre-1.0 dependency caveat
 
 The `noml` and `toml` features depend on the `noml` crate, which is
-itself pre-1.0 (`0.9.x`). config-lib pins to `noml = "=0.9.2"`
-exactly (since v1.1.0; v1.0.x pinned `=0.9.0`), so a later `noml` release does **not** automatically reach
+itself pre-1.0 (`0.9.x`). config-lib pins to `noml = "=0.9.4"`
+exactly (since v1.4.1; v1.1.0 to v1.4.0 pinned `=0.9.2`, v1.0.x pinned `=0.9.0`), so a later `noml` release does **not** automatically reach
 config-lib users via `cargo update`; the maintainer makes a
 deliberate pin bump after validating the new noml release.
 
