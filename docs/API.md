@@ -1,7 +1,7 @@
 <h1 id="top" align="center">
     <img width="99" alt="Rust logo" src="https://raw.githubusercontent.com/jamesgober/rust-collection/72baabd71f00e14aa9184efcb16fa3deddda3a0a/assets/rust-logo.svg">
     <br><b>config-lib</b><br>
-    <sub><sup>API REFERENCE - v1.3.2</sup></sub>
+    <sub><sup>API REFERENCE - v1.4.0</sup></sub>
 </h1>
 <div align="center">
     <sup>
@@ -29,7 +29,7 @@
 
 <br>
 
-> Canonical API reference for `config-lib v1.3.2`. Every public type and free function is documented here with description, key methods, parameter notes, and at least one runnable code example. The full v1.x stability contract for these items is in [`STABILITY-1.0.md`](./STABILITY-1.0.md).
+> Canonical API reference for `config-lib v1.4.0`. Every public type and free function is documented here with description, key methods, parameter notes, and at least one runnable code example. The full v1.x stability contract for these items is in [`STABILITY-1.0.md`](./STABILITY-1.0.md).
 
 ---
 
@@ -51,6 +51,7 @@
 - [`Value`](#value)
 - [`Config`](#config)
 - [`ConfigOptions`](#configoptions)
+- [`LoadOptions`](#loadoptions)
 - [`ConfigBuilder`](#configbuilder)
 - [`ConfigValue`](#configvalue)
 - [`CacheStats`](#cachestats)
@@ -108,20 +109,20 @@
 
 ```toml
 [dependencies]
-config-lib = "1.3"
+config-lib = "1.4"
 
 # Common feature additions:
-config-lib = { version = "1.3", features = ["jsonx", "validation", "env-override"] }
+config-lib = { version = "1.4", features = ["jsonx", "validation", "env-override"] }
 
 # Everything on:
-config-lib = { version = "1.3", features = [
+config-lib = { version = "1.4", features = [
     "jsonx", "json", "xml", "hcl", "noml", "toml",
     "validation", "schema", "async", "chrono",
     "env-override",
 ] }
 
 # Slim build (CONF only, no hot reload, no extras):
-config-lib = { version = "1.3", default-features = false, features = ["conf"] }
+config-lib = { version = "1.4", default-features = false, features = ["conf"] }
 ```
 
 **MSRV:** Rust `1.75+` for the default feature set; Rust `1.79+` with the `xml` feature (`quick-xml` 0.41); Rust `1.82+` with the `noml` or `toml` features (`noml = "=0.9.2"`); Rust `1.85+` with the `jsonx` feature (`jsonx-lib = "=0.5.1"`).
@@ -138,7 +139,7 @@ config-lib = { version = "1.3", default-features = false, features = ["conf"] }
 | `hcl`          | no       | HashiCorp Configuration Language (built-in parser)                                     |
 | `noml`         | no       | NOML parsing via the upstream `noml` crate (pinned `=0.9.2`)                           |
 | `toml`         | no       | TOML parsing via the `noml` crate for format preservation                              |
-| `validation`   | no       | Rule-based validation framework (`regex`-backed)                                       |
+| `validation`   | no       | Rule-based validation framework (no dependencies since v1.4.0)                         |
 | `schema`       | no       | Schema validation framework                                                            |
 | `async`        | no       | Async file I/O via `tokio`                                                             |
 | `chrono`       | no       | DateTime support via `chrono`                                                          |
@@ -467,7 +468,10 @@ The primary user-facing configuration type. Owns a [`Value`](#value) tree, track
 | `Config::new()`                            | Empty configuration (no values, no file path)                              |
 | `Config::from_string(source, format)`      | Parse from in-memory string with optional format hint                      |
 | `Config::from_string_strict(source, format)` | Same, but reads nothing outside `source`: NOML `include` and function calls (`env()`) are refused (since v1.3.0; see [`parse_strict`](#parse_strict)) |
-| `Config::from_file(path)`                  | Read + parse from disk; format detected by extension or content            |
+| `Config::from_file(path)`                  | Read + parse from disk; format from the extension (text detection only when there is none). Applies the default [`LoadOptions`](#loadoptions) |
+| `Config::from_file_strict(path)`           | Same, with strict NOML: no `include`, no `env()` (since v1.4.0)            |
+| `Config::from_file_with(path, &options)`   | Read + parse with the given [`LoadOptions`](#loadoptions) (since v1.4.0)   |
+| `Config::from_string_with(source, format, &options)` | Parse text with the given [`LoadOptions`](#loadoptions) (since v1.4.0) |
 | `Config::from_file_async(path)` *(async)*  | Async variant; requires the `async` feature                                |
 | `Config::with_options(opts)`               | Empty `Config` with non-default [`ConfigOptions`](#configoptions)          |
 | `Config::from(value)`                      | Construct from an existing [`Value`](#value) tree                          |
@@ -694,6 +698,38 @@ let opts = ConfigOptions::new().cache_enabled(false);
 let _cfg = Config::with_options(opts);
 ```
 
+<h2 id="loadoptions"><code>LoadOptions</code></h2>
+
+```rust
+pub struct LoadOptions { /* private */ }
+```
+
+Limits and include policy for a load (since v1.4.0). `LoadOptions::new()` (or `Default`) gives the defaults every load uses; `LoadOptions::strict_defaults()` adds strict NOML.
+
+| Method                          | Default   | Effect                                                                                   |
+|---------------------------------|-----------|------------------------------------------------------------------------------------------|
+| `strict(bool)`                  | `false`   | Strict NOML: `include` and function calls (`env()`) are refused                          |
+| `allow_include_dir(dir)`        | none      | Also allow NOML includes from `dir`; the loaded file's own directory is always allowed   |
+| `allow_includes_anywhere()`     | off       | Allow includes of any regular file                                                       |
+| `max_file_size(bytes)`          | 16 MiB    | Largest configuration or included file read; non-regular files are always refused       |
+| `max_includes(count)`           | 64        | Largest number of included files over all levels                                         |
+| `max_expanded_size(bytes)`      | 64 MiB    | Largest size a NOML document may expand to through `${...}`                              |
+| `max_expansions(count)`         | 10,000    | Largest number of `${...}` references                                                    |
+| `max_expansion_depth(depth)`    | 32        | Longest chain of `${...}` references                                                     |
+
+Includes are checked on the canonical path, so `..` and symbolic links cannot leave the allowed directories. Text loaded with `Config::from_string` resolves includes against, and confines them to, the current directory. A load over a limit is refused with `Error::Parse` (expansion, includes) or `Error::Io` (file size, file type); no message quotes the input.
+
+```rust
+use config_lib::{Config, LoadOptions};
+
+let options = LoadOptions::new().strict(true).max_file_size(1024 * 1024);
+let config = Config::from_string_with("port = 8080", Some("conf"), &options)?;
+assert_eq!(config.get_or("port", 0u16), 8080);
+# Ok::<(), config_lib::Error>(())
+```
+
+---
+
 <h2 id="configbuilder"><code>ConfigBuilder</code></h2>
 
 ```rust
@@ -707,6 +743,7 @@ Fluent builder for `Config` instances. Useful when you want to compose format hi
 | `ConfigBuilder::new()`                         | New empty builder                    |
 | `.format(fmt)`                                 | Set the format hint                  |
 | `.validation_rules(rules)` *(validation)*      | Attach a `ValidationRuleSet`         |
+| `.load_options(options)`                       | Read with these [`LoadOptions`](#loadoptions) (v1.4.0) |
 | `.from_string(source)`                         | Parse from an in-memory string       |
 | `.from_file(path)`                             | Parse from a file                    |
 
@@ -812,16 +849,27 @@ Entry point. Wraps a `Config` with file-watching, debouncing, and notification d
 
 ```rust
 pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self>;
+pub fn from_file_strict<P: AsRef<Path>>(path: P) -> Result<Self>;            // v1.4.0
+pub fn from_file_with<P: AsRef<Path>>(path: P, options: LoadOptions) -> Result<Self>; // v1.4.0
 pub fn with_poll_interval(self, interval: Duration) -> Self;
 pub fn with_debounce(self, debounce: Duration) -> Self;
 pub fn with_polling_fallback(self) -> Self;
+pub fn allow_empty_reload(self) -> Self;                                     // v1.4.0
+pub fn with_validator<F>(self, validator: F) -> Self
+where F: Fn(&Config) -> Result<()> + Send + Sync + 'static;                  // v1.4.0
 ```
+
+Every reload (manual or background) goes through the same checks before the new configuration replaces the current one (since v1.4.0): the file must not change while it is read (the watcher also waits for its size and time to settle), a file with no values does not replace a non-empty configuration unless `allow_empty_reload()` is set, the `with_validator` check and the configuration's critical validation rules must pass, and read-only mode, the defaults table and the validation rules carry over. A refused reload keeps the current configuration and dispatches `ReloadFailed`. Handlers run after the swap with no lock held, so a handler may read the configuration.
 
 | Method                       | Default                  | Effect                                                                                  |
 |------------------------------|--------------------------|-----------------------------------------------------------------------------------------|
 | `with_poll_interval(d)`      | `Duration::from_secs(1)` | Polling cadence (primary when `hot-reload` feature off; watchdog when on)               |
 | `with_debounce(d)`           | `Duration::from_millis(100)` | Collapses bursts of kernel events (atomic-rename saves emit 3-4 events per save)    |
 | `with_polling_fallback()`    | off                      | Run a polling watchdog alongside the event-driven watcher (NFS-safe)                    |
+| `allow_empty_reload()`       | off                      | Let a file with no values replace a non-empty configuration                             |
+| `with_validator(f)`          | none                     | Refuse a reloaded configuration when `f` returns an error                               |
+
+Intervals under 10 ms are raised to 10 ms. If the event watcher cannot start or stops, the worker reports `ReloadFailed` and polls instead.
 
 ### Notification API (v1.0.0+ — lock-free)
 
@@ -845,7 +893,7 @@ pub fn last_modified(&self) -> SystemTime;
 
 - `config()` — share the `Arc<RwLock<Config>>` with other threads; the reloader thread atomically swaps the inner `Config` on each successful reload.
 - `snapshot()` — re-parse the file from disk and return a fresh `Config` (does not affect the watcher's shared state).
-- `reload()` — manually trigger a reload check; returns `Ok(true)` if a reload happened, `Ok(false)` if mtime was unchanged.
+- `reload()`: manually trigger a reload check; returns `Ok(true)` if a reload happened, `Ok(false)` if the modification time and size are unchanged, and an error (with the current configuration kept) when a check refuses the file.
 - `start_watching()` — consume self, spawn the background worker, return a [`HotReloadHandle`](#hotreloadhandle).
 
 ### Deprecated bridge

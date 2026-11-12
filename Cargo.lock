@@ -173,7 +173,7 @@ checksum = "0e78417baa3b3114dc0e95e7357389a249c4da97c3c2b540700079db6171bfd7"
 
 [[package]]
 name = "config-lib"
-version = "1.3.2"
+version = "1.4.0"
 dependencies = [
  "arc-swap",
  "chrono",
@@ -183,8 +183,6 @@ dependencies = [
  "noml",
  "notify",
  "quick-xml",
- "regex",
- "serde",
  "serde_json",
  "tempfile",
  "thiserror 1.0.69",

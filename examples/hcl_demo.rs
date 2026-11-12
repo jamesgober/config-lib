@@ -22,18 +22,18 @@ fn main() -> Result<()> {
     
     variable "region" {
       description = "AWS region"
-      type        = string
+      type        = "string"
       default     = "us-west-2"
     }
     
     variable "instance_count" {
       description = "Number of instances"
-      type        = number
+      type        = "number"
       default     = 2
     }
     
     resource "aws_instance" "web" {
-      count         = var.instance_count
+      count         = 2
       ami           = "ami-12345678"
       instance_type = "t3.micro"
       
@@ -46,7 +46,7 @@ fn main() -> Result<()> {
     
     output "instance_ips" {
       description = "IP addresses of instances"
-      value       = aws_instance.web[*].public_ip
+      value       = "aws_instance.web[*].public_ip"
     }
     "#;
 
@@ -60,8 +60,10 @@ fn main() -> Result<()> {
         println!("   ✅ Terraform HCL parsing successful!");
         println!("   📝 Parsed configuration structure");
 
-        // Note: HCL parsing might be complex due to Terraform-specific syntax
-        // Let's show what we can access
+        // config-lib reads the static subset of HCL. Expressions such as
+        // `count = var.instance_count` are refused with their position.
+        let refused = Config::from_string("count = var.instance_count", Some("hcl"));
+        println!("   Expressions are refused: {}", refused.is_err());
         println!("   🔍 Configuration loaded and validated\n");
     }
 

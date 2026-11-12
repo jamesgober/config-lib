@@ -36,14 +36,14 @@
 - **INI** - Full INI file parsing with sections, comments, and data type detection  
 - **JSON** - JSON format with edit capabilities and serialization (feature: `jsonx` on jsonx-lib, strict and dependency-free; or `json` on serde_json)
 - **XML** - Zero-copy XML parsing with quick-xml for Java/.NET environments
-- **HCL** - HashiCorp Configuration Language for DevOps workflows
+- **HCL** - The static subset of the HashiCorp Configuration Language (attributes, labeled blocks, lists, objects, comments); expressions are refused
 - **Properties** - Complete Java .properties file parsing with Unicode and escaping
 - **NOML** - Advanced configuration with dynamic features (feature: `noml`)
 - **TOML** - TOML format with format preservation (feature: `toml`)
 
 ### Enterprise Performance
 - **Sub-50ns Cache Access Target** - Multi-tier caching designed for sub-50ns reads on hot paths
-- **Lock-Free Notification Dispatch** - `on_change` handlers fire inline from the reloader thread via `ArcSwap<Vec<Handler>>`; one atomic load + N closure calls, no channel allocation
+- **Lock-Free Notification Dispatch** - `on_change` handlers fire inline from the reloader thread via `ArcSwap<Vec<Handler>>`; one atomic load + N closure calls, no channel allocation, and no lock held (since v1.4.0), so a handler can read the configuration
 - **Zero-Copy Parsing** - Minimized allocations and string operations where possible
 - **Lock-Free Read Paths** - Poison-resistant locking with graceful failure recovery
 - **Hot Value Cache** - Ultra-fast access for frequently used values
@@ -56,13 +56,15 @@
 - **Audit Logging System** - Structured event logging with multiple sinks and severity filtering
 - **Environment Variable Overrides** - Smart caching with prefix matching and type conversion
 - **Schema Validation** - Trait-based validation system with feature gates
-- **Format Preservation** - Maintains comments, whitespace, and original formatting
+- **Format Preservation** - An unmodified NOML or TOML configuration saves with its comments and layout; CONF saves read back to the same values, without comments
 - **Async Native** - Full async/await support throughout the API
 
 ### Reliability & Safety
 - **Zero Unsafe Code** - All `unwrap()` calls eliminated, comprehensive error handling
 - **Type Safety** - Rich type system with automatic conversions and validation
 - **Reads only what you give it** - TOML never resolves NOML's `include` or `env()`; `Config::from_string_strict` refuses them in NOML too (since v1.3.0)
+- **Bounded loads** - files are regular files of at most 16 MiB, NOML includes stay in the config's directory, `${...}` expansion is capped at 64 MiB, and errors never quote the input; `LoadOptions` sets the limits and strict mode for files and hot reload (since v1.4.0)
+- **Typed reads that keep the file's value** - INI and environment values `1` and `0` are integers (they still read as booleans), so `get_or::<u16>` sees them
 - **Enterprise Error Handling** - Production-ready error messages with context preservation
 - **Comprehensive Testing** - Extensive unit, integration, and doc test coverage
 
@@ -93,10 +95,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-config-lib = "1.3"
+config-lib = "1.4"
 
 # For enhanced functionality, enable optional features:
-config-lib = { version = "1.3", features = [
+config-lib = { version = "1.4", features = [
     "jsonx",          # JSON format support on jsonx-lib (strict, no dependencies; Rust 1.85+)
     "json",           # JSON format support on serde_json (used when `jsonx` is off)
     "xml",            # XML format support with quick-xml backend  
@@ -124,7 +126,8 @@ config-lib = { version = "1.3", features = [
 ```rust
 use config_lib::Config;
 
-// Parse a configuration; name the format, or pass `None` to detect it.
+// Parse a configuration; name the format. With `None`, text is read as
+// CONF unless it clearly starts as XML or JSON or has `;` comments (INI).
 let mut config = Config::from_string(r#"
 [database]
 host = "localhost"
@@ -169,7 +172,7 @@ default. The same conversions are available directly as
 ```rust
 use config_lib::Config;
 
-// The same calls work for every format; name it, or pass `None` to detect it.
+// The same calls work for every format; name it.
 let config = Config::from_string(r#"
 [server]
 port = 8080
@@ -353,11 +356,22 @@ audit::init_audit_logger(
 );
 
 // Hot reloading: take the shared handle before `start_watching` consumes the watcher.
-let hot = HotReloadConfig::from_file("app.conf")?;
+// A reload that fails to parse, holds no values, or fails the validator keeps
+// the current configuration. Handlers run after the lock is released, so they
+// may read the configuration.
+let hot = HotReloadConfig::from_file("app.conf")?.with_validator(|config| {
+    if config.contains_key("server.port") {
+        Ok(())
+    } else {
+        Err(config_lib::Error::validation("server.port is required"))
+    }
+});
 let shared = hot.config();
-let _sub = hot.on_change(|event| {
+let reader = hot.config();
+let _sub = hot.on_change(move |event| {
     if let ConfigChangeEvent::Reloaded { path, .. } = event {
-        println!("reloaded {}", path.display());
+        let port: u16 = reader.read().map(|c| c.get_or("server.port", 8080)).unwrap_or(8080);
+        println!("reloaded {}: port {port}", path.display());
     }
 });
 let _handle = hot.start_watching();
@@ -395,7 +409,7 @@ Ok::<(), config_lib::Error>(())
 ### External Resources
 - **[API Documentation](https://docs.rs/config-lib)** - Complete API reference with examples
 - **[Crate Registry](https://crates.io/crates/config-lib)** - Official crate distribution
-- **[Examples Directory](examples/)** - 20+ comprehensive examples covering all features
+- **[Examples Directory](examples/)** - 9 runnable examples
 - **[Performance Benchmarks](benches/)** - Detailed performance analysis and comparisons
 - **[NOML Language](https://github.com/noml-lang/noml)** - NOML language specification and usage.
 

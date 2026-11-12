@@ -65,6 +65,9 @@
 #![deny(clippy::undocumented_unsafe_blocks)]
 #![deny(clippy::missing_safety_doc)]
 #![warn(clippy::pedantic)]
+// Some lints allowed below are newer than the 1.75 toolchain; its clippy
+// would otherwise stop on their names under `-D warnings`
+#![allow(unknown_lints)]
 // REPS-AUDIT: `clippy::pedantic` is a curated lint group, not a hard rule.
 // The following lints are turned back to `allow` because they fire on
 // idioms this crate uses deliberately, or because they trade real
@@ -152,6 +155,7 @@ mod convert; // TryFrom<Value> for plain types (makes `Config::get_or` work)
 /// environments and sub-50ns access times for cached values.
 pub mod enterprise; // Enterprise API with caching and performance
 pub mod error;
+pub mod load;
 pub mod parsers;
 pub mod value;
 
@@ -177,6 +181,7 @@ pub use config::{CacheStats, Config, ConfigBuilder, ConfigOptions, ConfigValue};
 // see `enterprise.rs` — the items themselves carry the deprecation notices
 pub use enterprise::{ConfigManager, EnterpriseConfig};
 pub use error::{Error, Result};
+pub use load::LoadOptions;
 pub use value::Value;
 
 #[cfg(feature = "schema")]

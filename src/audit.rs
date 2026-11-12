@@ -144,7 +144,47 @@ impl AuditEvent {
     }
 }
 
+/// A field written with control characters, quotes and backslashes escaped,
+/// so a newline in a key or a user name cannot forge another audit line
+struct Escaped<'a>(&'a str);
+
+impl fmt::Display for Escaped<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for c in self.0.chars() {
+            match c {
+                '"' => f.write_str("\\\"")?,
+                '\\' => f.write_str("\\\\")?,
+                '\n' => f.write_str("\\n")?,
+                '\r' => f.write_str("\\r")?,
+                '\t' => f.write_str("\\t")?,
+                c if c.is_control() => write!(f, "\\u{{{:x}}}", c as u32)?,
+                c => fmt::Write::write_char(f, c)?,
+            }
+        }
+        Ok(())
+    }
+}
+
+/// A value's type and size, never its contents: configuration values can be
+/// secrets
+struct Redacted<'a>(&'a Value);
+
+impl fmt::Display for Redacted<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Value::String(s) => write!(f, "<string, {} bytes>", s.len()),
+            Value::Array(items) => write!(f, "<array, {} items>", items.len()),
+            Value::Table(table) => write!(f, "<table, {} keys>", table.len()),
+            other => write!(f, "<{}>", other.type_name()),
+        }
+    }
+}
+
 impl fmt::Display for AuditEvent {
+    /// One line per event. Since v1.4.0 every text field is escaped, and
+    /// old and new values are shown as their type and size only; the
+    /// values themselves stay available on the event for sinks that need
+    /// them.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let timestamp_millis = self
             .timestamp
@@ -154,25 +194,27 @@ impl fmt::Display for AuditEvent {
 
         write!(
             f,
-            "[{}] {:?}:{:?} id={} key={} user={}",
+            "[{}] {:?}:{:?} id={} key=\"{}\" user=\"{}\"",
             timestamp_millis,
             self.event_type,
             self.severity,
-            self.id,
-            self.key.as_deref().unwrap_or("none"),
-            self.user_context.as_deref().unwrap_or("system")
+            Escaped(&self.id),
+            Escaped(self.key.as_deref().unwrap_or("none")),
+            Escaped(self.user_context.as_deref().unwrap_or("system"))
         )?;
 
         if let Some(error) = &self.error_message {
-            write!(f, " error=\"{error}\"")?;
+            write!(f, " error=\"{}\"", Escaped(error))?;
         }
 
-        if let (Some(old), Some(new)) = (&self.old_value, &self.new_value) {
-            write!(f, " change=\"{old:?}\" -> \"{new:?}\"")?;
+        match (&self.old_value, &self.new_value) {
+            (Some(old), Some(new)) => write!(f, " change={} -> {}", Redacted(old), Redacted(new))?,
+            (None, Some(new)) => write!(f, " value={}", Redacted(new))?,
+            _ => {}
         }
 
         for (key, value) in &self.metadata {
-            write!(f, " {key}=\"{value}\"")?;
+            write!(f, " {}=\"{}\"", Escaped(key), Escaped(value))?;
         }
 
         Ok(())

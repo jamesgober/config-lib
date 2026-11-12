@@ -184,7 +184,7 @@ change between releases.
 - **`async`** — Async file I/O via `tokio`.
 - **`chrono`** — `DateTime` support via `chrono`.
 - **`schema`** — Schema validation framework.
-- **`validation`** — Rule-based validation via `regex`.
+- **`validation`**: Rule-based validation (no dependencies since v1.4.0; it enabled an unused `regex` before).
 - **`env-override`** — Environment-variable override system.
 
 ### 4.2 Future feature additions

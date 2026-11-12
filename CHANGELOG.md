@@ -15,6 +15,58 @@
 <br>
 
 
+## [1.4.0] - 2026-11-12
+
+A security and correctness release. Hot reload no longer deadlocks a handler that reads the configuration, NOML expansion and includes are bounded, errors no longer quote the input, and a reload checks the file before it replaces the current configuration. No API is removed or changed in signature, and MSRV 1.75 is unchanged. Some inputs now parse differently or are refused; each case is listed under **Changed**.
+
+### Security
+- **NOML `${...}` expansion is bounded.** Each reference copies the value it names, so a few lines of `s1 = "${s0}${s0}..."` grew 424 bytes into 100 MB, in strict mode too. config-lib now measures what every reference would copy before the noml resolver runs, and refuses the document with `Error::Parse` past 64 MiB of expanded size, 10,000 references, or a reference chain 32 deep, in strict and default NOML. The limits are set with `LoadOptions`. The fix is in config-lib, in front of the noml crate (still pinned at 0.9.2), whose resolver has no limit of its own.
+- **NOML includes are confined.** config-lib reads included files itself, so the noml resolver never opens a file. By default an included file must be a regular file of at most 16 MiB inside the directory of the file being loaded (the current directory for text), checked on the canonical path so `..` and symbolic links cannot leave it. `LoadOptions::allow_include_dir` and `allow_includes_anywhere` widen this. At most 64 files are included per load, 10 levels deep; a file that includes itself, and `http://` includes, are refused.
+- **Strict NOML for files and hot reload.** New `Config::from_file_strict`, `HotReloadConfig::from_file_strict`, and `LoadOptions::strict` refuse `include` and `env()` on file loads and on every reload, as `from_string_strict` already did for text.
+- **Errors never quote the input.** TOML and NOML syntax errors quoted the offending token (`password = hunter2` with a missing quote put `hunter2` in the error, twice), INI quoted the whole line, Properties and CONF quoted a character, XML quoted element and entity names, and an included file's first token reached the error and every hot-reload `ReloadFailed` event. All of these are `Error::Parse` with a line, a column and fixed text now.
+- **File loads are bounded.** Every file load refuses anything that is not a regular file (a FIFO, a device, a directory) and anything over 16 MiB (`LoadOptions::max_file_size`), checked again while reading.
+- **Audit lines redact values and escape fields.** The `Display` of `AuditEvent` wrote old and new values in full, so rotating a password through `log_modification` logged both, and a newline in a key or user name forged a new audit line. Values are written as their type and size (`<string, 11 bytes>`), and every text field is escaped. The values stay on the event for sinks that need them.
+
+### Fixed
+- **A change handler that read the configuration deadlocked every reader.** The background watcher dispatched `Reloaded` while it still held the configuration's write lock, so a handler calling `shared.read()` hung the reloader and every reader in the process, and any slow handler blocked readers for its whole run. The new configuration is swapped in, the lock released, and then handlers run, on the event-driven and polling paths.
+- **A truncated or half-written file replaced a good configuration.** A writer that truncates and then writes exposed an empty file, which is valid CONF, INI and Properties, and it was swapped in. A reload now waits for the file's size and modification time to settle, refuses a file that changed while it was read, and does not let a file with no values replace a non-empty configuration (`HotReloadConfig::allow_empty_reload` allows it). `Config::save_to_file` writes a temporary file, flushes it and renames it over the target, keeping the old file's permissions.
+- **A reload dropped read-only mode, defaults and validation rules, and never validated.** They carry over to the new configuration now. The configuration's validation rules run before the swap and a critical error keeps the current configuration; `HotReloadConfig::with_validator` adds a caller's check. A refused reload dispatches `ReloadFailed` once per change of the file, not on every poll.
+- **INI and environment values `1` and `0` were booleans**, so `get_or::<u16>("pool.workers", 16)` on `workers = 1` returned 16. They are integers now, and `Value::as_bool` (and `get_or::<bool>`) reads the integers `1` and `0` as `true` and `false`, so boolean reads of them still work.
+- **Environment overrides split any value with a comma into a list** (`APP_DB_PASSWORD=ab,cd` became `["ab", "cd"]`). An override now takes the type of the value it replaces: a string stays a string, a number is parsed as a number, and a list is split only when the file holds a list.
+- **Format detection misrouted ordinary CONF text.** A quoted `\n` sent it to the Properties parser (which kept the quotes), a `T` and a `Z` on one line to TOML, a line starting `data ` to HCL, and a comment mentioning `include` to NOML. Without a format, text is now read as CONF unless it starts like XML or JSON or has a `;` comment line (INI). TOML, NOML, HCL and Properties are chosen only by name or file extension.
+- **CONF save did not read back.** Nested tables lost their keys, `x,y` came back as a list, `true` as a boolean, `""` as null, `p#ss` as `p`, and a value ending in a backslash wrote a file that did not parse. Strings are always quoted and escaped, arrays are written as `[a, b]`, floats keep their decimal point, and a nested table becomes a `[parent.child]` section. NaN, infinity, tables inside arrays and keys CONF cannot hold are a serialize error instead of text that reads back differently.
+- **The HCL parser accepted anything.** It split lines, so nested blocks, lists, comments after values and escaped quotes were misread, and garbage parsed as an empty configuration. It is now a parser for the static subset of HCL: attributes, blocks with labels (`resource "a" "b" {}` is `resource.a.b`), strings with escapes, numbers, booleans, null, lists, objects, and `#`, `//` and `/* */` comments. A repeated block becomes an array of tables. References, function calls, operators and heredocs are refused with their position.
+- **`Value::as_integer` truncated and saturated floats** (NaN became 0, `1e20` became `i64::MAX`, `100.9` became 100). It follows the same rules as `i64::try_from`: a float converts only when it is whole and in range. `RangeValidator` compares as a float and refuses NaN and infinity, so `100.9` fails `max 100`.
+- **`Config::validate` checked only top-level values.** Every value is checked, with its full dotted path (`server.port`).
+- **`Config::get_mut` ignored read-only mode** and left `get_arc` returning the old value. It is refused on a read-only configuration and clears the cache.
+- **A watcher that failed to start stopped reloading**, although its event said it fell back to polling. It polls now, as it says, and so does a watcher that stops. A zero poll interval spun a core; intervals are at least 10 ms.
+- **XML errors were `Error::Io` with no position.** They are `Error::Parse` with the line and column.
+- **NOML datetimes became the string `"datetime_value"`** with the `chrono` feature. They are `Value::DateTime`. A NOML `@size` past `i64::MAX` is an error instead of a negative number.
+
+### Changed
+- **CONF:** a `#` starts a comment only at the start of a value or after whitespace (`password = abc#def` keeps `abc#def`; `port = 80 # web` is still 80). Only a comment may follow a value on its line, so `tls = "on" tls = off` is an error. `nan`, `inf`, `infinity` and integers too large for `i64` stay strings. `[a.b]` is the table `b` inside `a`, so `a.b.c` resolves (it was one key named `a.b`).
+- **INI:** an inline `;` or `#` comment needs whitespace before it (`password = abc;def` keeps `abc;def`). `nan` and `inf` stay strings.
+- **NOML from text:** `Config::from_string` resolves includes against the current directory, as before, and now refuses an included file outside it unless `LoadOptions` allows its directory.
+- **Validation:** `TypeValidator` for booleans accepts the integers `1` and `0`, following `as_bool`.
+
+### Added
+- `LoadOptions` (module `load`, re-exported at the crate root): strict NOML, allowed include directories, and the file-size, include and expansion limits. Used by `Config::from_file_with`, `Config::from_string_with`, `ConfigBuilder::load_options` and `HotReloadConfig::from_file_with`.
+- `Config::from_file_strict`, `HotReloadConfig::from_file_strict`, `HotReloadConfig::with_validator`, `HotReloadConfig::allow_empty_reload`.
+- Fuzz targets `noml_parser` and `toml_parser`.
+
+### Dependencies
+- **Removed `serde` and `regex`.** Neither was used: nothing derived or implemented `Serialize` or `Deserialize`, and the `validation` feature enabled `regex` without calling it. The `validation` feature remains and has no dependency now. Direct dependencies after this release: `thiserror`, `dashmap` and `arc-swap` always; `notify` with `hot-reload` (default); `tokio` (`async`), `chrono` (`chrono`), `serde_json` (`json`), `quick-xml` (`xml`), `noml` (`noml`, `toml`) and `jsonx-lib` (`jsonx`) when their features are on. `serde` still arrives through `serde_json`, and through `chrono`'s `serde` feature, when those are enabled. Removing the rest is planned for 2.0.
+
+### Performance
+- An empty `Config` no longer sizes its cache from the CPU count (about 16 KiB on a 32-thread host); the cache uses eight shards. `Config::merge` merges in place instead of building a temporary `Config` per nested table, and `Value::get` no longer allocates a vector of path parts.
+
+### Tests
+- `tests/regressions_1_4.rs`: a handler reading the configuration during a background reload, a truncated file, empty reloads, carried read-only mode and defaults, validators and validation rules on reload, atomic save, expansion limits and cycles, include confinement and `..`, error text never quoting a marker value, file size and type checks, INI and environment typing, format detection, CONF round trips, comments and numbers, `as_integer`, `get_mut`, nested validation, HCL, and audit lines.
+
+
+<br>
+
+
 ## [1.3.2] - 2026-11-11
 
 A fix release: `Config::get_or` now works with plain types, as the README always said it did, and every README example compiles. No breaking changes; no new dependencies; the default feature set and MSRV 1.75 are unchanged.
@@ -873,7 +925,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.3.2...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/jamesgober/config-lib/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/jamesgober/config-lib/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/jamesgober/config-lib/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/jamesgober/config-lib/compare/v1.2.0...v1.3.0

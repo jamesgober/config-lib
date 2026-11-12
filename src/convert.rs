@@ -29,8 +29,9 @@
 //!   integer type.
 //! - `f64` follows [`Value::as_float`]: a float, an integer, or a string
 //!   that parses as a float.
-//! - `bool` follows [`Value::as_bool`]: a boolean, or one of the strings
-//!   `true`/`false`, `yes`/`no`, `on`/`off`, `1`/`0` (any case).
+//! - `bool` follows [`Value::as_bool`]: a boolean, the integers `1` and
+//!   `0`, or one of the strings `true`/`false`, `yes`/`no`, `on`/`off`,
+//!   `1`/`0` (any case).
 //! - `String` accepts a string value only.
 //!
 //! A failed conversion returns [`Error::Type`](crate::Error::Type).
@@ -43,7 +44,7 @@ use crate::value::Value;
 const I64_UPPER_EXCLUSIVE: f64 = 9_223_372_036_854_775_808.0; // 2^63
 const I64_LOWER_INCLUSIVE: f64 = -9_223_372_036_854_775_808.0; // -2^63
 
-fn integer_from(value: &Value, type_name: &'static str) -> Result<i64> {
+pub(crate) fn integer_from(value: &Value, type_name: &'static str) -> Result<i64> {
     match value {
         Value::Integer(i) => Ok(*i),
         Value::Float(f)
@@ -208,7 +209,11 @@ mod tests {
     fn bool_float_and_string() {
         assert!(bool::try_from(Value::Bool(true)).unwrap());
         assert!(!bool::try_from(Value::from("off")).unwrap());
-        assert!(bool::try_from(Value::Integer(1)).is_err());
+        // 1 and 0 read as booleans (INI and environment values are
+        // integers since v1.4.0); other integers do not
+        assert!(bool::try_from(Value::Integer(1)).unwrap());
+        assert!(!bool::try_from(Value::Integer(0)).unwrap());
+        assert!(bool::try_from(Value::Integer(2)).is_err());
 
         assert_eq!(f64::try_from(Value::Float(1.5)).unwrap(), 1.5);
         assert_eq!(f64::try_from(Value::Integer(2)).unwrap(), 2.0);

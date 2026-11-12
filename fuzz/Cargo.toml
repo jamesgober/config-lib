@@ -96,3 +96,17 @@ path = "fuzz_targets/format_detection.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "noml_parser"
+path = "fuzz_targets/noml_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "toml_parser"
+path = "fuzz_targets/toml_parser.rs"
+test = false
+doc = false
+bench = false

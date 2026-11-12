@@ -172,7 +172,9 @@ impl<'a> IniParser<'a> {
 
         if !matches!(self.peek(), Some('=' | ':')) {
             return Err(Error::Parse {
-                message: format!("Expected '=' or ':' after key '{key}'"),
+                // The key is not quoted back: a line holding only a token
+                // can be a pasted secret
+                message: "Expected '=' or ':' after the key".to_string(),
                 line: self.line,
                 column: 1,
                 file: None,
@@ -256,7 +258,16 @@ impl<'a> IniParser<'a> {
                     break;
                 }
                 '\n' | '\r' if !in_quotes => break,
-                ';' | '#' if !in_quotes => break, // Comment starts
+                // An inline comment starts only after whitespace, so
+                // `abc;def` and `http://h/#frag` stay whole values
+                ';' | '#'
+                    if !in_quotes
+                        && value_chars
+                            .last()
+                            .map_or(true, |c: &char| c.is_whitespace()) =>
+                {
+                    break
+                }
                 _ => {
                     if ch == '\n' {
                         // A line end inside quotes
@@ -338,8 +349,10 @@ impl<'a> IniParser<'a> {
 
         // Try boolean
         match value.to_lowercase().as_str() {
-            "true" | "yes" | "on" | "1" => return Ok(Value::Bool(true)),
-            "false" | "no" | "off" | "0" => return Ok(Value::Bool(false)),
+            // `1` and `0` stay integers (since v1.4.0), so integer reads of
+            // them work; `as_bool` still reads them as true and false
+            "true" | "yes" | "on" => return Ok(Value::Bool(true)),
+            "false" | "no" | "off" => return Ok(Value::Bool(false)),
             _ => {}
         }
 
@@ -348,8 +361,8 @@ impl<'a> IniParser<'a> {
             return Ok(Value::Integer(int_val));
         }
 
-        // Try float
-        if let Ok(float_val) = value.parse::<f64>() {
+        // Try float (decimal syntax only, so `nan` and `inf` stay text)
+        if let Some(float_val) = super::decimal_float(value) {
             return Ok(Value::Float(float_val));
         }
 

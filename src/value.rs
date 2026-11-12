@@ -125,6 +125,10 @@ impl Value {
     pub fn as_bool(&self) -> Result<bool> {
         match self {
             Value::Bool(b) => Ok(*b),
+            // INI and environment values `1` and `0` are integers since
+            // v1.4.0; they still read as booleans
+            Value::Integer(1) => Ok(true),
+            Value::Integer(0) => Ok(false),
             Value::String(s) => match s.to_lowercase().as_str() {
                 "true" | "yes" | "1" | "on" => Ok(true),
                 "false" | "no" | "0" | "off" => Ok(false),
@@ -145,8 +149,10 @@ impl Value {
     /// Try to convert this value to an integer
     pub fn as_integer(&self) -> Result<i64> {
         match self {
-            Value::Integer(i) => Ok(*i),
-            Value::Float(f) => Ok(*f as i64),
+            // Same rules as `i64::try_from`: a float converts only when it
+            // is whole and in range (before v1.4.0 NaN became 0, 100.9 became
+            // 100, and 1e20 saturated to i64::MAX)
+            Value::Integer(_) | Value::Float(_) => crate::convert::integer_from(self, "integer"),
             Value::String(s) => s.parse::<i64>().map_err(|_| {
                 Error::type_error("Cannot convert to integer", "integer", self.type_name())
             }),
@@ -256,11 +262,10 @@ impl Value {
         }
 
         // First try nested table access
-        let parts: Vec<&str> = path.split('.').collect();
         let mut current = self;
         let mut found_nested = true;
 
-        for part in parts {
+        for part in path.split('.') {
             match current {
                 Value::Table(table) => {
                     if let Some(next) = table.get(part) {

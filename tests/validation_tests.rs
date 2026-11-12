@@ -139,7 +139,10 @@ fn test_type_validator_comprehensive() {
     let result = bool_validator.validate("test", &config_lib::Value::Bool(true));
     assert_eq!(result, ValidationResult::Valid);
 
+    // 1 and 0 read as booleans (since v1.4.0); other integers do not
     let result = bool_validator.validate("test", &config_lib::Value::Integer(1));
+    assert_eq!(result, ValidationResult::Valid);
+    let result = bool_validator.validate("test", &config_lib::Value::Integer(2));
     assert!(matches!(result, ValidationResult::Invalid(_)));
 }
 

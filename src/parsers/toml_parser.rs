@@ -20,16 +20,21 @@ use std::collections::BTreeMap;
 
 /// Parse TOML format configuration
 pub fn parse(source: &str) -> Result<Value> {
-    let document = noml::parse_raw(source)?;
+    let document = noml::parse_raw(source).map_err(toml_error)?;
     resolve_as_toml(&document)
 }
 
 /// Parse TOML with format preservation for round-trip editing
 pub fn parse_with_preservation(source: &str) -> Result<(Value, noml::Document)> {
     // Parse to get the AST document for format preservation
-    let document = noml::parse_string(source, None)?;
+    let document = noml::parse_string(source, None).map_err(toml_error)?;
     let value = resolve_as_toml(&document)?;
     Ok((value, document))
+}
+
+/// A noml error as a crate error that does not quote the input
+fn toml_error(error: noml::NomlError) -> crate::error::Error {
+    noml_guard::noml_error(error, "TOML")
 }
 
 /// Resolve a parsed document with TOML semantics.
@@ -45,7 +50,9 @@ fn resolve_as_toml(document: &noml::Document) -> Result<Value> {
     noml_guard::check(document, Policy::Toml)?;
     let mut literal = document.clone();
     escape_templates(&mut literal.root);
-    let resolved = noml::Resolver::new().resolve(&literal)?;
+    let resolved = noml::Resolver::new()
+        .resolve(&literal)
+        .map_err(toml_error)?;
     convert_noml_value(resolved)
 }
 

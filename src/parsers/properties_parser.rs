@@ -66,7 +66,7 @@ impl PropertiesParser {
         // Expect separator (= or :)
         if self.current_char() != '=' && self.current_char() != ':' {
             return Err(Error::Parse {
-                message: format!("Expected '=' or ':', found '{}'", self.current_char()),
+                message: "Expected '=' or ':' after the key".to_string(),
                 line: self.line,
                 column: self.column,
                 file: None,
@@ -201,7 +201,7 @@ impl PropertiesParser {
                 self.advance();
             } else {
                 return Err(Error::Parse {
-                    message: format!("Invalid hex digit in unicode escape: '{ch}'"),
+                    message: "Invalid hex digit in unicode escape".to_string(),
                     line: self.line,
                     column: self.column,
                     file: None,
@@ -213,7 +213,7 @@ impl PropertiesParser {
             Ok(cp) => cp,
             Err(_) => {
                 return Err(Error::Parse {
-                    message: format!("Invalid hex digits in unicode escape: {hex_digits}"),
+                    message: "Invalid hex digits in unicode escape".to_string(),
                     line: self.line,
                     column: self.column,
                     file: None,
@@ -224,7 +224,7 @@ impl PropertiesParser {
             Ok(unicode_char.to_string())
         } else {
             Err(Error::Parse {
-                message: format!("Invalid unicode code point: {code_point}"),
+                message: "Invalid unicode code point".to_string(),
                 line: self.line,
                 column: self.column,
                 file: None,

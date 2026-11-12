@@ -277,6 +277,28 @@ impl Error {
             context: Some(context.into()),
         }
     }
+
+    /// Mark an error as coming from a file pulled in with NOML `include`
+    #[cfg(feature = "noml")]
+    pub(crate) fn in_included_file(self) -> Self {
+        match self {
+            Self::Parse {
+                message,
+                line,
+                column,
+                file,
+            } => Self::Parse {
+                message: format!("{message} (in an included file)"),
+                line,
+                column,
+                file,
+            },
+            Self::General { message } => Self::General {
+                message: format!("{message} (in an included file)"),
+            },
+            other => other,
+        }
+    }
 }
 
 /// Convert from std::io::Error
