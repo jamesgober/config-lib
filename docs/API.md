@@ -1,7 +1,7 @@
 <h1 id="top" align="center">
     <img width="99" alt="Rust logo" src="https://raw.githubusercontent.com/jamesgober/rust-collection/72baabd71f00e14aa9184efcb16fa3deddda3a0a/assets/rust-logo.svg">
     <br><b>config-lib</b><br>
-    <sub><sup>API REFERENCE - v1.4.0</sup></sub>
+    <sub><sup>API REFERENCE - v1.4.1</sup></sub>
 </h1>
 <div align="center">
     <sup>
@@ -137,7 +137,7 @@ config-lib = { version = "1.4", default-features = false, features = ["conf"] }
 | `jsonx`        | no       | JSON parsing via `jsonx-lib` (pinned `=0.5.1`, MSRV 1.85); wins over `json` when both are on |
 | `xml`          | no       | XML parsing via `quick-xml` 0.41 (MSRV 1.79)                                           |
 | `hcl`          | no       | HashiCorp Configuration Language (built-in parser)                                     |
-| `noml`         | no       | NOML parsing via the upstream `noml` crate (pinned `=0.9.2`)                           |
+| `noml`         | no       | NOML parsing via the upstream `noml` crate (pinned `=0.9.4`)                           |
 | `toml`         | no       | TOML parsing via the `noml` crate for format preservation                              |
 | `validation`   | no       | Rule-based validation framework (no dependencies since v1.4.0)                         |
 | `schema`       | no       | Schema validation framework                                                            |

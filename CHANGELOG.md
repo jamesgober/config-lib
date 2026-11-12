@@ -15,6 +15,29 @@
 <br>
 
 
+## [1.4.1] - 2026-11-12
+
+A dependency patch: the `noml` pin moves from `=0.9.2` to `=0.9.4` (`noml` and `toml` features). No API change, no new dependency, and MSRV is unchanged (1.75 for the default build, 1.82 for `noml` and `toml`).
+
+### Security
+- **`noml` `=0.9.2` to `=0.9.4`.** noml 0.9.4 bounds `${...}` expansion and reference chains in its own resolver, confines includes to an include root, keeps document text out of its errors, and no longer saves `env()` values as plain text from `noml::Config::save`. config-lib already guarded against the expansion and include problems in front of the resolver (v1.4.0); this release takes the fixes in noml as well. The AST types, error variants and message prefixes config-lib reads are unchanged.
+
+### Changed
+- **noml's resolver limits follow `LoadOptions`.** noml 0.9.4 checks its own expansion size, reference count, reference chain and include count limits. config-lib now passes its `LoadOptions` values (`max_expanded_size`, `max_expansions`, `max_expansion_depth`, `max_includes`) to the resolver through `noml::Resolver::with_limits`, so a caller who raises a limit is not refused by noml's default. config-lib's own check still runs first.
+
+### Fixed
+- **noml's limit and include errors read as "syntax error".** The new noml resolver errors (output size, reference count, reference chain, include count, refused include, unreadable include) are now `Error::Parse` with config-lib's own text for the same limit: "the document expands past the size limit through ${...} references", "the document has too many ${...} references", "a chain of ${...} references is too long", "too many included files", "the included file is outside the allowed directories" and "the included file could not be read". The line and column are kept and the noml message, which can name a path, is not.
+
+### Notes
+- `noml::NomlError::Type` now holds a placeholder (such as `<string>`) instead of the value. config-lib never matched on that text; the variant still reaches callers only through `Error::Noml` from `Config::serialize`.
+
+### Tests
+- `noml_guard` unit tests map each new noml message and check that no text after the prefix reaches the error. `noml_resolve` unit tests run the noml resolver alone under small limits and check the mapped error, and check that raised reference and chain limits reach the resolver (both fail with noml's defaults).
+
+
+<br>
+
+
 ## [1.4.0] - 2026-11-12
 
 A security and correctness release. Hot reload no longer deadlocks a handler that reads the configuration, NOML expansion and includes are bounded, errors no longer quote the input, and a reload checks the file before it replaces the current configuration. No API is removed or changed in signature, and MSRV 1.75 is unchanged. Some inputs now parse differently or are refused; each case is listed under **Changed**.
@@ -925,7 +948,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/jamesgober/config-lib/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/jamesgober/config-lib/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/jamesgober/config-lib/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/jamesgober/config-lib/compare/v1.3.0...v1.3.1
