@@ -49,11 +49,57 @@ fn section_clash(line: usize, column: usize) -> Error {
     Error::parse("A section has the name of a key above it", line, column)
 }
 
+fn table_is_array(line: usize, column: usize) -> Error {
+    Error::parse(
+        "A [section] has the name of a [[list]] of tables above it",
+        line,
+        column,
+    )
+}
+
+fn array_is_table(line: usize, column: usize) -> Error {
+    Error::parse(
+        "A [[list]] of tables has the name of a [section] or key above it",
+        line,
+        column,
+    )
+}
+
+/// The tables an `[[a]]` header builds: an array whose items are all
+/// tables. CONF has no inline tables, so only `[[...]]` makes one.
+fn is_table_array(items: &[Value]) -> bool {
+    !items.is_empty() && items.iter().all(|item| matches!(item, Value::Table(_)))
+}
+
+/// The table one step into `value` for a path through it: a table itself,
+/// or the last table of an `[[a]]` list, as in TOML (`[a.b]` after
+/// `[[a]]` belongs to the last `a`). `None` for anything else.
+fn step_into(value: &mut Value) -> Option<&mut BTreeMap<String, Value>> {
+    match value {
+        Value::Table(inner) => Some(inner),
+        Value::Array(items) if is_table_array(items) => match items.last_mut() {
+            Some(Value::Table(inner)) => Some(inner),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// What a header opens: a `[section]` or a new item of a `[[list]]`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Header {
+    Table,
+    ArrayItem,
+}
+
 /// Take the table at `path` out of `root` so a section can add to it, or
-/// start an empty one. A non-table in the way is refused.
+/// start an empty one. For `[[a]]` it is always a new, empty item, after
+/// a check that `a` is a list of tables or nothing yet. A non-table in the
+/// way is refused, and so is mixing `[a]` and `[[a]]`.
 fn open_section(
     root: &mut BTreeMap<String, Value>,
     path: &[String],
+    header: Header,
     line: usize,
     column: usize,
 ) -> Result<BTreeMap<String, Value>> {
@@ -65,31 +111,42 @@ fn open_section(
     for part in parents {
         table = match table.get_mut(part.as_str()) {
             None => return Ok(BTreeMap::new()),
-            Some(Value::Table(inner)) => inner,
-            Some(_) => return Err(section_clash(line, column)),
+            Some(value) => step_into(value).ok_or_else(|| section_clash(line, column))?,
         };
     }
-    match table.remove(last.as_str()) {
-        None => Ok(BTreeMap::new()),
-        Some(Value::Table(inner)) => Ok(inner),
-        Some(other) => {
-            table.insert(last.clone(), other);
-            Err(section_clash(line, column))
+    match (header, table.get(last.as_str())) {
+        (Header::ArrayItem, None) => Ok(BTreeMap::new()),
+        (Header::ArrayItem, Some(Value::Array(items))) if is_table_array(items) => {
+            Ok(BTreeMap::new())
         }
+        (Header::ArrayItem, Some(_)) => Err(array_is_table(line, column)),
+        (Header::Table, Some(Value::Array(items))) if is_table_array(items) => {
+            Err(table_is_array(line, column))
+        }
+        (Header::Table, _) => match table.remove(last.as_str()) {
+            None => Ok(BTreeMap::new()),
+            Some(Value::Table(inner)) => Ok(inner),
+            Some(other) => {
+                table.insert(last.clone(), other);
+                Err(section_clash(line, column))
+            }
+        },
     }
 }
 
-/// Put a section's table back at its path. A section with no keys is kept
-/// as an empty table, as TOML and NOML keep one (since v1.4.2), so a
-/// caller that checks section names sees it: a misspelled `[auth.passwrd]`
-/// with nothing under it is an unknown section, not nothing.
-fn close_section(
-    root: &mut BTreeMap<String, Value>,
-    path: &[String],
-    section: BTreeMap<String, Value>,
-    line: usize,
-    column: usize,
-) -> Result<()> {
+/// Put a section's table back at its path, or add it to the end of its
+/// `[[list]]`. A section with no keys is kept as an empty table, as TOML
+/// and NOML keep one (since v1.5.0), so a caller that checks section names
+/// sees it: a misspelled `[auth.passwrd]` with nothing under it is an
+/// unknown section, not nothing.
+fn close_section(root: &mut BTreeMap<String, Value>, open: OpenSection) -> Result<()> {
+    let OpenSection {
+        path,
+        table: section,
+        header,
+        line,
+        column,
+    } = open;
     let (last, parents) = match path.split_last() {
         Some(split) => split,
         None => return Ok(()),
@@ -99,18 +156,32 @@ fn close_section(
         let entry = table
             .entry(part.clone())
             .or_insert_with(|| Value::table(BTreeMap::new()));
-        table = match entry {
-            Value::Table(inner) => inner,
-            _ => return Err(section_clash(line, column)),
-        };
+        table = step_into(entry).ok_or_else(|| section_clash(line, column))?;
     }
-    table.insert(last.clone(), Value::table(section));
+    match header {
+        Header::Table => {
+            table.insert(last.clone(), Value::table(section));
+        }
+        Header::ArrayItem => match table
+            .entry(last.clone())
+            .or_insert_with(|| Value::array(Vec::new()))
+        {
+            Value::Array(items) => items.push(Value::table(section)),
+            _ => return Err(array_is_table(line, column)),
+        },
+    }
     Ok(())
 }
 
-/// A section being read: its path, its table, and the header's line and
-/// column
-type OpenSection = (Vec<String>, BTreeMap<String, Value>, usize, usize);
+/// A section being read: its path, its table, what opened it, and the
+/// header's line and column.
+struct OpenSection {
+    path: Vec<String>,
+    table: BTreeMap<String, Value>,
+    header: Header,
+    line: usize,
+    column: usize,
+}
 
 /// Deepest nesting of `[...]` arrays the parser accepts.
 ///
@@ -163,16 +234,23 @@ impl<'a> ConfParser<'a> {
             // Check for section header
             if self.peek() == Some('[') {
                 let (line, column) = (self.line, self.column);
-                let name = self.parse_section_header()?;
+                let (name, header) = self.parse_section_header()?;
                 let path = section_path(&name, line, column)?;
-                if let Some((open, table, l, c)) = section.take() {
-                    close_section(&mut root, &open, table, l, c)?;
+                if let Some(open) = section.take() {
+                    close_section(&mut root, open)?;
                 }
                 // A section seen before continues where it left off. One
                 // named like a key above it used to lose its keys
-                // silently; it is refused.
-                let table = open_section(&mut root, &path, line, column)?;
-                section = Some((path, table, line, column));
+                // silently; it is refused. `[[a]]` starts a new item of
+                // the list `a` (since v1.5.0).
+                let table = open_section(&mut root, &path, header, line, column)?;
+                section = Some(OpenSection {
+                    path,
+                    table,
+                    header,
+                    line,
+                    column,
+                });
                 continue;
             }
 
@@ -180,8 +258,8 @@ impl<'a> ConfParser<'a> {
             let (key, value) = self.parse_key_value()?;
 
             match &mut section {
-                Some((_, table, _, _)) => {
-                    table.insert(key, value);
+                Some(open) => {
+                    open.table.insert(key, value);
                 }
                 None => {
                     root.insert(key, value);
@@ -189,20 +267,26 @@ impl<'a> ConfParser<'a> {
             }
         }
 
-        if let Some((open, table, l, c)) = section {
-            close_section(&mut root, &open, table, l, c)?;
+        if let Some(open) = section {
+            close_section(&mut root, open)?;
         }
         Ok(Value::table(root))
     }
 
-    /// Parse a section header like [section_name]
-    fn parse_section_header(&mut self) -> Result<String> {
+    /// Parse a section header, `[name]` or `[[name]]`
+    fn parse_section_header(&mut self) -> Result<(String, Header)> {
         self.expect('[')?;
+        let header = if self.peek() == Some('[') {
+            self.advance();
+            Header::ArrayItem
+        } else {
+            Header::Table
+        };
         let start = self.position;
 
         // Find the closing bracket
         self.advance_while(|ch| ch != ']' && ch != '\n');
-        if self.peek() == Some('\n') {
+        if self.peek() != Some(']') {
             return Err(Error::parse(
                 "Unterminated section header",
                 self.line,
@@ -212,8 +296,18 @@ impl<'a> ConfParser<'a> {
 
         let section_name = self.since(start).trim().to_string();
         self.expect(']')?;
+        if header == Header::ArrayItem && self.peek() != Some(']') {
+            return Err(Error::parse(
+                "A [[list]] header ends with ]]",
+                self.line,
+                self.column,
+            ));
+        }
+        if header == Header::ArrayItem {
+            self.advance();
+        }
 
-        Ok(section_name)
+        Ok((section_name, header))
     }
 
     /// Parse a key-value pair
@@ -696,7 +790,7 @@ mod tests {
 
     #[test]
     fn test_an_empty_dotted_section_is_an_empty_table_like_toml() {
-        // v1.4.2: `[auth.passwrd]` with no keys used to vanish, so a check
+        // v1.5.0: `[auth.passwrd]` with no keys used to vanish, so a check
         // of the section's keys never saw the misspelling.
         let value =
             parse("[auth]\nkey = 1\n[auth.passwrd]\n[content.fields.post.author]\n").unwrap();
@@ -710,6 +804,90 @@ mod tests {
         assert_eq!(value.get("a.b.x").unwrap().as_integer().unwrap(), 1);
         // An empty section named like a key above it is still refused.
         assert!(parse("db = on\n[db]\n").is_err());
+    }
+
+    fn items<'v>(value: &'v Value, path: &str) -> &'v [Value] {
+        value.get(path).unwrap().as_array().unwrap()
+    }
+
+    #[test]
+    fn test_lists_of_tables_read_as_toml_does() {
+        // v1.5.0: `[[name]]` used to fail on its first line.
+        let text = "\
+[server]
+port = 1
+
+[[upstream]]
+host = \"a\"
+weight = 2
+
+[[upstream]]
+host = \"b\"
+[upstream.tls]
+verify = true
+[[upstream.path]]
+prefix = \"/api\"
+[[upstream.path]]
+prefix = \"/web\"
+
+[limits]
+rate = 10
+";
+        let value = parse(text).unwrap();
+        assert_eq!(value.get("server.port").unwrap().as_integer().unwrap(), 1);
+        assert_eq!(value.get("limits.rate").unwrap().as_integer().unwrap(), 10);
+        let upstream = items(&value, "upstream");
+        assert_eq!(upstream.len(), 2);
+        let first = upstream[0].as_table().unwrap();
+        assert_eq!(first["host"].as_string().unwrap(), "a");
+        assert_eq!(first["weight"].as_integer().unwrap(), 2);
+        assert!(!first.contains_key("tls"));
+        // `[upstream.tls]` and `[[upstream.path]]` belong to the last item.
+        let second = upstream[1].as_table().unwrap();
+        assert_eq!(second["host"].as_string().unwrap(), "b");
+        assert!(second["tls"].as_table().unwrap()["verify"]
+            .as_bool()
+            .unwrap());
+        let paths = second["path"].as_array().unwrap();
+        assert_eq!(paths.len(), 2);
+        assert_eq!(
+            paths[1].as_table().unwrap()["prefix"].as_string().unwrap(),
+            "/web"
+        );
+
+        // The same text through TOML gives the same value.
+        #[cfg(feature = "toml")]
+        assert_eq!(crate::parsers::toml_parser::parse(text).unwrap(), value);
+    }
+
+    #[test]
+    fn test_an_empty_list_item_is_kept_and_lists_nest_in_sections() {
+        let value =
+            parse("[[rule]]\n[[rule]]\nname = x\n[site]\n[[site.host]]\nname = a\n").unwrap();
+        let rules = items(&value, "rule");
+        assert_eq!(rules.len(), 2);
+        assert!(rules[0].as_table().unwrap().is_empty());
+        assert_eq!(items(&value, "site.host").len(), 1);
+    }
+
+    #[test]
+    fn test_mixing_a_list_with_a_section_or_key_is_refused_with_its_position() {
+        for (text, line, column) in [
+            ("[a]\nk = 1\n[[a]]\n", 3, 1),
+            ("[[a]]\nk = 1\n[a]\n", 3, 1),
+            ("a = 1\n\n[[a]]\n", 3, 1),
+            ("a = [1, 2]\n[[a]]\n", 2, 1),
+            ("a = [1, 2]\n[a.b]\n", 2, 1),
+            ("[[a]\nk = 1\n", 1, 5),
+            ("[[a\n", 1, 4),
+        ] {
+            match parse(text) {
+                Err(Error::Parse {
+                    line: l, column: c, ..
+                }) => assert_eq!((l, c), (line, column), "{text:?}"),
+                other => panic!("expected a parse error for {text:?}, got {other:?}"),
+            }
+        }
     }
 
     #[test]
