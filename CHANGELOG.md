@@ -15,15 +15,22 @@
 <br>
 
 
-## [1.4.2] - 2026-11-20
+## [1.5.0] - 2026-11-20
 
-A CONF parser fix. No API change, no new dependency, MSRV unchanged.
+CONF reads lists of tables (`[[name]]`) and keeps empty sections, as TOML does. No API change, no new dependency, MSRV unchanged.
+
+### Added
+- **Lists of tables in CONF.** A `[[name]]` header starts a new table at the end of the list `name`, with TOML's rules: the keys after it go into that table, a `[name.sub]` or `[[name.sub]]` header after it belongs to the last item, an item with no keys is kept as an empty table, and `[[a.b]]` nests a list inside a section. The header used to fail on its first line. Mixing `[name]` and `[[name]]`, or `[[name]]` with a key or a value list of the same name, is refused with the header's line and column, and so is a header that does not end with `]]`. The same text parsed as TOML gives the same value.
 
 ### Fixed
 - **An empty CONF section vanished.** A section header with no keys under it (`[auth.passwrd]`, `[content.fields.post.author]`) was left out of the parsed value, while TOML and NOML keep it as an empty table. A caller that checks section and key names never saw it, so a misspelled empty section went unnoticed and an intentionally empty one never reached the application. CONF now keeps it as an empty table at its path, as TOML does. A later section under it adds to the same table, and an empty section named like a key above it is still refused.
 
+### Changed
+- **CI.** The cross-compile job builds with `cargo build --target` and the target's standard library (plus MinGW's dlltool for windows-gnu) instead of cross's container images, which stopped building on current stable, and it runs on pull requests too.
+
 ### Tests
 - `conf` unit tests: an empty dotted section is an empty table at its path, a section under an empty parent adds to it, and an empty section named like a key is refused; the repeated-section test now expects the empty section.
+- `conf` unit tests for lists of tables: several items with nested sections and lists, the same value as TOML, an empty item, a list inside a section, and the position of each refused mix and unterminated header.
 
 
 
@@ -963,8 +970,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.4.2...HEAD
-[1.4.2]: https://github.com/jamesgober/config-lib/compare/v1.4.1...v1.4.2
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/jamesgober/config-lib/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/jamesgober/config-lib/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/jamesgober/config-lib/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/jamesgober/config-lib/compare/v1.3.1...v1.3.2

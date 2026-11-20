@@ -40,7 +40,8 @@
 
 **Key Features:**
 - Simple key-value pairs
-- Section support with `[section]` headers; a section with no keys is an empty table, as in TOML (since v1.4.2)
+- Section support with `[section]` headers; a section with no keys is an empty table, as in TOML (since v1.5.0)
+- Lists of tables with `[[name]]` headers, read with TOML's rules (since v1.5.0)
 - Comments with `#` prefix
 - Multi-line values
 - Environment variable substitution

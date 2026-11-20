@@ -95,10 +95,10 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-config-lib = "1.4"
+config-lib = "1.5"
 
 # For enhanced functionality, enable optional features:
-config-lib = { version = "1.4", features = [
+config-lib = { version = "1.5", features = [
     "jsonx",          # JSON format support on jsonx-lib (strict, no dependencies; Rust 1.85+)
     "json",           # JSON format support on serde_json (used when `jsonx` is off)
     "xml",            # XML format support with quick-xml backend  
