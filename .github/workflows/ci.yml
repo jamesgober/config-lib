@@ -202,7 +202,8 @@ jobs:
   cross-compile:
     name: Cross Compile
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # On pull requests too: run only on main, a failure here went unseen.
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     strategy:
       matrix:
         target: 
@@ -215,9 +216,17 @@ jobs:
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
 
-    - name: Install cross
-      run: cargo install cross
+    # windows-sys and its users import DLLs through raw-dylib, which needs
+    # MinGW's dlltool when building for windows-gnu from Linux.
+    - name: Install MinGW dlltool
+      if: matrix.target == 'x86_64-pc-windows-gnu'
+      run: sudo apt-get update && sudo apt-get install -y binutils-mingw-w64-x86-64
 
+    # A library build makes an rlib and links nothing, so the target's
+    # standard library (and dlltool above) is all it needs; cross's
+    # container images stopped building on current stable.
     - name: Cross compile
-      run: cross build --target ${{ matrix.target }} --features "json,chrono,validation,xml,hcl,env-override"
+      run: cargo build --target ${{ matrix.target }} --features "json,chrono,validation,xml,hcl,env-override"
