@@ -79,8 +79,10 @@ fn open_section(
     }
 }
 
-/// Put a section's table back at its path. A section with no keys is left
-/// out, as it always was.
+/// Put a section's table back at its path. A section with no keys is kept
+/// as an empty table, as TOML and NOML keep one (since v1.4.2), so a
+/// caller that checks section names sees it: a misspelled `[auth.passwrd]`
+/// with nothing under it is an unknown section, not nothing.
 fn close_section(
     root: &mut BTreeMap<String, Value>,
     path: &[String],
@@ -88,9 +90,6 @@ fn close_section(
     line: usize,
     column: usize,
 ) -> Result<()> {
-    if section.is_empty() {
-        return Ok(());
-    }
     let (last, parents) = match path.split_last() {
         Some(split) => split,
         None => return Ok(()),
@@ -684,14 +683,33 @@ mod tests {
     }
 
     #[test]
-    fn test_a_repeated_section_continues_and_an_empty_one_is_left_out() {
+    fn test_a_repeated_section_continues_and_an_empty_one_is_kept() {
         let value = parse("[a]\nx = 1\n[empty]\n[b]\ny = 2\n[a]\nz = 3\n").unwrap();
         let root = value.as_table().unwrap();
-        assert_eq!(root.len(), 2);
+        assert_eq!(root.len(), 3);
+        assert!(root["empty"].as_table().unwrap().is_empty());
         let a = root["a"].as_table().unwrap();
         assert_eq!(a["x"].as_integer().unwrap(), 1);
         assert_eq!(a["z"].as_integer().unwrap(), 3);
         assert_eq!(root["b"].as_table().unwrap()["y"].as_integer().unwrap(), 2);
+    }
+
+    #[test]
+    fn test_an_empty_dotted_section_is_an_empty_table_like_toml() {
+        // v1.4.2: `[auth.passwrd]` with no keys used to vanish, so a check
+        // of the section's keys never saw the misspelling.
+        let value =
+            parse("[auth]\nkey = 1\n[auth.passwrd]\n[content.fields.post.author]\n").unwrap();
+        let auth = value.get("auth").unwrap().as_table().unwrap();
+        assert_eq!(auth.len(), 2);
+        assert!(auth["passwrd"].as_table().unwrap().is_empty());
+        let author = value.get("content.fields.post.author").unwrap();
+        assert!(author.as_table().unwrap().is_empty());
+        // A section after its empty parent adds to the same table.
+        let value = parse("[a]\n[a.b]\nx = 1\n").unwrap();
+        assert_eq!(value.get("a.b.x").unwrap().as_integer().unwrap(), 1);
+        // An empty section named like a key above it is still refused.
+        assert!(parse("db = on\n[db]\n").is_err());
     }
 
     #[test]
