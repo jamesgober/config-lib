@@ -15,6 +15,21 @@
 <br>
 
 
+## [1.4.2] - 2026-11-20
+
+A CONF parser fix. No API change, no new dependency, MSRV unchanged.
+
+### Fixed
+- **An empty CONF section vanished.** A section header with no keys under it (`[auth.passwrd]`, `[content.fields.post.author]`) was left out of the parsed value, while TOML and NOML keep it as an empty table. A caller that checks section and key names never saw it, so a misspelled empty section went unnoticed and an intentionally empty one never reached the application. CONF now keeps it as an empty table at its path, as TOML does. A later section under it adds to the same table, and an empty section named like a key above it is still refused.
+
+### Tests
+- `conf` unit tests: an empty dotted section is an empty table at its path, a section under an empty parent adds to it, and an empty section named like a key is refused; the repeated-section test now expects the empty section.
+
+
+
+<br>
+
+
 ## [1.4.1] - 2026-11-12
 
 A dependency patch: the `noml` pin moves from `=0.9.2` to `=0.9.4` (`noml` and `toml` features). No API change, no new dependency, and MSRV is unchanged (1.75 for the default build, 1.82 for `noml` and `toml`).
@@ -948,7 +963,8 @@ Project creation and starting point.
 
 <!-- FOOT LINKS
 ################################################# -->
-[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/jamesgober/config-lib/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/jamesgober/config-lib/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/jamesgober/config-lib/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/jamesgober/config-lib/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/jamesgober/config-lib/compare/v1.3.1...v1.3.2

@@ -1,7 +1,7 @@
 <h1 id="top" align="center">
     <img width="99" alt="Rust logo" src="https://raw.githubusercontent.com/jamesgober/rust-collection/72baabd71f00e14aa9184efcb16fa3deddda3a0a/assets/rust-logo.svg">
     <br><b>config-lib</b><br>
-    <sub><sup>API REFERENCE - v1.4.1</sup></sub>
+    <sub><sup>API REFERENCE - v1.4.2</sup></sub>
 </h1>
 <div align="center">
     <sup>
